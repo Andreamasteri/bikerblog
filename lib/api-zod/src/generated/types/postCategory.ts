@@ -10,8 +10,9 @@ export type PostCategory = typeof PostCategory[keyof typeof PostCategory];
 
 
 export const PostCategory = {
-  'ride-report': 'ride-report',
-  'gear-review': 'gear-review',
-  'tech-tips': 'tech-tips',
-  news: 'news',
+  postmortem: 'postmortem',
+  debugging: 'debugging',
+  backend: 'backend',
+  product: 'product',
+  security: 'security',
 } as const;

@@ -50,7 +50,7 @@ export function NewPost() {
       excerpt: "",
       content: "",
       coverImageUrl: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?q=80&w=2070&auto=format&fit=crop",
-      category: "ride-report",
+      category: "postmortem",
       tags: "",
       authorId: 0,
       location: "",
@@ -138,10 +138,11 @@ export function NewPost() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="ride-report">Ride Report</SelectItem>
-                      <SelectItem value="gear-review">Gear Review</SelectItem>
-                      <SelectItem value="tech-tips">Tech Tips</SelectItem>
-                      <SelectItem value="news">News</SelectItem>
+                      <SelectItem value="postmortem">Postmortem</SelectItem>
+                      <SelectItem value="debugging">Debugging</SelectItem>
+                      <SelectItem value="backend">Backend</SelectItem>
+                      <SelectItem value="product">Product</SelectItem>
+                      <SelectItem value="security">Security</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

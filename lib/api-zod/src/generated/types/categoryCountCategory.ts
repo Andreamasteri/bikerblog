@@ -10,8 +10,9 @@ export type CategoryCountCategory = typeof CategoryCountCategory[keyof typeof Ca
 
 
 export const CategoryCountCategory = {
-  'ride-report': 'ride-report',
-  'gear-review': 'gear-review',
-  'tech-tips': 'tech-tips',
-  news: 'news',
+  postmortem: 'postmortem',
+  debugging: 'debugging',
+  backend: 'backend',
+  product: 'product',
+  security: 'security',
 } as const;

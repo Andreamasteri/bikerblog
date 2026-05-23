@@ -40,10 +40,11 @@ export type PostCategory = typeof PostCategory[keyof typeof PostCategory];
 
 
 export const PostCategory = {
-  'ride-report': 'ride-report',
-  'gear-review': 'gear-review',
-  'tech-tips': 'tech-tips',
-  news: 'news',
+  postmortem: 'postmortem',
+  debugging: 'debugging',
+  backend: 'backend',
+  product: 'product',
+  security: 'security',
 } as const;
 
 export interface Post {
@@ -71,10 +72,11 @@ export type PostInputCategory = typeof PostInputCategory[keyof typeof PostInputC
 
 
 export const PostInputCategory = {
-  'ride-report': 'ride-report',
-  'gear-review': 'gear-review',
-  'tech-tips': 'tech-tips',
-  news: 'news',
+  postmortem: 'postmortem',
+  debugging: 'debugging',
+  backend: 'backend',
+  product: 'product',
+  security: 'security',
 } as const;
 
 export interface PostInput {
@@ -124,10 +126,11 @@ export type CategoryCountCategory = typeof CategoryCountCategory[keyof typeof Ca
 
 
 export const CategoryCountCategory = {
-  'ride-report': 'ride-report',
-  'gear-review': 'gear-review',
-  'tech-tips': 'tech-tips',
-  news: 'news',
+  postmortem: 'postmortem',
+  debugging: 'debugging',
+  backend: 'backend',
+  product: 'product',
+  security: 'security',
 } as const;
 
 export interface CategoryCount {
@@ -153,10 +156,11 @@ export type ListPostsCategory = typeof ListPostsCategory[keyof typeof ListPostsC
 
 
 export const ListPostsCategory = {
-  'ride-report': 'ride-report',
-  'gear-review': 'gear-review',
-  'tech-tips': 'tech-tips',
-  news: 'news',
+  postmortem: 'postmortem',
+  debugging: 'debugging',
+  backend: 'backend',
+  product: 'product',
+  security: 'security',
 } as const;
 
 export type ListPopularPostsParams = {

@@ -46,7 +46,7 @@ paths:
           name: category
           schema:
             type: string
-            enum: [ride-report, gear-review, tech-tips, news]
+            enum: [postmortem, debugging, backend, product, security]
           required: false
         - in: query
           name: search
@@ -300,7 +300,7 @@ components:
         coverImageUrl: { type: string }
         category:
           type: string
-          enum: [ride-report, gear-review, tech-tips, news]
+          enum: [postmortem, debugging, backend, product, security]
         tags:
           type: array
           items: { type: string }
@@ -323,7 +323,7 @@ components:
         coverImageUrl: { type: string }
         category:
           type: string
-          enum: [ride-report, gear-review, tech-tips, news]
+          enum: [postmortem, debugging, backend, product, security]
         tags:
           type: array
           items: { type: string }
@@ -361,7 +361,7 @@ components:
       properties:
         category:
           type: string
-          enum: [ride-report, gear-review, tech-tips, news]
+          enum: [postmortem, debugging, backend, product, security]
         count: { type: integer }
 
     BlogStats:

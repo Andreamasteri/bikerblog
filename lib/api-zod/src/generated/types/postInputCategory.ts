@@ -10,8 +10,9 @@ export type PostInputCategory = typeof PostInputCategory[keyof typeof PostInputC
 
 
 export const PostInputCategory = {
-  'ride-report': 'ride-report',
-  'gear-review': 'gear-review',
-  'tech-tips': 'tech-tips',
-  news: 'news',
+  postmortem: 'postmortem',
+  debugging: 'debugging',
+  backend: 'backend',
+  product: 'product',
+  security: 'security',
 } as const;

@@ -10,8 +10,9 @@ export type ListPostsCategory = typeof ListPostsCategory[keyof typeof ListPostsC
 
 
 export const ListPostsCategory = {
-  'ride-report': 'ride-report',
-  'gear-review': 'gear-review',
-  'tech-tips': 'tech-tips',
-  news: 'news',
+  postmortem: 'postmortem',
+  debugging: 'debugging',
+  backend: 'backend',
+  product: 'product',
+  security: 'security',
 } as const;

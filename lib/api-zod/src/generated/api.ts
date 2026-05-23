@@ -21,7 +21,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const ListPostsQueryParams = zod.object({
   "tag": zod.coerce.string().optional(),
-  "category": zod.enum(['ride-report', 'gear-review', 'tech-tips', 'news']).optional(),
+  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']).optional(),
   "search": zod.coerce.string().optional()
 })
 
@@ -32,7 +32,7 @@ export const ListPostsResponseItem = zod.object({
   "excerpt": zod.string(),
   "content": zod.string().describe('Markdown body'),
   "coverImageUrl": zod.string(),
-  "category": zod.enum(['ride-report', 'gear-review', 'tech-tips', 'news']),
+  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
   "tags": zod.array(zod.string()),
   "author": zod.object({
   "id": zod.number(),
@@ -65,7 +65,7 @@ export const CreatePostBody = zod.object({
   "excerpt": zod.string().min(1),
   "content": zod.string().min(1),
   "coverImageUrl": zod.string(),
-  "category": zod.enum(['ride-report', 'gear-review', 'tech-tips', 'news']),
+  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
   "tags": zod.array(zod.string()),
   "authorId": zod.number(),
   "location": zod.string().nullish(),
@@ -83,7 +83,7 @@ export const GetFeaturedPostResponse = zod.object({
   "excerpt": zod.string(),
   "content": zod.string().describe('Markdown body'),
   "coverImageUrl": zod.string(),
-  "category": zod.enum(['ride-report', 'gear-review', 'tech-tips', 'news']),
+  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
   "tags": zod.array(zod.string()),
   "author": zod.object({
   "id": zod.number(),
@@ -121,7 +121,7 @@ export const ListPopularPostsResponseItem = zod.object({
   "excerpt": zod.string(),
   "content": zod.string().describe('Markdown body'),
   "coverImageUrl": zod.string(),
-  "category": zod.enum(['ride-report', 'gear-review', 'tech-tips', 'news']),
+  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
   "tags": zod.array(zod.string()),
   "author": zod.object({
   "id": zod.number(),
@@ -155,7 +155,7 @@ export const GetPostResponse = zod.object({
   "excerpt": zod.string(),
   "content": zod.string().describe('Markdown body'),
   "coverImageUrl": zod.string(),
-  "category": zod.enum(['ride-report', 'gear-review', 'tech-tips', 'news']),
+  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
   "tags": zod.array(zod.string()),
   "author": zod.object({
   "id": zod.number(),
@@ -188,7 +188,7 @@ export const LikePostResponse = zod.object({
   "excerpt": zod.string(),
   "content": zod.string().describe('Markdown body'),
   "coverImageUrl": zod.string(),
-  "category": zod.enum(['ride-report', 'gear-review', 'tech-tips', 'news']),
+  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
   "tags": zod.array(zod.string()),
   "author": zod.object({
   "id": zod.number(),
@@ -262,7 +262,7 @@ export const GetBlogStatsResponse = zod.object({
   "totalLikes": zod.number(),
   "totalAuthors": zod.number(),
   "categories": zod.array(zod.object({
-  "category": zod.enum(['ride-report', 'gear-review', 'tech-tips', 'news']),
+  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
   "count": zod.number()
 }))
 })
