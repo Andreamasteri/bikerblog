@@ -66,6 +66,11 @@ export interface Post {
   location?: string | null;
   /** @nullable */
   bike?: string | null;
+  /**
+     * Massima del giorno del programmatore — frase pull-quote da mostrare nel post.
+     * @nullable
+     */
+  dailyMaxim?: string | null;
 }
 
 export type PostInputCategory = typeof PostInputCategory[keyof typeof PostInputCategory];

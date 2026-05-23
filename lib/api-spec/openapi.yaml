@@ -312,6 +312,9 @@ components:
         commentCount: { type: integer }
         location: { type: ["string", "null"] }
         bike: { type: ["string", "null"] }
+        dailyMaxim:
+          type: ["string", "null"]
+          description: "Massima del giorno del programmatore — frase pull-quote da mostrare nel post."
 
     PostInput:
       type: object

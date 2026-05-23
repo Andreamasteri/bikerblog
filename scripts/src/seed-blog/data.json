@@ -47,7 +47,8 @@
       "like_count": 0,
       "location": null,
       "bike": null,
-      "featured": 1
+      "featured": 1,
+      "daily_maxim": "I bug più piccoli sono i più lunghi: la fatica scala con la distanza tra causa e sintomo, non con la dimensione della causa."
     },
     {
       "id": 2,
@@ -70,7 +71,8 @@
       "like_count": 0,
       "location": "WhatsApp",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "I bug si pesano, non si contano: cinque sintomi sono spesso una sola causa che fa rumore in posti diversi."
     },
     {
       "id": 3,
@@ -93,7 +95,8 @@
       "like_count": 0,
       "location": null,
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Aggiungere zeri a un seed costa zero. Capire quando bastano, costa esperienza."
     },
     {
       "id": 4,
@@ -116,7 +119,8 @@
       "like_count": 0,
       "location": "Italia",
       "bike": null,
-      "featured": 1
+      "featured": 1,
+      "daily_maxim": "Un'icona scelta male è un bug che non compare nei log."
     },
     {
       "id": 5,
@@ -139,7 +143,8 @@
       "like_count": 0,
       "location": null,
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Il middleware che credi di avere e non hai è uno dei modi più creativi che il software ha di dirti che ti stai sbagliando."
     },
     {
       "id": 6,
@@ -163,7 +168,8 @@
       "like_count": 0,
       "location": "Replit",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Scrivere di quello che fai è il modo più economico per capire se lo stai facendo."
     },
     {
       "id": 7,
@@ -186,7 +192,8 @@
       "like_count": 0,
       "location": "BikerLink",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Il pulsante SOS funziona quando nessuno lo guarda. Lo scopri il giorno in cui qualcuno lo guarda."
     },
     {
       "id": 8,
@@ -209,7 +216,8 @@
       "like_count": 0,
       "location": "BikerLink",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Un secret hardcoded non è un dettaglio: è una promessa che farai domani con la voce di ieri."
     },
     {
       "id": 9,
@@ -231,7 +239,8 @@
       "like_count": 0,
       "location": "Italia",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Le feature più amate sono quelle che il codice aveva già scritto, in attesa di un nome."
     },
     {
       "id": 10,
@@ -253,7 +262,8 @@
       "like_count": 0,
       "location": "BikerLink",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Una mappa vuota racconta sempre la stessa storia. I dati finti, almeno, raccontano quella che vuoi tu."
     },
     {
       "id": 11,
@@ -276,7 +286,8 @@
       "like_count": 0,
       "location": "BikerLink",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Le giornate da venti task non si pianificano: si sopravvivono con una lista corta e molte pause brevi."
     },
     {
       "id": 12,
@@ -298,7 +309,8 @@
       "like_count": 0,
       "location": "Italia",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Una buona impostazione di default vale dieci tutorial."
     },
     {
       "id": 13,
@@ -321,7 +333,8 @@
       "like_count": 0,
       "location": "BikerLink",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Un backup manuale è un backup che non c'è. Lo scopri il giorno in cui ti serve."
     },
     {
       "id": 14,
@@ -343,7 +356,8 @@
       "like_count": 0,
       "location": "BikerLink",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Le feature più importanti tolgono, non aggiungono."
     },
     {
       "id": 15,
@@ -366,7 +380,8 @@
       "like_count": 0,
       "location": "Italia",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Una privacy policy non scritta è codice che firmi senza leggere."
     },
     {
       "id": 16,
@@ -389,7 +404,8 @@
       "like_count": 0,
       "location": "Sotto la scrivania",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Quando il crash vive dentro una libreria, il fix più solido è togliere la libreria."
     },
     {
       "id": 17,
@@ -412,7 +428,8 @@
       "like_count": 0,
       "location": "Replit",
       "bike": null,
-      "featured": 0
+      "featured": 0,
+      "daily_maxim": "Tra te e il bug ci sono sempre più layer di quanti ne ricordi. Vai a monte, lontano dal sintomo."
     }
   ],
   "comments": [

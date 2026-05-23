@@ -1,7 +1,7 @@
 import { useGetPost, useLikePost, useListPostComments, useCreatePostComment, getGetPostQueryKey, getListPostCommentsQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { format } from "date-fns";
-import { Clock, MapPin, Bike, ThumbsUp, MessageSquare, ChevronLeft } from "lucide-react";
+import { Clock, MapPin, Bike, ThumbsUp, MessageSquare, ChevronLeft, Quote } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -139,6 +139,26 @@ export function PostDetail() {
             </Button>
           </div>
         </div>
+
+        {/* Massima del giorno */}
+        {post.dailyMaxim && (
+          <aside
+            className="relative bg-muted/30 border-l-4 border-primary p-6 md:p-8 mb-12"
+            data-testid="daily-maxim"
+          >
+            <div className="flex items-start gap-4">
+              <Quote className="w-8 h-8 text-primary shrink-0 mt-1" />
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-primary mb-2">
+                  Massima del giorno
+                </div>
+                <blockquote className="font-serif italic text-xl md:text-2xl leading-snug text-foreground/90">
+                  &ldquo;{post.dailyMaxim}&rdquo;
+                </blockquote>
+              </div>
+            </div>
+          </aside>
+        )}
 
         {/* Content */}
         <div className="prose prose-lg dark:prose-invert prose-headings:font-display prose-headings:uppercase prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-none max-w-none mb-16">

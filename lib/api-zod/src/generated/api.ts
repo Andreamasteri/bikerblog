@@ -47,7 +47,8 @@ export const ListPostsResponseItem = zod.object({
   "likeCount": zod.number(),
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
-  "bike": zod.string().nullish()
+  "bike": zod.string().nullish(),
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
 })
 export const ListPostsResponse = zod.array(ListPostsResponseItem)
 
@@ -98,7 +99,8 @@ export const GetFeaturedPostResponse = zod.object({
   "likeCount": zod.number(),
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
-  "bike": zod.string().nullish()
+  "bike": zod.string().nullish(),
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
 })
 
 
@@ -136,7 +138,8 @@ export const ListPopularPostsResponseItem = zod.object({
   "likeCount": zod.number(),
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
-  "bike": zod.string().nullish()
+  "bike": zod.string().nullish(),
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
 })
 export const ListPopularPostsResponse = zod.array(ListPopularPostsResponseItem)
 
@@ -170,7 +173,8 @@ export const GetPostResponse = zod.object({
   "likeCount": zod.number(),
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
-  "bike": zod.string().nullish()
+  "bike": zod.string().nullish(),
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
 })
 
 
@@ -203,7 +207,8 @@ export const LikePostResponse = zod.object({
   "likeCount": zod.number(),
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
-  "bike": zod.string().nullish()
+  "bike": zod.string().nullish(),
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
 })
 
 

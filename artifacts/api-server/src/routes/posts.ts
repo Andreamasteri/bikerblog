@@ -66,6 +66,7 @@ function shapePost(
     commentCount,
     location: p.location,
     bike: p.bike,
+    dailyMaxim: p.dailyMaxim,
   };
 }
 

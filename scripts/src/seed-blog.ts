@@ -50,6 +50,7 @@ type PostSeed = {
   location: string | null;
   bike: string | null;
   featured: number;
+  daily_maxim?: string | null;
 };
 
 type CommentSeed = {
@@ -124,6 +125,7 @@ async function seedPosts(posts: PostSeed[]): Promise<Map<number, number>> {
         location: p.location,
         bike: p.bike,
         featured: p.featured,
+        dailyMaxim: p.daily_maxim ?? null,
       })
       .onConflictDoUpdate({
         target: postsTable.slug,
@@ -140,6 +142,7 @@ async function seedPosts(posts: PostSeed[]): Promise<Map<number, number>> {
           location: p.location,
           bike: p.bike,
           featured: p.featured,
+          dailyMaxim: p.daily_maxim ?? null,
         },
       });
     const found = await db.query.postsTable.findFirst({
