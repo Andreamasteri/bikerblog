@@ -430,6 +430,30 @@
       "bike": null,
       "featured": 0,
       "daily_maxim": "Tra te e il bug ci sono sempre più layer di quanti ne ricordi. Vai a monte, lontano dal sintomo."
+    },
+    {
+      "id": 18,
+      "slug": "03-marzo-tutto-e-cominciato-cosi",
+      "title": "Tutto è cominciato così",
+      "excerpt": "Le 23:41 del 3 marzo 2026. Nessun repository, nessun file, nessuna riga di codice. Solo un'idea che girava in testa e un messaggio di tredici parole a un agente. Da lì è cominciato BikerLink.",
+      "content": "Le 23:41. Martedì 3 marzo 2026.\n\n  Non c'era ancora niente. Nessun repository, nessun file, nessuna riga di codice. C'ero io, uno schermo acceso nel buio, e un'idea che girava in testa da un po' troppo tempo per lasciarla ancora lì.\n\n  Ho aperto un chat con l'agente e ho scritto:\n\n  > *\"Voglio creare una nuova app per mettere in contatto i motociclisti. Deve funzionare su android e iphone. Com'è meglio partire, considerando che dovrò fare molto debug — 11:41 pm, Mar 03, 2026\"*\n\n  È tutto lì. Tredici parole più l'orario. Nessun wireframe, nessuna specifiche, nessun PRD. Solo il problema e una domanda su come cominciare.\n\n  ## Perché quella notte\n\n  Non lo ricordo con precisione — probabilmente perché non c'era un motivo singolo, c'erano una decina di cose accumulate. I gruppi WhatsApp di motociclisti che scoppiano di messaggi e poi muoiono. Le app di dating che hai provato a usare \"per trovare gente con cui uscire in moto\" e che ti fanno sentire ridicolo. La mappa di Google Maps che sai benissimo dove sei ma non sa nulla di chi c'è intorno a te con la stessa voglia di girare.\n\n  Volevo qualcosa di semplice: apri l'app, vedi chi c'è vicino, ti unisci o organizzi. Per moto, con logica da biker — marca, stile di guida, disponibilità, non l'algoritmo di un sito di incontri.\n\n  E poi c'era Quebracho che dormiva ai miei piedi, e pensare a cose concrete aiuta quando una testa gira troppo.\n\n  ## La risposta\n\n  L'agente ha risposto in modo più sensato di quanto mi aspettassi alle undici di sera. React Native con Expo, ha detto. Unica codebase per iOS e Android. Debug mobile è già difficile — farlo due volte su due piattaforme diverse è una cattiveria che non serve. Expo aggiunge un layer che a volte salva la vita (hot reload, EAS Build, OTA update) e a volte la complica — ma nel bilancio, da solo e con poco tempo, vale il compromesso.\n\n  Server Express su Node, database PostgreSQL. Semplice, stabile, non cercare novità quando la novità è già il progetto.\n\n  Ho detto: *\"ok, facciamolo.\"*\n\n  ## Quello che non sapevo\n\n  Non sapevo che sette settimane dopo avrei passato un sabato sera a inseguire tre crash in tre librerie native per far funzionare la prima APK. Non sapevo che avrei generato 2.420 utenti finti per dare l'impressione di una community che ancora non esisteva. Non sapevo che avrei scritto una privacy policy in cinque lingue prima ancora che ci fosse un utente vero da proteggere.\n\n  Non sapevo che ci sarebbe stato un momento — seduto sul divano, app aperta sul telefono — in cui la mappa si sarebbe centrata sul mio paese e avrei visto puntini intorno, e mi ci sarebbero voluti dieci minuti per accorgermi che qualcosa era cambiato davvero.\n\n  Non sapevo niente di tutto questo alle 23:41 del 3 marzo.\n\n  ## Il punto\n\n  Raccontare BikerLink su questo blog serve a qualcosa di preciso: tenere traccia delle decisioni mentre le prendo ancora, non dopo. I postmortem valgono poco se le scrivi quando hai già dimenticato come ti sentivi quando tutto era rotto.\n\n  Questa è la prima voce. Il resto è già scritto — o lo sarà.\n\n  Quebracho quella notte si è svegliato una volta, mi ha guardato, e si è riaddormentato. Segno che andava bene.",
+      "cover_image_url": "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1600&q=80",
+      "category": "product",
+      "tags": [
+        "origine",
+        "bikerlink",
+        "expo",
+        "react-native",
+        "notte"
+      ],
+      "author_id": 1,
+      "published_at": "2026-03-03T23:41:00+00:00",
+      "reading_minutes": 4,
+      "like_count": 0,
+      "location": "Italia",
+      "bike": null,
+      "featured": 0,
+      "daily_maxim": "La prima riga non è mai codice. È una domanda fatta ad alta voce."
     }
   ],
   "comments": [
