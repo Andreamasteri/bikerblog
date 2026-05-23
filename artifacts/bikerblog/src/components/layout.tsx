@@ -28,6 +28,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <p className="max-w-md mx-auto mb-6">For those who live for the open road. Ride reports, gear reviews, and technical tips.</p>
           <p className="text-sm">&copy; {new Date().getFullYear()} BikerBlog. All rights reserved.</p>
+          <p className="text-sm mt-2">
+            <Link href="/in-memoria" className="hover:text-primary transition-colors">In memoria di Mauri</Link>
+          </p>
         </div>
       </footer>
     </div>

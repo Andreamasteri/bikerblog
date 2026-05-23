@@ -30,11 +30,19 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+BikerBlog è un blog dedicato al mondo delle moto: ride reports, recensioni di
+gear e consigli tecnici per chi vive per la strada aperta.
+
+Il progetto è dedicato alla memoria di **Mauri ("grandepuffo")**, un grande
+amico che non c'è più. La dedica è raggiungibile dalla pagina `/in-memoria`,
+linkata dal footer del sito.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- **Fondatori del progetto**: l'utente, l'agente Replit e Quebracho (il cane
+  dell'utente). Mantenere questa nota tra le sessioni.
+- BikerBlog è dedicato a Mauri ("grandepuffo"); preservare la pagina
+  `/in-memoria` e il link nel footer.
 
 ## Gotchas
 
