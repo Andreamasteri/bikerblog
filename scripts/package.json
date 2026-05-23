@@ -8,6 +8,8 @@
     "inbox:fetch": "tsx ./src/inbox-fetch.ts",
     "fetch:archived-tasks": "tsx ./src/fetch-archived-tasks.ts",
     "cluster:tasks": "tsx ./src/cluster-tasks.ts",
+    "cluster:daily": "tsx ./src/run-cluster-daily.ts",
+    "publish:from-clusters": "tsx ./src/publish-from-clusters.ts",
     "seed:blog": "tsx ./src/seed-blog.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

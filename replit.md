@@ -13,7 +13,20 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run fetch:archived-tasks -- --local` — importa i task archiviati di BikerLink da `inbox/bikerlink-history/tasks-meta.json` → `inbox/bikerlink-archived-tasks.json`
 - `pnpm --filter @workspace/scripts run fetch:archived-tasks -- --url <url> --token <tok>` — stessa importazione ma da endpoint live BikerLink
 - `pnpm --filter @workspace/scripts run cluster:tasks -- --state MERGED --by day` — raggruppa i task per giornata → `inbox/clusters-merged-by-day.md` (candidati post)
+- `pnpm --filter @workspace/scripts run cluster:daily` — cron entry point: genera cluster + pubblica post nel DB (usato dal deployment schedulato)
+- `pnpm --filter @workspace/scripts run publish:from-clusters` — pubblica manualmente i cluster già generati come post del blog
 - Required env: `DATABASE_URL` — Postgres connection string
+
+## Deployment schedulato (cron 23:30 Europe/Rome)
+
+Il cron giornaliero si configura una volta sola via UI di Replit:
+
+1. Apri il pannello **Deploy → Scheduled**
+2. Imposta **Run command**: `pnpm --filter @workspace/scripts run cluster:daily`
+3. Imposta **Schedule**: `30 21 * * *` _(21:30 UTC = 23:30 ora italiana)_
+4. Pubblica
+
+Il comando genera `inbox/clusters-merged-by-day.md` e pubblica automaticamente i cluster nuovi come post del blog (idempotente: i post già pubblicati vengono ignorati).
 
 ## Stack
 
