@@ -6,6 +6,8 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "inbox:fetch": "tsx ./src/inbox-fetch.ts",
+    "fetch:archived-tasks": "tsx ./src/fetch-archived-tasks.ts",
+    "cluster:tasks": "tsx ./src/cluster-tasks.ts",
     "seed:blog": "tsx ./src/seed-blog.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
