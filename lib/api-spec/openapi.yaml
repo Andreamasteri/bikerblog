@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: BikerBlog API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: posts
+    description: Blog post operations
+  - name: comments
+    description: Comment operations
+  - name: tags
+    description: Tag operations
+  - name: stats
+    description: Aggregate stats and discovery
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +31,348 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /posts:
+    get:
+      operationId: listPosts
+      tags: [posts]
+      summary: List blog posts
+      parameters:
+        - in: query
+          name: tag
+          schema: { type: string }
+          required: false
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [ride-report, gear-review, tech-tips, news]
+          required: false
+        - in: query
+          name: search
+          schema: { type: string }
+          required: false
+      responses:
+        "200":
+          description: List of posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+    post:
+      operationId: createPost
+      tags: [posts]
+      summary: Create a new blog post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+
+  /posts/featured:
+    get:
+      operationId: getFeaturedPost
+      tags: [posts]
+      summary: Get the featured (hero) post
+      responses:
+        "200":
+          description: Featured post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+
+  /posts/popular:
+    get:
+      operationId: listPopularPosts
+      tags: [posts]
+      summary: Most-liked posts
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 20, default: 5 }
+      responses:
+        "200":
+          description: Popular posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+
+  /posts/{slug}:
+    get:
+      operationId: getPost
+      tags: [posts]
+      summary: Get a single post by slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts/{slug}/like:
+    post:
+      operationId: likePost
+      tags: [posts]
+      summary: Increment like counter for a post
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+
+  /posts/{slug}/comments:
+    get:
+      operationId: listPostComments
+      tags: [comments]
+      summary: List comments for a post
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Comment"
+    post:
+      operationId: createPostComment
+      tags: [comments]
+      summary: Add a comment to a post
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+
+  /tags:
+    get:
+      operationId: listTags
+      tags: [tags]
+      summary: List all tags with usage counts
+      responses:
+        "200":
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TagCount"
+
+  /stats:
+    get:
+      operationId: getBlogStats
+      tags: [stats]
+      summary: Aggregate stats about the blog
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogStats"
+
+  /authors:
+    get:
+      operationId: listAuthors
+      tags: [stats]
+      summary: List authors with post counts
+      responses:
+        "200":
+          description: Authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuthorSummary"
+
 components:
   schemas:
     HealthStatus:
       type: object
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+      required: [error]
+
+    Author:
+      type: object
+      required: [id, name, avatarUrl, bio]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        avatarUrl: { type: string }
+        bio: { type: string }
+        location: { type: ["string", "null"] }
+        bike: { type: ["string", "null"] }
+
+    AuthorSummary:
+      type: object
+      required: [id, name, avatarUrl, postCount]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        avatarUrl: { type: string }
+        bio: { type: string }
+        location: { type: ["string", "null"] }
+        bike: { type: ["string", "null"] }
+        postCount: { type: integer }
+
+    Post:
+      type: object
+      required:
+        - id
+        - slug
+        - title
+        - excerpt
+        - content
+        - coverImageUrl
+        - category
+        - tags
+        - author
+        - publishedAt
+        - readingMinutes
+        - likeCount
+        - commentCount
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string }
+        content: { type: string, description: "Markdown body" }
+        coverImageUrl: { type: string }
+        category:
+          type: string
+          enum: [ride-report, gear-review, tech-tips, news]
+        tags:
+          type: array
+          items: { type: string }
+        author:
+          $ref: "#/components/schemas/Author"
+        publishedAt: { type: string, format: date-time }
+        readingMinutes: { type: integer }
+        likeCount: { type: integer }
+        commentCount: { type: integer }
+        location: { type: ["string", "null"] }
+        bike: { type: ["string", "null"] }
+
+    PostInput:
+      type: object
+      required: [title, excerpt, content, coverImageUrl, category, tags, authorId]
+      properties:
+        title: { type: string, minLength: 1 }
+        excerpt: { type: string, minLength: 1 }
+        content: { type: string, minLength: 1 }
+        coverImageUrl: { type: string }
+        category:
+          type: string
+          enum: [ride-report, gear-review, tech-tips, news]
+        tags:
+          type: array
+          items: { type: string }
+        authorId: { type: integer }
+        location: { type: ["string", "null"] }
+        bike: { type: ["string", "null"] }
+
+    Comment:
+      type: object
+      required: [id, postId, authorName, body, createdAt]
+      properties:
+        id: { type: integer }
+        postId: { type: integer }
+        authorName: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    CommentInput:
+      type: object
+      required: [authorName, body]
+      properties:
+        authorName: { type: string, minLength: 1, maxLength: 80 }
+        body: { type: string, minLength: 1, maxLength: 2000 }
+
+    TagCount:
+      type: object
+      required: [tag, count]
+      properties:
+        tag: { type: string }
+        count: { type: integer }
+
+    CategoryCount:
+      type: object
+      required: [category, count]
+      properties:
+        category:
+          type: string
+          enum: [ride-report, gear-review, tech-tips, news]
+        count: { type: integer }
+
+    BlogStats:
+      type: object
+      required: [totalPosts, totalComments, totalLikes, totalAuthors, categories]
+      properties:
+        totalPosts: { type: integer }
+        totalComments: { type: integer }
+        totalLikes: { type: integer }
+        totalAuthors: { type: integer }
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryCount"

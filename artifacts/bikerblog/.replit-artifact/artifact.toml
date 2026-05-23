@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "BikerBlog"
+version = "1.0.0"
+id = "artifacts/bikerblog"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21881
+
+[services.development]
+run = "pnpm --filter @workspace/bikerblog run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/bikerblog", "run", "build" ]
+publicDir = "artifacts/bikerblog/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21881"
+BASE_PATH = "/"

@@ -1,0 +1,32 @@
+import {
+  pgTable,
+  text,
+  serial,
+  integer,
+  timestamp,
+} from "drizzle-orm/pg-core";
+import { authorsTable } from "./authors";
+
+export const postsTable = pgTable("posts", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  excerpt: text("excerpt").notNull(),
+  content: text("content").notNull(),
+  coverImageUrl: text("cover_image_url").notNull(),
+  category: text("category").notNull(),
+  tags: text("tags").array().notNull().default([]),
+  authorId: integer("author_id")
+    .notNull()
+    .references(() => authorsTable.id),
+  publishedAt: timestamp("published_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  readingMinutes: integer("reading_minutes").notNull().default(5),
+  likeCount: integer("like_count").notNull().default(0),
+  location: text("location"),
+  bike: text("bike"),
+  featured: integer("featured").notNull().default(0),
+});
+
+export type PostRow = typeof postsTable.$inferSelect;
