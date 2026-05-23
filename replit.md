@@ -22,7 +22,15 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- DB schema: `lib/db/src/schema/{authors,posts,comments}.ts`
+- API contract: `lib/api-spec/openapi.yaml` (regenerate with `pnpm --filter @workspace/api-spec run codegen`)
+- API routes: `artifacts/api-server/src/routes/{posts,comments,meta}.ts`
+- Frontend: `artifacts/bikerblog/src/`
+- **Inbox** (external context dropped here for the agent to read):
+  `inbox/` — files like `inbox/<source>-chat-latest.md`. Fetched via
+  `pnpm --filter @workspace/scripts run inbox:fetch --source <name> --url <url> --token <token>`
+  (see `scripts/src/inbox-fetch.ts`). Used to import chat history or
+  context from other Replit projects.
 
 ## Architecture decisions
 
