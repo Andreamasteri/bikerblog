@@ -12,6 +12,7 @@
     "publish:from-clusters": "tsx ./src/publish-from-clusters.ts",
     "seed:blog": "tsx ./src/seed-blog.ts",
     "daily-pipeline": "tsx src/daily-pipeline.ts",
+    "sync": "tsx src/sync-and-publish.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
