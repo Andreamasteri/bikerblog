@@ -44,9 +44,15 @@ const TASKS_META     = resolve(ROOT, "inbox", "bikerlink-history", "tasks-meta.j
 const DAY_MAP_FILE   = resolve(ROOT, "inbox", "bikerlink-chat-day-map.json");
 
 const DATE_START = "2026-03-12";
+
 /** Historical end of the BikerLink development period */
 const DATE_END_BASE  = "2026-05-23";
-/** Maximum sessions to pass to Claude per day */
+
+/** Maximum keyword-matched (globally-relevant) sessions for task days */
+const MAX_RELEVANT_SESSIONS   = 8;
+/** Maximum proportional-slice (contextual background) sessions for task days */
+const MAX_CONTEXTUAL_SESSIONS = 5;
+/** Maximum sessions to pass to Claude per day (non-task days / legacy cap) */
 const MAX_SESSIONS_PER_DAY = 13;
 /** Maximum boundary shift (in sessions) for content-signal adjustment */
 const MAX_BOUNDARY_SHIFT   = 5;
@@ -313,6 +319,79 @@ function buildDayMap(
   return dayMap;
 }
 
+// ── Semantic session selection ────────────────────────────────────────────────
+
+interface SelectedSessions {
+  /** Globally keyword-matched sessions — directly mention the day's task refs or title words */
+  relevant:   string[];
+  /** Proportional-slice sessions from the day map — provide temporal background context */
+  contextual: string[];
+}
+
+/**
+ * For days WITH task clusters: selects sessions by semantic relevance.
+ *   1. Build keywords: task refs (#N) + significant words from task titles (len > 4, max 3/title)
+ *   2. Score every session in the full corpus by keyword hit count
+ *   3. Take the top MAX_RELEVANT_SESSIONS as "relevant"
+ *   4. Take up to MAX_CONTEXTUAL_SESSIONS from the proportional day-map slice
+ *      that are NOT already in the relevant set, as temporal background
+ *
+ * For days WITHOUT task clusters: falls back to the proportional slice only
+ * (returned as contextual, relevant is empty).
+ */
+function selectSessionsForDay(
+  cluster:      Cluster | undefined,
+  sessions:     string[],
+  dayMapEntry:  DayMapEntry,
+): SelectedSessions {
+  // Non-task days: proportional slice only
+  if (!cluster) {
+    return {
+      relevant:   [],
+      contextual: sessions
+        .slice(dayMapEntry.sessionStart, dayMapEntry.sessionEnd)
+        .slice(0, MAX_SESSIONS_PER_DAY),
+    };
+  }
+
+  // Build keyword list (same strategy as enrich-posts-with-ai.ts)
+  const keywords: string[] = [
+    ...cluster.taskRefs, // "#123", "#45", …
+    ...cluster.taskTitles.flatMap((title) =>
+      title.split(/\s+/).filter((w) => w.length > 4).slice(0, 3)
+    ),
+  ];
+
+  // Score each session in the FULL corpus
+  const scored: { idx: number; score: number }[] = [];
+  for (let i = 0; i < sessions.length; i++) {
+    const lower = sessions[i].toLowerCase();
+    const score = keywords.filter((kw) => lower.includes(kw.toLowerCase())).length;
+    if (score > 0) scored.push({ idx: i, score });
+  }
+  // Sort descending by relevance score, then ascending by position (stable tiebreak)
+  scored.sort((a, b) => b.score - a.score || a.idx - b.idx);
+
+  const relevantIdxSet = new Set(
+    scored.slice(0, MAX_RELEVANT_SESSIONS).map((s) => s.idx)
+  );
+  // Re-order relevant sessions chronologically
+  const relevantIdxs = [...relevantIdxSet].sort((a, b) => a - b);
+  const relevant = relevantIdxs.map((i) => sessions[i]);
+
+  // Contextual: from proportional day-map slice, skip those already in relevant
+  const contextual: string[] = [];
+  for (
+    let i = dayMapEntry.sessionStart;
+    i < dayMapEntry.sessionEnd && contextual.length < MAX_CONTEXTUAL_SESSIONS;
+    i++
+  ) {
+    if (!relevantIdxSet.has(i)) contextual.push(sessions[i]);
+  }
+
+  return { relevant, contextual };
+}
+
 // ── Prompts ───────────────────────────────────────────────────────────────────
 
 const PERSONA = `Sei il ghostwriter del blog BikerLink, scritto in prima persona da un programmatore italiano appassionato di moto.
@@ -322,7 +401,8 @@ Il blog racconta lo sviluppo di **BikerLink** — un'app moto italiana — giorn
 function buildPromptWithTasks(
   date: string,
   cluster: Cluster,
-  sessions: string[]
+  relevant:   string[],
+  contextual: string[],
 ): string {
   const taskList = cluster.taskTitles
     .map((t, i) => `- ${cluster.taskRefs[i]}: ${t}`)
@@ -333,14 +413,27 @@ function buildPromptWithTasks(
     .replace(/\n{3,}/g, "\n\n")
     .slice(0, 2800);
 
-  const chatSection = sessions.length > 0
-    ? `\n\n### Estratti dalla chat di sviluppo (${sessions.length} scambi del giorno)\n` +
-      sessions
-        .slice(0, 10)
-        .map((s, i) => `\n**[${i + 1}]** ${s.slice(0, 550)}`)
+  let chatSection = "";
+
+  if (relevant.length > 0) {
+    chatSection +=
+      `\n\n### Sessioni rilevanti ai task (${relevant.length} — trovate per keyword matching)\n` +
+      relevant
+        .slice(0, 8)
+        .map((s, i) => `\n**[R${i + 1}]** ${s.slice(0, 600)}`)
         .join("\n\n")
-        .slice(0, 3000)
-    : "";
+        .slice(0, 3200);
+  }
+
+  if (contextual.length > 0) {
+    chatSection +=
+      `\n\n### Sessioni di contesto (${contextual.length} — segmento proporzionale del giorno)\n` +
+      contextual
+        .slice(0, 5)
+        .map((s, i) => `\n**[C${i + 1}]** ${s.slice(0, 400)}`)
+        .join("\n\n")
+        .slice(0, 1500);
+  }
 
   return `${PERSONA}
 
@@ -356,7 +449,7 @@ ${cleanDetails}${chatSection}
 Scrivi un post blog in **italiano** di circa **450-550 parole** con questo formato:
 
 1. **Apertura narrativa** (1-2 frasi): cattura l'atmosfera del giorno senza iniziare con "Oggi" o "Questa settimana"
-2. **Il lavoro vero** (3-5 paragrafi): cosa è stato fatto, in ordine logico. Usa i dettagli tecnici reali dei task. Se dalla chat emergono momenti interessanti (bug, decisioni, discussioni), usali.
+2. **Il lavoro vero** (3-5 paragrafi): cosa è stato fatto, in ordine logico. Usa i dettagli tecnici reali dei task. Se dalle sessioni rilevanti emergono momenti interessanti (bug, decisioni, discussioni), usali — preferisci quelle [R*] ai generici contesti [C*].
 3. **Un momento specifico** (1 paragrafo): il task o la conversazione più interessante, approfondita
 4. **Chiusura** (1 frase): una nota personale su dove sta andando il progetto
 
@@ -616,20 +709,18 @@ async function main() {
     await Promise.all(batch.map(async (date) => {
       const slug    = `diary-${date}`;
       const entry   = dayMap[date];
-      // Non-overlapping slice: [sessionStart, sessionEnd)
-      const daySessions = sessions
-        .slice(entry.sessionStart, entry.sessionEnd)
-        .slice(0, MAX_SESSIONS_PER_DAY);
-
       const cluster = clusterMap.get(date);
-      const prompt  = cluster
-        ? buildPromptWithTasks(date, cluster, daySessions)
-        : buildPromptChatOnly(date, daySessions);
+
+      const { relevant, contextual } = selectSessionsForDay(cluster, sessions, entry);
+
+      const prompt = cluster
+        ? buildPromptWithTasks(date, cluster, relevant, contextual)
+        : buildPromptChatOnly(date, contextual);
 
       const kind = cluster
-        ? `${cluster.taskCount} task`
-        : "solo chat";
-      console.log(`[diary] ▶ ${slug} (${kind}, ${entry.sessionCount} sess → slice [${entry.sessionStart}:${entry.sessionEnd}])...`);
+        ? `${cluster.taskCount} task, ${relevant.length} sess rilevanti + ${contextual.length} contesto`
+        : `solo chat, ${contextual.length} sess`;
+      console.log(`[diary] ▶ ${slug} (${kind})`);
 
       try {
         const content = await generatePost(prompt);
