@@ -13,6 +13,10 @@ export function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <p className="text-sm md:text-base italic text-muted-foreground/70 tracking-widest font-serif mb-4 select-none">
+        — Come lo feci
+      </p>
+
       {featuredLoading ? (
         <div className="h-[60vh] bg-muted animate-pulse mb-12"></div>
       ) : featuredPost ? (
@@ -20,12 +24,6 @@ export function Home() {
           <Link href={`/posts/${featuredPost.slug}`} className="group relative block h-[60vh] overflow-hidden bg-black">
             <img src={featuredPost.coverImageUrl} alt={featuredPost.title} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity duration-700" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-            <div className="absolute top-0 left-0 right-0 p-8 md:p-12 flex items-center justify-between">
-              <p className="text-base md:text-lg italic text-gray-200/80 tracking-widest font-serif select-none"
-                style={{ textShadow: "0 1px 8px rgba(0,0,0,0.8)" }}>
-                — Come lo feci
-              </p>
-            </div>
             <div className="absolute bottom-0 left-0 p-8 md:p-12 w-full max-w-4xl">
               <Badge className="mb-4 bg-primary text-primary-foreground uppercase tracking-widest">{featuredPost.category.replace('-', ' ')}</Badge>
               <h1 className="text-4xl md:text-6xl font-display font-bold text-white mb-4 leading-tight group-hover:text-primary transition-colors">{featuredPost.title}</h1>
