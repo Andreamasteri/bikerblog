@@ -101,6 +101,27 @@ async function generateTtsBytes(text: string, slug: string): Promise<Buffer> {
   }
 }
 
+// ── Verify audio endpoint is reachable after upload ───────────────────────────
+
+async function verifyAudioReachable(slug: string): Promise<boolean> {
+  const url = `${API_BASE}/api/podcast/audio/${encodeURIComponent(slug)}`;
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    if (res.ok) {
+      console.log(`[podcast]   verify HEAD ${slug} → ${res.status} OK`);
+      return true;
+    }
+    console.error(`[podcast]   verify HEAD ${slug} → ${res.status} FAIL`);
+    return false;
+  } catch (err) {
+    console.error(
+      `[podcast]   verify HEAD ${slug} → FAIL (network):`,
+      err instanceof Error ? err.message : err,
+    );
+    return false;
+  }
+}
+
 // ── Store via API server (usa sidecar GCS) ────────────────────────────────────
 
 async function storeAudio(slug: string, audioBytes: Buffer): Promise<string> {
@@ -167,6 +188,19 @@ async function main() {
       console.log(`[podcast]   TTS ok — ${(audioBytes.length / 1024).toFixed(0)} KB`);
 
       const publicUrl = await storeAudio(slug, audioBytes);
+      console.log(`[podcast]   stored → ${publicUrl}`);
+
+      const reachable = await verifyAudioReachable(slug);
+      if (!reachable) {
+        console.error(`[podcast] ✗ ${slug} — endpoint non raggiungibile, audio_url rimosso dal DB`);
+        await db
+          .update(postsTable)
+          .set({ audioUrl: null })
+          .where(eq(postsTable.slug, slug));
+        fail++;
+        continue;
+      }
+
       console.log(`[podcast] ✓ ${slug} → ${publicUrl}`);
       ok++;
 
