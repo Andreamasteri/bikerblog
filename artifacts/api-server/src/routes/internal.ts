@@ -130,7 +130,11 @@ router.post(
   express.json({ limit: "20mb" }),
   async (req, res): Promise<void> => {
     const auth = req.headers.authorization;
-    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+    const seedToken = process.env["SEED_TOKEN"];
+    const validTokens: string[] = [];
+    if (INBOX_TOKEN) validTokens.push(`Bearer ${INBOX_TOKEN}`);
+    if (seedToken) validTokens.push(`Bearer ${seedToken}`);
+    if (validTokens.length === 0 || !auth || !validTokens.includes(auth)) {
       res.status(401).json({ error: "unauthorized" });
       return;
     }
