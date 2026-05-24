@@ -1,6 +1,7 @@
 {
   "nav": {
     "posts": "Posts",
+    "podcast": "Podcast",
     "timeline": "Timeline",
     "authors": "Authors"
   },
@@ -84,6 +85,15 @@
   "categories": {
     "label": "Category",
     "noResults": "No posts found in this category."
+  },
+  "podcast": {
+    "title": "Podcast",
+    "subtitle": "All BikerBlog audio episodes. Listen to the best dispatches from the road.",
+    "rss": "RSS Feed",
+    "episode": "Episode",
+    "readPost": "Read post",
+    "empty": "No episodes",
+    "emptyDesc": "No audio episodes available yet. Check back soon."
   },
   "notFound": {
     "title": "404 Page Not Found",

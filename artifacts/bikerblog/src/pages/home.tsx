@@ -100,7 +100,7 @@ export function Home() {
               <Headphones className="w-7 h-7 text-primary" />
               {t("home.listen")}
             </h2>
-            <Link href="/posts" className="text-primary hover:underline font-bold uppercase text-sm tracking-wider">{t("home.allPosts")}</Link>
+            <Link href="/podcast" className="text-primary hover:underline font-bold uppercase text-sm tracking-wider">{t("home.allPosts")}</Link>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {podcastPosts.map(post => (

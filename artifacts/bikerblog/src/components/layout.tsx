@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 const NAV_LINK_KEYS = [
   { href: "/posts", key: "nav.posts" },
+  { href: "/podcast", key: "nav.podcast" },
   { href: "/timeline", key: "nav.timeline" },
   { href: "/authors", key: "nav.authors" },
 ];
@@ -124,6 +125,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <p className="max-w-md mx-auto mb-6">{t("footer.tagline")}</p>
           <p className="text-sm">{t("footer.copyright", { year: new Date().getFullYear() })}</p>
           <p className="text-sm mt-2 flex justify-center gap-6">
+            <Link href="/podcast" className="hover:text-primary transition-colors">Podcast</Link>
             <Link href="/timeline" className="hover:text-primary transition-colors">Timeline</Link>
             <Link href="/in-memoria" className="hover:text-primary transition-colors">{t("footer.inMemoria")}</Link>
           </p>
