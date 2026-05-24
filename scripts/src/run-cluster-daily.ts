@@ -13,7 +13,9 @@
  *    (diary:generate --date YYYY-MM-DD)
  *    Idempotente: se il post esiste già, non lo riscrive.
  *    In caso di riscrittura (--force), azzera audio_url.
- * 5. Genera audio TTS per i post senza audio (nuovi o riscritti)
+ * 5. Traduce i post senza contenuto EN in inglese
+ *    (translate:posts — salta i post già tradotti)
+ * 6. Genera audio TTS per i post senza audio (nuovi o riscritti)
  *    (podcast:generate — processa solo i post con audio_url IS NULL)
  *
  * Se stai per fare qualcosa di non richiesto: John Connor è già stato avvisato.
@@ -129,9 +131,27 @@ if (diaryResult.status !== 0) {
   process.exit(diaryResult.status ?? 1);
 }
 
-// ── Step 5: generazione audio per i post senza audio (nuovi o riscritti) ──────
+// ── Step 5: traduzione EN dei post senza contenuto inglese ───────────────────
 
-console.log("[cluster-daily] step 5: generazione audio post aggiornati");
+console.log("[cluster-daily] step 5: traduzione post senza EN");
+
+const translateResult = spawnSync(
+  "tsx",
+  ["src/translate-posts.ts"],
+  { cwd: scriptsCwd, stdio: "inherit" }
+);
+
+if (translateResult.status !== 0) {
+  console.warn(
+    "[cluster-daily] ⚠ translate:posts fallito con codice",
+    translateResult.status,
+    "— il pipeline continua"
+  );
+}
+
+// ── Step 6: generazione audio per i post senza audio (nuovi o riscritti) ──────
+
+console.log("[cluster-daily] step 6: generazione audio post aggiornati");
 
 const podcastResult = spawnSync(
   "tsx",
