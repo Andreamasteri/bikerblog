@@ -301,6 +301,15 @@ components:
         audioUrl:
           type: ["string", "null"]
           description: "URL MP3 dell'episodio podcast generato da TTS."
+        titleEn:
+          type: ["string", "null"]
+          description: "English translation of the post title."
+        excerptEn:
+          type: ["string", "null"]
+          description: "English translation of the post excerpt."
+        bodyEn:
+          type: ["string", "null"]
+          description: "English translation of the post body (Markdown)."
 
     PostInput:
       type: object

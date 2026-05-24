@@ -1,15 +1,16 @@
 import { useListAuthors } from "@workspace/api-client-react";
 import { MapPin, Bike, FileText } from "lucide-react";
-import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 
 export function Authors() {
+  const { t } = useTranslation();
   const { data: authors, isLoading } = useListAuthors();
 
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mb-16">
-        <h1 className="text-4xl md:text-6xl font-display font-bold uppercase tracking-tight mb-4 leading-none">The Writers</h1>
-        <p className="text-muted-foreground max-w-xl text-lg">The grease monkeys, long-haulers, and speed freaks behind the dispatches.</p>
+        <h1 className="text-4xl md:text-6xl font-display font-bold uppercase tracking-tight mb-4 leading-none">{t("authors.title")}</h1>
+        <p className="text-muted-foreground max-w-xl text-lg">{t("authors.subtitle")}</p>
       </div>
 
       {isLoading ? (

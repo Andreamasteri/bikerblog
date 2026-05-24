@@ -1,7 +1,7 @@
 import { useGetPost, useLikePost, useListPostComments, useCreatePostComment, getGetPostQueryKey, getListPostCommentsQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { format } from "date-fns";
-import { Clock, MapPin, Bike, ThumbsUp, MessageSquare, ChevronLeft, Quote } from "lucide-react";
+import { Clock, MapPin, Bike, ThumbsUp, MessageSquare, ChevronLeft, Quote, Languages } from "lucide-react";
 import { PodcastPlayer } from "@/components/podcast-player";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,55 @@ import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
+
+function usePostMeta(slug: string | undefined) {
+  useEffect(() => {
+    if (!slug) return;
+    const base = window.location.origin + window.location.pathname;
+
+    let canonicalEl = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
+    if (!canonicalEl) {
+      canonicalEl = document.createElement("link");
+      canonicalEl.rel = "canonical";
+      document.head.appendChild(canonicalEl);
+    }
+    canonicalEl.href = base;
+
+    const langs: Array<[string, string]> = [
+      ["it", `${base}?lang=it`],
+      ["en", `${base}?lang=en`],
+      ["x-default", base],
+    ];
+    for (const [hreflang, href] of langs) {
+      const id = `hreflang-${hreflang}`;
+      let el = document.getElementById(id) as HTMLLinkElement | null;
+      if (!el) {
+        el = document.createElement("link");
+        el.id = id;
+        el.rel = "alternate";
+        el.setAttribute("hreflang", hreflang);
+        document.head.appendChild(el);
+      }
+      el.href = href;
+    }
+
+    return () => {
+      canonicalEl?.remove();
+      for (const [hreflang] of langs) {
+        document.getElementById(`hreflang-${hreflang}`)?.remove();
+      }
+    };
+  }, [slug]);
+}
 
 export function PostDetail() {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   const { slug } = useParams();
+  usePostMeta(slug);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -45,14 +89,14 @@ export function PostDetail() {
       data: { authorName: commentName, body: commentBody }
     }, {
       onSuccess: () => {
-        toast({ title: "Comment posted", description: "Your voice has been added to the mix." });
+        toast({ title: t("postDetail.commentPosted"), description: t("postDetail.commentPostedDesc") });
         setCommentName("");
         setCommentBody("");
         queryClient.invalidateQueries({ queryKey: getListPostCommentsQueryKey(slug) });
         queryClient.invalidateQueries({ queryKey: getGetPostQueryKey(slug) });
       },
       onError: () => {
-        toast({ variant: "destructive", title: "Error", description: "Failed to post comment. Try again." });
+        toast({ variant: "destructive", title: t("postDetail.commentError"), description: t("postDetail.commentErrorDesc") });
       }
     });
   };
@@ -75,26 +119,32 @@ export function PostDetail() {
   if (postError || !post) {
     return (
       <div className="container max-w-4xl mx-auto px-4 py-24 text-center">
-        <h1 className="text-4xl font-display font-bold uppercase mb-4">Dead End</h1>
-        <p className="text-muted-foreground mb-8">The post you're looking for doesn't exist or has been moved.</p>
+        <h1 className="text-4xl font-display font-bold uppercase mb-4">{t("postDetail.deadEnd")}</h1>
+        <p className="text-muted-foreground mb-8">{t("postDetail.notFound")}</p>
         <Link href="/posts">
           <Button variant="outline" className="rounded-none uppercase tracking-wider font-bold">
-            <ChevronLeft className="w-4 h-4 mr-2" /> Back to Archives
+            <ChevronLeft className="w-4 h-4 mr-2" /> {t("postDetail.backToArchives")}
           </Button>
         </Link>
       </div>
     );
   }
 
+  const useEn = lang === "en";
+  const displayTitle = useEn && post.titleEn ? post.titleEn : post.title;
+  const displayExcerpt = useEn && post.excerptEn ? post.excerptEn : post.excerpt;
+  const displayBody = useEn && post.bodyEn ? post.bodyEn : post.content;
+  const hasTranslation = !!(post.titleEn && post.excerptEn && post.bodyEn);
+
   return (
     <article className="pb-24">
       {/* Hero Section */}
       <header className="relative h-[70vh] min-h-[500px] w-full mb-16 flex items-end">
-        <img src={post.coverImageUrl} alt={post.title} className="absolute inset-0 w-full h-full object-cover" />
+        <img src={post.coverImageUrl} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
         <div className="container max-w-4xl mx-auto px-4 relative z-10 pb-12">
           <Link href="/posts" className="inline-flex items-center text-sm font-bold uppercase tracking-wider text-muted-foreground hover:text-primary mb-8 transition-colors">
-            <ChevronLeft className="w-4 h-4 mr-1" /> Back
+            <ChevronLeft className="w-4 h-4 mr-1" /> {t("postDetail.back")}
           </Link>
           <div className="mb-6 flex flex-wrap gap-3">
             <Badge className="bg-primary text-primary-foreground uppercase tracking-widest rounded-none">{post.category.replace('-', ' ')}</Badge>
@@ -102,8 +152,8 @@ export function PostDetail() {
               <Badge key={tag} variant="outline" className="uppercase tracking-widest rounded-none border-primary/50 text-primary-foreground">{tag}</Badge>
             ))}
           </div>
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-display font-bold uppercase tracking-tight mb-6 leading-[1.1]">{post.title}</h1>
-          <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl font-serif italic">{post.excerpt}</p>
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-display font-bold uppercase tracking-tight mb-6 leading-[1.1]">{displayTitle}</h1>
+          <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl font-serif italic">{displayExcerpt}</p>
         </div>
       </header>
 
@@ -117,7 +167,7 @@ export function PostDetail() {
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>{format(new Date(post.publishedAt), "MMMM d, yyyy")}</span>
                 <span>&bull;</span>
-                <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {post.readingMinutes} min read</span>
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {post.readingMinutes} {t("postDetail.minRead")}</span>
               </div>
             </div>
           </div>
@@ -130,16 +180,24 @@ export function PostDetail() {
               disabled={likeMutation.isPending}
             >
               <ThumbsUp className={`w-4 h-4 mr-2 ${likeMutation.isPending ? 'animate-bounce' : ''}`} /> 
-              {post.likeCount} Likes
+              {post.likeCount} {t("postDetail.likes")}
             </Button>
             <Button variant="outline" size="sm" className="rounded-none uppercase tracking-wider font-bold" asChild>
               <a href="#comments">
                 <MessageSquare className="w-4 h-4 mr-2" />
-                {post.commentCount} Comments
+                {post.commentCount} {t("postDetail.comments")}
               </a>
             </Button>
           </div>
         </div>
+
+        {/* Translation notice */}
+        {useEn && hasTranslation && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/20 border border-border px-4 py-3 mb-8">
+            <Languages className="w-4 h-4 text-primary shrink-0" />
+            <span>{t("postDetail.translatedNote")}</span>
+          </div>
+        )}
 
         {/* Massima del giorno */}
         {post.dailyMaxim && (
@@ -151,7 +209,7 @@ export function PostDetail() {
               <Quote className="w-8 h-8 text-primary shrink-0 mt-1" />
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-primary mb-2">
-                  Massima del giorno
+                  {t("postDetail.dailyMaxim")}
                 </div>
                 <blockquote className="font-serif italic text-xl md:text-2xl leading-snug text-foreground/90">
                   &ldquo;{post.dailyMaxim}&rdquo;
@@ -163,19 +221,19 @@ export function PostDetail() {
 
         {/* Podcast Player */}
         {post.audioUrl && (
-          <PodcastPlayer audioUrl={post.audioUrl} title={post.title} />
+          <PodcastPlayer audioUrl={post.audioUrl} title={displayTitle} />
         )}
 
         {/* Content */}
         <div className="prose prose-lg dark:prose-invert prose-headings:font-display prose-headings:uppercase prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-none max-w-none mb-16">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {post.content}
+            {displayBody}
           </ReactMarkdown>
         </div>
 
         {/* Author Card */}
         <div className="bg-muted p-8 border-l-4 border-primary mb-16">
-          <h3 className="font-display text-2xl uppercase font-bold mb-6">About the Author</h3>
+          <h3 className="font-display text-2xl uppercase font-bold mb-6">{t("postDetail.aboutAuthor")}</h3>
           <div className="flex flex-col md:flex-row gap-6 items-start">
             <img src={post.author.avatarUrl} alt={post.author.name} className="w-24 h-24 grayscale object-cover" />
             <div>
@@ -195,14 +253,14 @@ export function PostDetail() {
 
         {/* Comments Section */}
         <section id="comments" className="border-t border-border pt-12">
-          <h3 className="font-display text-3xl uppercase font-bold mb-8">Discuss ({post.commentCount})</h3>
+          <h3 className="font-display text-3xl uppercase font-bold mb-8">{t("postDetail.discuss", { count: post.commentCount })}</h3>
           
           <form onSubmit={handleCommentSubmit} className="mb-12 bg-muted/20 p-6 border border-border">
-            <h4 className="font-bold uppercase tracking-wider mb-4 text-sm text-primary">Leave a comment</h4>
+            <h4 className="font-bold uppercase tracking-wider mb-4 text-sm text-primary">{t("postDetail.leaveComment")}</h4>
             <div className="space-y-4">
               <div>
                 <Input 
-                  placeholder="Your Name" 
+                  placeholder={t("postDetail.yourName")}
                   value={commentName}
                   onChange={e => setCommentName(e.target.value)}
                   className="rounded-none bg-background focus-visible:ring-primary"
@@ -212,7 +270,7 @@ export function PostDetail() {
               </div>
               <div>
                 <Textarea 
-                  placeholder="What's on your mind?" 
+                  placeholder={t("postDetail.yourThoughts")}
                   value={commentBody}
                   onChange={e => setCommentBody(e.target.value)}
                   className="rounded-none bg-background min-h-[100px] focus-visible:ring-primary"
@@ -221,7 +279,7 @@ export function PostDetail() {
                 />
               </div>
               <Button type="submit" disabled={commentMutation.isPending} className="rounded-none uppercase tracking-wider font-bold w-full sm:w-auto">
-                {commentMutation.isPending ? 'Posting...' : 'Post Comment'}
+                {commentMutation.isPending ? t("postDetail.posting") : t("postDetail.postComment")}
               </Button>
             </div>
           </form>
@@ -233,7 +291,7 @@ export function PostDetail() {
                 <div className="h-24 bg-muted w-full"></div>
               </div>
             ) : comments?.length === 0 ? (
-              <p className="text-muted-foreground italic">No comments yet. Be the first.</p>
+              <p className="text-muted-foreground italic">{t("postDetail.noComments")}</p>
             ) : (
               comments?.map(comment => (
                 <div key={comment.id} className="border-b border-border pb-8 last:border-0">

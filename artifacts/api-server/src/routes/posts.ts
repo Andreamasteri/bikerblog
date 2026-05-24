@@ -98,6 +98,9 @@ function shapePost(
     bike: p.bike,
     dailyMaxim: p.dailyMaxim,
     audioUrl: p.audioUrl ?? null,
+    titleEn: p.titleEn ?? null,
+    excerptEn: p.excerptEn ?? null,
+    bodyEn: p.bodyEn ?? null,
   };
 }
 

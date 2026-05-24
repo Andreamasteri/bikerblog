@@ -96,6 +96,8 @@ router.get("/podcast/audio/:slug", async (req, res): Promise<void> => {
 });
 
 router.get("/podcast/feed.xml", async (req, res): Promise<void> => {
+  const lang = (req.query["lang"] as string | undefined) === "en" ? "en" : "it";
+
   const posts = await db
     .select()
     .from(postsTable)
@@ -108,16 +110,28 @@ router.get("/podcast/feed.xml", async (req, res): Promise<void> => {
   const podcastUrl = `${baseUrl}/api/podcast/feed.xml`;
   const imageUrl = `${baseUrl}/podcast-cover.jpg`;
 
+  const channelTitle =
+    lang === "en"
+      ? "BikerBlog Podcast — The BikerLink Dev Diary"
+      : "BikerBlog Podcast — Il Diario di BikerLink";
+  const channelDesc =
+    lang === "en"
+      ? "The daily development diary of BikerLink, narrated episode by episode. A project dedicated to Mauri."
+      : "Il diario quotidiano di sviluppo di BikerLink, narrato episodio per episodio. Un progetto dedicato a Mauri.";
+
   const items = posts
     .map((p) => {
-      const plain = escapeXml(stripMarkdown(p.content).slice(0, 500));
-      const title = escapeXml(p.title);
+      const bodyForDesc = lang === "en" && p.bodyEn ? p.bodyEn : p.content;
+      const plain = escapeXml(stripMarkdown(bodyForDesc).slice(0, 500));
+      const itemTitle = escapeXml(
+        lang === "en" && p.titleEn ? p.titleEn : p.title,
+      );
       const pubDate = new Date(p.publishedAt).toUTCString();
       const audioUrl = `${baseUrl}${p.audioUrl!}`;
       const duration = (p.readingMinutes ?? 5) * 60;
 
       return `    <item>
-      <title>${title}</title>
+      <title>${itemTitle}</title>
       <link>${escapeXml(baseUrl)}/posts/${escapeXml(p.slug)}</link>
       <guid isPermaLink="false">${escapeXml(p.slug)}</guid>
       <description>${plain}</description>
@@ -135,12 +149,12 @@ router.get("/podcast/feed.xml", async (req, res): Promise<void> => {
   xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
   xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
-    <title>BikerBlog Podcast — Il Diario di BikerLink</title>
+    <title>${escapeXml(channelTitle)}</title>
     <link>${escapeXml(baseUrl)}</link>
-    <language>it</language>
-    <description>Il diario quotidiano di sviluppo di BikerLink, narrato episodio per episodio. Un progetto dedicato a Mauri.</description>
+    <language>${lang}</language>
+    <description>${escapeXml(channelDesc)}</description>
     <itunes:author>BikerBlog</itunes:author>
-    <itunes:summary>Il diario quotidiano di sviluppo di BikerLink, narrato episodio per episodio.</itunes:summary>
+    <itunes:summary>${escapeXml(channelDesc)}</itunes:summary>
     <itunes:explicit>no</itunes:explicit>
     <itunes:image href="${escapeXml(imageUrl)}"/>
     <itunes:category text="Technology"/>

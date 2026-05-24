@@ -29,6 +29,9 @@ export const postsTable = pgTable("posts", {
   featured: integer("featured").notNull().default(0),
   dailyMaxim: text("daily_maxim"),
   audioUrl: text("audio_url"),
+  titleEn: text("title_en"),
+  excerptEn: text("excerpt_en"),
+  bodyEn: text("body_en"),
 });
 
 export type PostRow = typeof postsTable.$inferSelect;

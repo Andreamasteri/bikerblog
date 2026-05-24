@@ -13,6 +13,8 @@ import { InMemoria } from "@/pages/in-memoria";
 import { Timeline } from "@/pages/timeline";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
+import { I18nextProvider, useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 const queryClient = new QueryClient();
 
@@ -23,9 +25,18 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function HtmlLangSync() {
+  const { i18n: i18nInst } = useTranslation();
+  useEffect(() => {
+    document.documentElement.lang = i18nInst.language;
+  }, [i18nInst.language]);
+  return null;
+}
+
 function Router() {
   return (
     <Layout>
+      <HtmlLangSync />
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/posts" component={Posts} />
@@ -43,16 +54,18 @@ function Router() {
 
 function App() {
   return (
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <I18nextProvider i18n={i18n}>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </I18nextProvider>
   );
 }
 

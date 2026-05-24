@@ -1,18 +1,25 @@
 import { useListPosts } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { format, parseISO, getMonth, getYear } from "date-fns";
-import { it } from "date-fns/locale";
+import { format, parseISO, getMonth } from "date-fns";
+import { enUS, it } from "date-fns/locale";
 import { Calendar, ChevronRight } from "lucide-react";
 import { useState, useMemo } from "react";
-
-const MONTHS = [
-  { label: "Tutti", value: null },
-  { label: "Marzo", value: 2 },
-  { label: "Aprile", value: 3 },
-  { label: "Maggio", value: 4 },
-];
+import { useTranslation } from "react-i18next";
+import { usePostLocale } from "@/lib/post-i18n";
 
 export function Timeline() {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
+  const dateLocale = lang === "en" ? enUS : it;
+  const { postTitle, postExcerpt } = usePostLocale();
+
+  const MONTHS = [
+    { key: "timeline.all", value: null },
+    { key: "timeline.march", value: 2 },
+    { key: "timeline.april", value: 3 },
+    { key: "timeline.may", value: 4 },
+  ];
+
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
 
   const { data: posts, isLoading } = useListPosts();
@@ -36,13 +43,13 @@ export function Timeline() {
     const map: Record<string, typeof filteredPosts> = {};
     for (const post of filteredPosts) {
       const key = format(parseISO(post.publishedAt), "MMMM yyyy", {
-        locale: it,
+        locale: dateLocale,
       });
       if (!map[key]) map[key] = [];
       map[key].push(post);
     }
     return Object.entries(map);
-  }, [filteredPosts]);
+  }, [filteredPosts, dateLocale]);
 
   return (
     <div className="container mx-auto px-4 py-12">
@@ -50,15 +57,14 @@ export function Timeline() {
         <div className="flex items-center gap-2 text-primary mb-2">
           <Calendar className="w-4 h-4" />
           <span className="text-sm font-bold uppercase tracking-widest">
-            73 giorni
+            {t("timeline.days")}
           </span>
         </div>
         <h1 className="text-4xl md:text-6xl font-display font-bold uppercase tracking-tight leading-none mb-4">
-          Timeline
+          {t("timeline.title")}
         </h1>
         <p className="text-muted-foreground max-w-xl">
-          La storia completa di BikerBlog — dal 12 marzo al 23 maggio 2026.
-          Ogni giorno, ogni sprint, ogni svolta.
+          {t("timeline.subtitle")}
         </p>
       </div>
 
@@ -73,7 +79,7 @@ export function Timeline() {
                 : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
             }`}
           >
-            {m.label}
+            {t(m.key)}
           </button>
         ))}
       </div>
@@ -93,10 +99,10 @@ export function Timeline() {
       ) : filteredPosts.length === 0 ? (
         <div className="text-center py-24 bg-muted/20 border border-dashed">
           <h3 className="text-2xl font-display font-bold uppercase mb-2">
-            Nessun post
+            {t("timeline.noPost")}
           </h3>
           <p className="text-muted-foreground">
-            Nessun post trovato per questo mese.
+            {t("timeline.noPostDesc")}
           </p>
         </div>
       ) : (
@@ -104,7 +110,7 @@ export function Timeline() {
           {grouped.map(([month, monthPosts]) => (
             <section key={month}>
               <h2 className="text-xs font-bold uppercase tracking-widest text-primary mb-4 pb-2 border-b border-primary/30">
-                {month} · {monthPosts.length} post
+                {month} · {monthPosts.length} {t("timeline.posts_other")}
               </h2>
               <div className="divide-y divide-border/40">
                 {monthPosts.map((post) => (
@@ -114,7 +120,7 @@ export function Timeline() {
                       className="text-xs font-mono text-muted-foreground tabular-nums shrink-0 pt-1 w-24"
                     >
                       {format(parseISO(post.publishedAt), "dd MMM", {
-                        locale: it,
+                        locale: dateLocale,
                       })}
                     </time>
                     <div className="flex-1 min-w-0">
@@ -122,11 +128,11 @@ export function Timeline() {
                         <div className="min-w-0">
                           <Link href={`/posts/${post.slug}`}>
                             <h3 className="font-display font-bold text-base leading-snug group-hover:text-primary transition-colors truncate">
-                              {post.title}
+                              {postTitle(post)}
                             </h3>
                           </Link>
                           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                            {post.excerpt}
+                            {postExcerpt(post)}
                           </p>
                         </div>
                         <Link

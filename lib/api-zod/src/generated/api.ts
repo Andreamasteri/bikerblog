@@ -49,7 +49,10 @@ export const ListPostsResponseItem = zod.object({
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
   "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
-  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.'),
+  "titleEn": zod.string().nullish().describe('English translation of the post title.'),
+  "excerptEn": zod.string().nullish().describe('English translation of the post excerpt.'),
+  "bodyEn": zod.string().nullish().describe('English translation of the post body (Markdown).')
 })
 export const ListPostsResponse = zod.array(ListPostsResponseItem)
 
@@ -81,7 +84,10 @@ export const GetFeaturedPostResponse = zod.object({
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
   "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
-  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.'),
+  "titleEn": zod.string().nullish().describe('English translation of the post title.'),
+  "excerptEn": zod.string().nullish().describe('English translation of the post excerpt.'),
+  "bodyEn": zod.string().nullish().describe('English translation of the post body (Markdown).')
 })
 
 
@@ -121,7 +127,10 @@ export const ListPopularPostsResponseItem = zod.object({
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
   "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
-  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.'),
+  "titleEn": zod.string().nullish().describe('English translation of the post title.'),
+  "excerptEn": zod.string().nullish().describe('English translation of the post excerpt.'),
+  "bodyEn": zod.string().nullish().describe('English translation of the post body (Markdown).')
 })
 export const ListPopularPostsResponse = zod.array(ListPopularPostsResponseItem)
 
@@ -157,7 +166,10 @@ export const GetPostResponse = zod.object({
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
   "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
-  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.'),
+  "titleEn": zod.string().nullish().describe('English translation of the post title.'),
+  "excerptEn": zod.string().nullish().describe('English translation of the post excerpt.'),
+  "bodyEn": zod.string().nullish().describe('English translation of the post body (Markdown).')
 })
 
 
@@ -192,7 +204,10 @@ export const LikePostResponse = zod.object({
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
   "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
-  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.'),
+  "titleEn": zod.string().nullish().describe('English translation of the post title.'),
+  "excerptEn": zod.string().nullish().describe('English translation of the post excerpt.'),
+  "bodyEn": zod.string().nullish().describe('English translation of the post body (Markdown).')
 })
 
 

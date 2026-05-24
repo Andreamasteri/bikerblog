@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Play, Pause, Volume2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface PodcastPlayerProps {
   audioUrl: string;
@@ -7,6 +8,7 @@ interface PodcastPlayerProps {
 }
 
 export function PodcastPlayer({ audioUrl, title }: PodcastPlayerProps) {
+  const { t } = useTranslation();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -69,7 +71,7 @@ export function PodcastPlayer({ audioUrl, title }: PodcastPlayerProps) {
     <div className="flex flex-col gap-3 bg-muted/30 border border-border p-4 mb-8">
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
         <Volume2 className="w-3.5 h-3.5" />
-        <span>Ascolta questo episodio</span>
+        <span>{t("postDetail.listenEpisode")}</span>
       </div>
 
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
@@ -78,7 +80,7 @@ export function PodcastPlayer({ audioUrl, title }: PodcastPlayerProps) {
         <button
           onClick={togglePlay}
           className="w-10 h-10 flex items-center justify-center border border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors shrink-0"
-          aria-label={playing ? "Pausa" : "Riproduci"}
+          aria-label={playing ? t("postDetail.pause") : t("postDetail.play")}
         >
           {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
         </button>

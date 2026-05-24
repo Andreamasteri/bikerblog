@@ -37,4 +37,19 @@ export interface Post {
      * @nullable
      */
   audioUrl?: string | null;
+  /**
+     * English translation of the post title.
+     * @nullable
+     */
+  titleEn?: string | null;
+  /**
+     * English translation of the post excerpt.
+     * @nullable
+     */
+  excerptEn?: string | null;
+  /**
+     * English translation of the post body (Markdown).
+     * @nullable
+     */
+  bodyEn?: string | null;
 }

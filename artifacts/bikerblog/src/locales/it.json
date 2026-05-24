@@ -1,0 +1,92 @@
+{
+  "nav": {
+    "posts": "Posts",
+    "timeline": "Timeline",
+    "authors": "Authors"
+  },
+  "menu": {
+    "open": "Apri menu",
+    "close": "Chiudi menu"
+  },
+  "footer": {
+    "tagline": "Per chi vive per la strada aperta. Ride report, recensioni di gear e consigli tecnici.",
+    "copyright": "© {{year}} BikerBlog. Tutti i diritti riservati.",
+    "inMemoria": "In memoria di Mauri"
+  },
+  "home": {
+    "motto": "— Come lo feci",
+    "heroTagline": "Est. on the open road",
+    "heroDesc": "Ride reports, recensioni di gear e consigli tecnici per chi vive per la strada aperta.",
+    "readArticles": "Leggi gli articoli",
+    "listen": "Ascolta",
+    "allPosts": "Tutti i post",
+    "audioEpisode": "Episodio audio",
+    "recentDispatches": "Dispatches recenti",
+    "viewAll": "Vedi tutti",
+    "mostRead": "Più letti",
+    "categories": "Categorie",
+    "tags": "Tag"
+  },
+  "posts": {
+    "title": "The Archives",
+    "subtitle": "Ogni viaggio, ogni chiave girata, ogni storia dalla strada. Cerca negli archivi o sfoglia per data.",
+    "searchPlaceholder": "Cerca dispatches...",
+    "deadEnd": "Vicolo cieco",
+    "noResults": "Nessun post trovato per la tua ricerca. Prova un percorso diverso."
+  },
+  "postDetail": {
+    "back": "Indietro",
+    "minRead": "min di lettura",
+    "likes": "Mi piace",
+    "comments": "Commenti",
+    "dailyMaxim": "Massima del giorno",
+    "listenEpisode": "Ascolta questo episodio",
+    "play": "Riproduci",
+    "pause": "Pausa",
+    "aboutAuthor": "L'autore",
+    "discuss": "Discussione ({{count}})",
+    "leaveComment": "Lascia un commento",
+    "yourName": "Il tuo nome",
+    "yourThoughts": "Cosa pensi?",
+    "posting": "Pubblicazione...",
+    "postComment": "Pubblica commento",
+    "commentPosted": "Commento pubblicato",
+    "commentPostedDesc": "La tua voce è stata aggiunta.",
+    "commentError": "Errore",
+    "commentErrorDesc": "Impossibile pubblicare il commento. Riprova.",
+    "noComments": "Ancora nessun commento. Sii il primo.",
+    "deadEnd": "Vicolo cieco",
+    "notFound": "Il post che cerchi non esiste o è stato spostato.",
+    "backToArchives": "Torna agli archivi",
+    "translatedNote": "Traduzione automatica — contenuto originale in italiano."
+  },
+  "authors": {
+    "title": "The Writers",
+    "subtitle": "I meccanici, i lungometraggisti e i velocisti dietro ai dispatches."
+  },
+  "timeline": {
+    "days": "73 giorni",
+    "title": "Timeline",
+    "subtitle": "La storia completa di BikerBlog — dal 12 marzo al 23 maggio 2026. Ogni giorno, ogni sprint, ogni svolta.",
+    "all": "Tutti",
+    "march": "Marzo",
+    "april": "Aprile",
+    "may": "Maggio",
+    "posts_one": "post",
+    "posts_other": "post",
+    "noPost": "Nessun post",
+    "noPostDesc": "Nessun post trovato per questo mese."
+  },
+  "tags": {
+    "label": "Tag",
+    "noResults": "Nessun post trovato con questo tag."
+  },
+  "categories": {
+    "label": "Categoria",
+    "noResults": "Nessun post trovato in questa categoria."
+  },
+  "notFound": {
+    "title": "404 Pagina non trovata",
+    "desc": "Hai dimenticato di aggiungere la pagina al router?"
+  }
+}

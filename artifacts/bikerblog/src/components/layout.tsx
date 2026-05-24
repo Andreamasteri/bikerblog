@@ -1,14 +1,50 @@
 import { Link, useLocation } from "wouter";
 import { Wrench, Menu, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
-const NAV_LINKS = [
-  { href: "/posts", label: "Posts" },
-  { href: "/timeline", label: "Timeline" },
-  { href: "/authors", label: "Authors" },
+const NAV_LINK_KEYS = [
+  { href: "/posts", key: "nav.posts" },
+  { href: "/timeline", key: "nav.timeline" },
+  { href: "/authors", key: "nav.authors" },
 ];
 
+function LanguageSwitcher({ mobile }: { mobile?: boolean }) {
+  const { i18n } = useTranslation();
+  const lang = i18n.language;
+
+  const toggle = (l: string) => {
+    i18n.changeLanguage(l);
+    localStorage.setItem("bikerblog_lang", l);
+  };
+
+  const base = mobile
+    ? "flex items-center gap-3 py-3 text-sm font-bold uppercase tracking-wider border-b border-border/30"
+    : "flex items-center gap-1 text-xs font-bold uppercase tracking-widest";
+
+  return (
+    <div className={base}>
+      <button
+        onClick={() => toggle("it")}
+        className={`px-2 py-0.5 transition-colors ${lang === "it" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        aria-pressed={lang === "it"}
+      >
+        IT
+      </button>
+      <span className="text-border select-none">|</span>
+      <button
+        onClick={() => toggle("en")}
+        className={`px-2 py-0.5 transition-colors ${lang === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        aria-pressed={lang === "en"}
+      >
+        EN
+      </button>
+    </div>
+  );
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [location] = useLocation();
   const drawerRef = useRef<HTMLDivElement>(null);
@@ -39,15 +75,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-            {NAV_LINKS.map(l => (
-              <Link key={l.href} href={l.href} className="hover:text-primary transition-colors uppercase tracking-wider">{l.label}</Link>
+            {NAV_LINK_KEYS.map(l => (
+              <Link key={l.href} href={l.href} className="hover:text-primary transition-colors uppercase tracking-wider">{t(l.key)}</Link>
             ))}
+            <LanguageSwitcher />
           </nav>
 
           {/* Mobile hamburger */}
           <button
             className="md:hidden flex items-center justify-center w-10 h-10 text-foreground hover:text-primary transition-colors"
-            aria-label={menuOpen ? "Chiudi menu" : "Apri menu"}
+            aria-label={menuOpen ? t("menu.close") : t("menu.open")}
             onClick={() => setMenuOpen(o => !o)}
           >
             {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -57,15 +94,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Mobile drawer */}
         {menuOpen && (
           <div ref={drawerRef} className="md:hidden border-t border-border/40 bg-background/98 backdrop-blur px-4 py-4 flex flex-col gap-1">
-            {NAV_LINKS.map(l => (
+            {NAV_LINK_KEYS.map(l => (
               <Link
                 key={l.href}
                 href={l.href}
                 className="block py-3 text-sm font-bold uppercase tracking-wider hover:text-primary transition-colors border-b border-border/30 last:border-0"
               >
-                {l.label}
+                {t(l.key)}
               </Link>
             ))}
+            <LanguageSwitcher mobile />
           </div>
         )}
       </header>
@@ -80,11 +118,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Wrench className="h-5 w-5" />
             <span className="font-display font-bold text-xl uppercase tracking-tighter text-foreground">BikerBlog</span>
           </div>
-          <p className="max-w-md mx-auto mb-6">For those who live for the open road. Ride reports, gear reviews, and technical tips.</p>
-          <p className="text-sm">&copy; {new Date().getFullYear()} BikerBlog. All rights reserved.</p>
+          <p className="max-w-md mx-auto mb-6">{t("footer.tagline")}</p>
+          <p className="text-sm">{t("footer.copyright", { year: new Date().getFullYear() })}</p>
           <p className="text-sm mt-2 flex justify-center gap-6">
             <Link href="/timeline" className="hover:text-primary transition-colors">Timeline</Link>
-            <Link href="/in-memoria" className="hover:text-primary transition-colors">In memoria di Mauri</Link>
+            <Link href="/in-memoria" className="hover:text-primary transition-colors">{t("footer.inMemoria")}</Link>
           </p>
         </div>
       </footer>
