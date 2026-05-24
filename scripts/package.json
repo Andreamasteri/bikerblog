@@ -14,6 +14,7 @@
     "daily-pipeline": "tsx src/daily-pipeline.ts",
     "sync": "tsx src/sync-and-publish.ts",
     "enrich:posts": "tsx src/enrich-posts-with-ai.ts",
+    "diary:generate": "tsx src/generate-daily-diary.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

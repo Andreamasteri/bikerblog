@@ -15,6 +15,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run cluster:tasks -- --state MERGED --by day` — raggruppa i task per giornata → `inbox/clusters-merged-by-day.md` (candidati post)
 - `pnpm --filter @workspace/scripts run cluster:daily` — cron entry point: genera cluster + pubblica post nel DB (usato dal deployment schedulato)
 - `pnpm --filter @workspace/scripts run publish:from-clusters` — pubblica manualmente i cluster già generati come post del blog
+- `pnpm --filter @workspace/scripts run diary:generate` — genera/aggiorna post narrativi per tutti i 73 giorni (12 mar – 23 mag 2026) usando Claude + chat + task. Flag: `--dry-run`, `--force`, `--map-only`, `--date YYYY-MM-DD`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`. Scrive la mappa sessioni in `inbox/bikerlink-chat-day-map.json`.
 - Required env: `DATABASE_URL` — Postgres connection string
 
 ## Deployment schedulato (cron 23:30 Europe/Rome)

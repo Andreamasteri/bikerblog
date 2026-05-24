@@ -1,0 +1,18 @@
+# BikerLink — Attività del giorno
+**domenica 24 maggio 2026** — generato alle 07:20
+
+## Riepilogo
+| Metrica | Oggi | Totale |
+|---------|------|--------|
+| Nuovi utenti | 0 | 3242 |
+| Messaggi inviati | 0 | 3182 |
+| Nuovi match/proposte | 0 | — |
+
+## Nuovi utenti (0)
+_Nessun nuovo utente oggi._
+
+## Nuove proposte/match (0)
+_Nessuna proposta oggi._
+
+## Messaggi di oggi (0)
+_Nessun messaggio oggi._
