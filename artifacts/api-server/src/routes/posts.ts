@@ -157,29 +157,13 @@ router.get("/posts", async (req, res): Promise<void> => {
 });
 
 router.get("/posts/featured", async (_req, res): Promise<void> => {
-  // Prende il post più recente con featured=1; se è più vecchio di 3 giorni
-  // (o non esiste), usa semplicemente il post più recente in assoluto.
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-
-  const [featuredRow] = await db
+  // Mostra sempre il post più recente — la home si aggiorna giorno per giorno.
+  const [row] = await db
     .select({ post: postsTable, author: authorsTable })
     .from(postsTable)
     .innerJoin(authorsTable, eq(postsTable.authorId, authorsTable.id))
-    .where(eq(postsTable.featured, 1))
     .orderBy(desc(postsTable.publishedAt))
     .limit(1);
-
-  let row = featuredRow;
-  if (!row || row.post.publishedAt < threeDaysAgo) {
-    const [latestRow] = await db
-      .select({ post: postsTable, author: authorsTable })
-      .from(postsTable)
-      .innerJoin(authorsTable, eq(postsTable.authorId, authorsTable.id))
-      .orderBy(desc(postsTable.publishedAt))
-      .limit(1);
-    row = latestRow;
-  }
-
   if (!row) {
     res.status(404).json({ error: "No posts yet" });
     return;
