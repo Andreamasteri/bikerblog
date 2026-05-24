@@ -14,7 +14,7 @@
  *
  * Fase 2 — Generazione post:
  *   Per ogni giorno: se ci sono task cluster → prompt con task + chat;
- *   altrimenti → prompt solo chat. Upsert in DB con slug `recap-YYYY-MM-DD`.
+ *   altrimenti → prompt solo chat. Upsert in DB con slug `diary-YYYY-MM-DD`.
  *
  * Fase 3 — Verifica:
  *   Al termine, verifica che tutti i 73 slug siano presenti e non vuoti.
@@ -44,7 +44,8 @@ const TASKS_META     = resolve(ROOT, "inbox", "bikerlink-history", "tasks-meta.j
 const DAY_MAP_FILE   = resolve(ROOT, "inbox", "bikerlink-chat-day-map.json");
 
 const DATE_START = "2026-03-12";
-const DATE_END   = "2026-05-23";
+/** Historical end of the BikerLink development period */
+const DATE_END_BASE  = "2026-05-23";
 /** Maximum sessions to pass to Claude per day */
 const MAX_SESSIONS_PER_DAY = 13;
 /** Maximum boundary shift (in sessions) for content-signal adjustment */
@@ -59,6 +60,12 @@ const ONLY_DATE = args.includes("--date") ? args[args.indexOf("--date") + 1] : n
 const FROM_DATE = args.includes("--from") ? args[args.indexOf("--from") + 1] : null;
 /** Process only dates <= TO (inclusive, YYYY-MM-DD) */
 const TO_DATE   = args.includes("--to")   ? args[args.indexOf("--to")   + 1] : null;
+
+/**
+ * Effective end date: if a single --date is requested beyond the historical
+ * range, extend the range to include it so cron use for ongoing days works.
+ */
+const DATE_END = ONLY_DATE && ONLY_DATE > DATE_END_BASE ? ONLY_DATE : DATE_END_BASE;
 
 // ── Anthropic ─────────────────────────────────────────────────────────────────
 
@@ -494,7 +501,7 @@ function assertDayMapConsistency(
 const MIN_POST_LENGTH = 200; // minimum chars to consider a post non-empty
 
 async function verifyAllDays(allDates: string[]): Promise<boolean> {
-  const slugs = allDates.map((d) => `recap-${d}`);
+  const slugs = allDates.map((d) => `diary-${d}`);
 
   // Fetch slug + content length for all recap posts
   const rows = await db
@@ -584,9 +591,9 @@ async function main() {
   let targetDates = ONLY_DATE ? [ONLY_DATE] : allDates;
   if (FROM_DATE) targetDates = targetDates.filter((d) => d >= FROM_DATE);
   if (TO_DATE)   targetDates = targetDates.filter((d) => d <= TO_DATE);
-  const allSlugs    = allDates.map((d) => `recap-${d}`);
+  const allSlugs    = allDates.map((d) => `diary-${d}`);
   const existingSlugs = FORCE ? new Set<string>() : await getExistingSlugs(allSlugs);
-  const toProcess   = targetDates.filter((d) => !existingSlugs.has(`recap-${d}`));
+  const toProcess   = targetDates.filter((d) => !existingSlugs.has(`diary-${d}`));
 
   if (!FORCE && existingSlugs.size > 0) {
     console.log(`[diary] Post già presenti: ${existingSlugs.size} (saltati; usa --force per riscrivere)`);
@@ -607,7 +614,7 @@ async function main() {
     const batch = toProcess.slice(i, i + 2);
 
     await Promise.all(batch.map(async (date) => {
-      const slug    = `recap-${date}`;
+      const slug    = `diary-${date}`;
       const entry   = dayMap[date];
       // Non-overlapping slice: [sessionStart, sessionEnd)
       const daySessions = sessions

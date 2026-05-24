@@ -13,7 +13,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run fetch:archived-tasks -- --local` — importa i task archiviati di BikerLink da `inbox/bikerlink-history/tasks-meta.json` → `inbox/bikerlink-archived-tasks.json`
 - `pnpm --filter @workspace/scripts run fetch:archived-tasks -- --url <url> --token <tok>` — stessa importazione ma da endpoint live BikerLink
 - `pnpm --filter @workspace/scripts run cluster:tasks -- --state MERGED --by day` — raggruppa i task per giornata → `inbox/clusters-merged-by-day.md` (candidati post)
-- `pnpm --filter @workspace/scripts run cluster:daily` — cron entry point: genera cluster + pubblica post nel DB (usato dal deployment schedulato)
+- `pnpm --filter @workspace/scripts run cluster:daily` — cron entry point: (1) aggiorna inbox chat se INBOX_URL è impostato, (2) genera cluster, (3) pubblica post cluster nel DB, (4) genera il post diaristico del giorno corrente (idempotente)
 - `pnpm --filter @workspace/scripts run publish:from-clusters` — pubblica manualmente i cluster già generati come post del blog
 - `pnpm --filter @workspace/scripts run diary:generate` — genera/aggiorna post narrativi per tutti i 73 giorni (12 mar – 23 mag 2026) usando Claude + chat + task. Flag: `--dry-run`, `--force`, `--map-only`, `--date YYYY-MM-DD`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`. Scrive la mappa sessioni in `inbox/bikerlink-chat-day-map.json`.
 - `pnpm --filter @workspace/scripts run podcast:generate` — genera audio TTS (ElevenLabs, voce George) per i post senza `audio_url` e li carica su GCS. Flag: `--slug <slug>` (solo un post), `--dry-run`, `--force` (rigenera anche chi ha già audio). Richiede `ELEVENLABS_API_KEY` (segreto da impostare) + `SESSION_SECRET` (già presente).
@@ -28,7 +28,13 @@ Il cron giornaliero si configura una volta sola via UI di Replit:
 3. Imposta **Schedule**: `30 21 * * *` _(21:30 UTC = 23:30 ora italiana)_
 4. Pubblica
 
-Il comando genera `inbox/clusters-merged-by-day.md` e pubblica automaticamente i cluster nuovi come post del blog (idempotente: i post già pubblicati vengono ignorati).
+Il comando esegue 4 step in sequenza (tutti idempotenti):
+1. Aggiorna `inbox/bikerlink-chat-latest.md` da BikerLink (solo se `INBOX_URL` è impostato)
+2. Genera `inbox/clusters-merged-by-day.md` dai task MERGED
+3. Pubblica i cluster nuovi come post del blog (cluster già pubblicati vengono ignorati)
+4. Genera il post diaristico per la data odierna (post già esistenti vengono ignorati)
+
+Env opzionali per lo step 1: `INBOX_URL`, `INBOX_TOKEN`, `INBOX_SOURCE` (default: `bikerlink`).
 
 ## Stack
 

@@ -2,15 +2,21 @@
 /**
  * run-cluster-daily — entry point per il cron giornaliero delle 23:30.
  *
- * 1. Genera inbox/clusters-merged-by-day.md
+ * 1. (Opzionale) Aggiorna inbox/bikerlink-chat-latest.md da INBOX_URL
+ *    Se INBOX_URL non è impostato, questo step viene saltato.
+ * 2. Genera inbox/clusters-merged-by-day.md
  *    (cluster:tasks --state MERGED --by day)
- * 2. Pubblica i cluster nuovi come post del blog
+ * 3. Pubblica i cluster nuovi come post del blog
  *    (publish-from-clusters)
+ * 4. Genera il post diaristico per la data odierna (Europe/Rome)
+ *    (diary:generate --date YYYY-MM-DD)
+ *    Idempotente: se il post esiste già, non lo riscrive.
  *
  * Usage:
  *   pnpm --filter @workspace/scripts run cluster:daily
  *
  * Richiede DATABASE_URL.
+ * Opzionale per step 1: INBOX_URL, INBOX_TOKEN, INBOX_SOURCE.
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -20,10 +26,54 @@ import { publishFromClusters } from "./publish-from-clusters.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scriptsCwd = resolve(here, "..");
+/** Project root — used as cwd for scripts that resolve paths from process.cwd() */
+const projectRoot = resolve(scriptsCwd, "..");
+
+/** Returns today's date as YYYY-MM-DD in the Europe/Rome timezone. */
+function todayRome(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Rome" }).format(
+    new Date()
+  );
+}
 
 console.log("[cluster-daily] avvio —", new Date().toISOString());
 
-console.log("[cluster-daily] step 1: generazione cluster");
+// ── Step 1: aggiorna inbox chat (opzionale) ───────────────────────────────────
+
+const inboxUrl = process.env.INBOX_URL;
+if (inboxUrl) {
+  console.log("[cluster-daily] step 1: aggiornamento inbox chat");
+  const inboxArgs = ["scripts/src/inbox-fetch.ts"];
+  // Default source to "bikerlink" so the fetched file is always
+  // inbox/bikerlink-chat-latest.md — the path read by generate-daily-diary.ts
+  const inboxSource = process.env.INBOX_SOURCE ?? "bikerlink";
+  inboxArgs.push("--source", inboxSource);
+  inboxArgs.push("--url", inboxUrl);
+  if (process.env.INBOX_TOKEN) inboxArgs.push("--token", process.env.INBOX_TOKEN);
+
+  // cwd = project root so inbox-fetch.ts resolves `inbox/` to the repo-root inbox dir
+  // (the same directory read by generate-daily-diary.ts)
+  const inboxResult = spawnSync("tsx", inboxArgs, {
+    cwd: projectRoot,
+    stdio: "inherit",
+  });
+
+  if (inboxResult.status !== 0) {
+    console.warn(
+      "[cluster-daily] ⚠ inbox-fetch fallito con codice",
+      inboxResult.status,
+      "— il pipeline continua con la chat già presente"
+    );
+  }
+} else {
+  console.log(
+    "[cluster-daily] step 1: INBOX_URL non impostato — inbox chat non aggiornata"
+  );
+}
+
+// ── Step 2: generazione cluster ───────────────────────────────────────────────
+
+console.log("[cluster-daily] step 2: generazione cluster");
 const clusterResult = spawnSync(
   "tsx",
   [
@@ -44,11 +94,35 @@ if (clusterResult.status !== 0) {
   process.exit(clusterResult.status ?? 1);
 }
 
-console.log("[cluster-daily] step 2: pubblicazione post");
+// ── Step 3: pubblicazione post cluster ───────────────────────────────────────
+
+console.log("[cluster-daily] step 3: pubblicazione post cluster");
 try {
   await publishFromClusters();
-} finally {
+} catch (err) {
   await pool.end();
+  throw err;
 }
+
+// ── Step 4: generazione post diario del giorno ───────────────────────────────
+
+const today = todayRome();
+console.log(`[cluster-daily] step 4: generazione post diario per ${today}`);
+
+const diaryResult = spawnSync(
+  "tsx",
+  ["src/generate-daily-diary.ts", "--date", today],
+  { cwd: scriptsCwd, stdio: "inherit" }
+);
+
+if (diaryResult.status !== 0) {
+  console.error(
+    "[cluster-daily] ✗ diary:generate fallito con codice",
+    diaryResult.status
+  );
+  process.exit(diaryResult.status ?? 1);
+}
+
+await pool.end();
 
 console.log("[cluster-daily] completato —", new Date().toISOString());
