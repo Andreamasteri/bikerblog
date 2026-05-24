@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "50q1KgtDXl5qTOtvOdE8X"
+uri = "file://attached_assets/generated_audio/03-marzo-tutto-e-cominciato-cosi.mp3"
+type = "audio"
+title = "03-marzo-tutto-e-cominciato-cosi"

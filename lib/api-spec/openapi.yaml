@@ -315,6 +315,9 @@ components:
         dailyMaxim:
           type: ["string", "null"]
           description: "Massima del giorno del programmatore — frase pull-quote da mostrare nel post."
+        audioUrl:
+          type: ["string", "null"]
+          description: "URL MP3 dell'episodio podcast generato da TTS."
 
     PostInput:
       type: object

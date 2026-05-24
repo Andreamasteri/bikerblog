@@ -2,6 +2,7 @@ import { useGetPost, useLikePost, useListPostComments, useCreatePostComment, get
 import { useParams, Link } from "wouter";
 import { format } from "date-fns";
 import { Clock, MapPin, Bike, ThumbsUp, MessageSquare, ChevronLeft, Quote } from "lucide-react";
+import { PodcastPlayer } from "@/components/podcast-player";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -158,6 +159,11 @@ export function PostDetail() {
               </div>
             </div>
           </aside>
+        )}
+
+        {/* Podcast Player */}
+        {post.audioUrl && (
+          <PodcastPlayer audioUrl={post.audioUrl} title={post.title} />
         )}
 
         {/* Content */}

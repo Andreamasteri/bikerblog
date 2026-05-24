@@ -16,6 +16,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run cluster:daily` — cron entry point: genera cluster + pubblica post nel DB (usato dal deployment schedulato)
 - `pnpm --filter @workspace/scripts run publish:from-clusters` — pubblica manualmente i cluster già generati come post del blog
 - `pnpm --filter @workspace/scripts run diary:generate` — genera/aggiorna post narrativi per tutti i 73 giorni (12 mar – 23 mag 2026) usando Claude + chat + task. Flag: `--dry-run`, `--force`, `--map-only`, `--date YYYY-MM-DD`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`. Scrive la mappa sessioni in `inbox/bikerlink-chat-day-map.json`.
+- `pnpm --filter @workspace/scripts run podcast:generate` — genera audio TTS (ElevenLabs, voce George) per i post senza `audio_url` e li carica su GCS. Flag: `--slug <slug>` (solo un post), `--dry-run`, `--force` (rigenera anche chi ha già audio). Richiede `ELEVENLABS_API_KEY` (segreto da impostare) + `SESSION_SECRET` (già presente).
 - Required env: `DATABASE_URL` — Postgres connection string
 
 ## Deployment schedulato (cron 23:30 Europe/Rome)
@@ -42,7 +43,7 @@ Il comando genera `inbox/clusters-merged-by-day.md` e pubblica automaticamente i
 
 - DB schema: `lib/db/src/schema/{authors,posts,comments}.ts`
 - API contract: `lib/api-spec/openapi.yaml` (regenerate with `pnpm --filter @workspace/api-spec run codegen`)
-- API routes: `artifacts/api-server/src/routes/{posts,comments,meta}.ts`
+- API routes: `artifacts/api-server/src/routes/{posts,comments,meta,podcast,internal}.ts`
 - Frontend: `artifacts/bikerblog/src/`
 - **Inbox** (external context dropped here for the agent to read):
   `inbox/` — files like `inbox/<source>-chat-latest.md`. Fetched via
@@ -52,7 +53,8 @@ Il comando genera `inbox/clusters-merged-by-day.md` e pubblica automaticamente i
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- **Podcast audio via API streaming**: i file MP3 sono salvati privati su GCS (bucket con public access prevention); vengono serviti da `GET /api/podcast/audio/:slug` nell'api-server usando il sidecar GCS Replit. Il frontend usa questo URL come `src` del player.
+- **Token interno derivato da SESSION_SECRET**: gli endpoint `/_internal/*` usano un HMAC(SESSION_SECRET, "internal-api-token-v1") come token di autenticazione. Nessun segreto aggiuntivo necessario per la comunicazione script→server.
 
 ## Product
 
@@ -72,7 +74,8 @@ linkata dal footer del sito.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- **GCS sidecar funziona solo nell'api-server workflow** — non in bash o code_execution. Per caricare file su GCS dai script, usare l'endpoint `POST /api/_internal/podcast-store` che gira nell'api-server.
+- **podcast:generate richiede ELEVENLABS_API_KEY** — da impostare come segreto Replit prima di eseguire. Ogni 1000 caratteri costa ~$0.30 (ElevenLabs multilingual v2).
 
 ## Pointers
 

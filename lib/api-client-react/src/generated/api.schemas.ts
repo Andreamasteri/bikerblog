@@ -71,6 +71,11 @@ export interface Post {
      * @nullable
      */
   dailyMaxim?: string | null;
+  /**
+     * URL MP3 dell'episodio podcast generato da TTS.
+     * @nullable
+     */
+  audioUrl?: string | null;
 }
 
 export type PostInputCategory = typeof PostInputCategory[keyof typeof PostInputCategory];

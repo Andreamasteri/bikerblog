@@ -67,6 +67,7 @@ function shapePost(
     location: p.location,
     bike: p.bike,
     dailyMaxim: p.dailyMaxim,
+    audioUrl: p.audioUrl ?? null,
   };
 }
 

@@ -32,4 +32,9 @@ export interface Post {
      * @nullable
      */
   dailyMaxim?: string | null;
+  /**
+     * URL MP3 dell'episodio podcast generato da TTS.
+     * @nullable
+     */
+  audioUrl?: string | null;
 }

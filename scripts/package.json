@@ -15,10 +15,12 @@
     "sync": "tsx src/sync-and-publish.ts",
     "enrich:posts": "tsx src/enrich-posts-with-ai.ts",
     "diary:generate": "tsx src/generate-daily-diary.ts",
+    "podcast:generate": "tsx src/podcast-generate.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
+    "@google-cloud/storage": "^7.19.0",
     "@workspace/db": "workspace:*",
     "drizzle-orm": "catalog:"
   },

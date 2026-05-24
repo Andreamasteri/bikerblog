@@ -28,6 +28,7 @@ export const postsTable = pgTable("posts", {
   bike: text("bike"),
   featured: integer("featured").notNull().default(0),
   dailyMaxim: text("daily_maxim"),
+  audioUrl: text("audio_url"),
 });
 
 export type PostRow = typeof postsTable.$inferSelect;

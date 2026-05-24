@@ -48,7 +48,8 @@ export const ListPostsResponseItem = zod.object({
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
-  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
 })
 export const ListPostsResponse = zod.array(ListPostsResponseItem)
 
@@ -100,7 +101,8 @@ export const GetFeaturedPostResponse = zod.object({
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
-  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
 })
 
 
@@ -139,7 +141,8 @@ export const ListPopularPostsResponseItem = zod.object({
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
-  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
 })
 export const ListPopularPostsResponse = zod.array(ListPopularPostsResponseItem)
 
@@ -174,7 +177,8 @@ export const GetPostResponse = zod.object({
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
-  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
 })
 
 
@@ -208,7 +212,8 @@ export const LikePostResponse = zod.object({
   "commentCount": zod.number(),
   "location": zod.string().nullish(),
   "bike": zod.string().nullish(),
-  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.')
+  "dailyMaxim": zod.string().nullish().describe('Massima del giorno del programmatore — frase pull-quote da mostrare nel post.'),
+  "audioUrl": zod.string().nullish().describe('URL MP3 dell\'episodio podcast generato da TTS.')
 })
 
 
