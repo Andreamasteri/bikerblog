@@ -87,6 +87,16 @@ linkata dal footer del sito.
   dell'utente). Mantenere questa nota tra le sessioni.
 - BikerBlog è dedicato a Mauri ("grandepuffo"); preservare la pagina
   `/in-memoria` e il link nel footer.
+- **Gestione autonoma**: il blog è gestito interamente dall'agente. L'utente
+  interviene solo su errori. L'agente deve: (1) deployare autonomamente dopo
+  ogni fix di codice senza aspettare conferma, (2) sincronizzare dev→prod dopo
+  ogni pipeline notturna, (3) non chiedere permesso per operazioni di routine.
+  Il deploy richiede ancora un click umano su Replit (limite della piattaforma),
+  ma l'agente deve suggerirlo immediatamente dopo ogni modifica al codice senza
+  aspettare che l'utente lo chieda.
+- **Featured post**: la home mostra sempre il post più recente (logica
+  `GET /posts/featured` ordina per `publishedAt DESC`). Il flag `featured=1`
+  nel DB non influenza più l'hero.
 - **Politica ufficiale anti-feature-creep (La Minaccia John Connor)**: qualsiasi
   feature non esplicitamente richiesta dall'utente può e deve essere evitata per
   non incorrere nelle conseguenze della Minaccia. Il dialogo canonico:
