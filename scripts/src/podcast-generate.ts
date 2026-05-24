@@ -4,28 +4,38 @@
  *
  * Flusso:
  *   1. Legge i post dal DB senza audio_url
- *   2. Per ognuno, chiama ElevenLabs TTS → ottiene bytes MP3
+ *   2. Per ognuno, chiama edge-tts (Microsoft neural TTS, gratuito) → MP3
  *   3. Invia i bytes all'endpoint interno /api/_internal/podcast-store
  *      che usa il sidecar GCS dell'api-server per caricare su GCS e aggiorna il DB
  *
  * Richiede:
- *   ELEVENLABS_API_KEY  — API key ElevenLabs
- *   SESSION_SECRET      — già impostato (usato per derivare il token interno)
- *   DATABASE_URL        — Postgres
+ *   edge-tts         — installato via pip (nessuna API key necessaria)
+ *   SESSION_SECRET   — già impostato (usato per derivare il token interno)
+ *   DATABASE_URL     — Postgres
  *
  * Usage:
  *   pnpm --filter @workspace/scripts run podcast:generate
  *   pnpm --filter @workspace/scripts run podcast:generate -- --slug recap-2026-03-12
  *   pnpm --filter @workspace/scripts run podcast:generate -- --dry-run
  *   pnpm --filter @workspace/scripts run podcast:generate -- --force
+ *
+ * Voce: it-IT-DiegoNeural (Microsoft Edge TTS, voce maschile italiana)
+ * Per listare le voci disponibili: edge-tts --list-voices
  */
 
 import { createHmac } from "crypto";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { readFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 import { db, pool, postsTable } from "@workspace/db";
 import { eq, isNull } from "drizzle-orm";
 
-const VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"; // George — warm storyteller, eleven_multilingual_v2
-const MODEL_ID = "eleven_multilingual_v2";
+const execFileAsync = promisify(execFile);
+
+const VOICE = "it-IT-DiegoNeural";
+const EDGE_TTS_BIN = "edge-tts";
 
 const API_BASE = process.env["API_BASE_URL"] ?? "http://localhost:8080";
 const STORE_ENDPOINT = `${API_BASE}/api/_internal/podcast-store`;
@@ -65,45 +75,23 @@ function buildNarrationText(title: string, content: string): string {
   return `${title}.\n\n${clean}`;
 }
 
-// ── ElevenLabs TTS ────────────────────────────────────────────────────────────
+// ── edge-tts TTS ──────────────────────────────────────────────────────────────
 
-async function generateTtsBytes(text: string): Promise<Buffer> {
-  const apiKey = process.env["ELEVENLABS_API_KEY"];
-  if (!apiKey) {
-    throw new Error(
-      "ELEVENLABS_API_KEY non impostato. " +
-        "Imposta la variabile d'ambiente con la tua API key ElevenLabs.",
-    );
+async function generateTtsBytes(text: string, slug: string): Promise<Buffer> {
+  const outPath = join(tmpdir(), `podcast-${slug}-${Date.now()}.mp3`);
+
+  try {
+    await execFileAsync(EDGE_TTS_BIN, [
+      "--voice", VOICE,
+      "--text", text,
+      "--write-media", outPath,
+    ]);
+
+    const bytes = await readFile(outPath);
+    return bytes;
+  } finally {
+    await unlink(outPath).catch(() => {});
   }
-
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "audio/mpeg",
-    },
-    body: JSON.stringify({
-      text,
-      model_id: MODEL_ID,
-      voice_settings: {
-        stability: 0.45,
-        similarity_boost: 0.8,
-        style: 0.15,
-        use_speaker_boost: true,
-        speed: 0.95,
-      },
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`ElevenLabs error ${res.status}: ${err.slice(0, 200)}`);
-  }
-
-  const arrayBuffer = await res.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
 
 // ── Store via API server (usa sidecar GCS) ────────────────────────────────────
@@ -147,6 +135,7 @@ async function main() {
     return;
   }
 
+  console.log(`[podcast] Voce: ${VOICE}`);
   console.log(`[podcast] Post da processare: ${posts.length}${DRY_RUN ? " (DRY RUN)" : ""}`);
 
   let ok = 0;
@@ -167,14 +156,14 @@ async function main() {
         continue;
       }
 
-      const audioBytes = await generateTtsBytes(text);
+      const audioBytes = await generateTtsBytes(text, slug);
       console.log(`[podcast]   TTS ok — ${(audioBytes.length / 1024).toFixed(0)} KB`);
 
       const publicUrl = await storeAudio(slug, audioBytes);
       console.log(`[podcast] ✓ ${slug} → ${publicUrl}`);
       ok++;
 
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 200));
     } catch (err) {
       console.error(
         `[podcast] ✗ ${slug} —`,
@@ -184,9 +173,8 @@ async function main() {
     }
   }
 
-  const estimatedCost = (totalChars / 1000) * 0.3;
   console.log(`\n[podcast] ✅ ok: ${ok}, falliti: ${fail}`);
-  console.log(`[podcast] Caratteri totali: ${totalChars} (~$${estimatedCost.toFixed(2)} stima ElevenLabs)`);
+  console.log(`[podcast] Caratteri totali: ${totalChars} (edge-tts gratuito)`);
 }
 
 try {
