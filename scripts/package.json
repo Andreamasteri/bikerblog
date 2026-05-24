@@ -17,6 +17,7 @@
     "diary:generate": "tsx src/generate-daily-diary.ts",
     "podcast:generate": "tsx src/podcast-generate.ts",
     "translate:posts": "tsx src/translate-posts.ts",
+    "translate:backfill": "tsx src/translate-backfill.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
