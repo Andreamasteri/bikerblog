@@ -64,4 +64,3 @@ channel = "stable-25_05"
 [userenv.shared]
 INBOX_URL = "https://biker-link.replit.app/api/_internal/chat-export"
 INBOX_SOURCE = "bikerlink"
-SEED_TOKEN = "5566b9d87a07a5ef92cfca6816f28a7a7000d216e7baf783df7239ba68067740"
