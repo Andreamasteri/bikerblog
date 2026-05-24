@@ -151,20 +151,29 @@ if (translateResult.status !== 0) {
 
 // ── Step 6: generazione audio per i post senza audio (nuovi o riscritti) ──────
 
-console.log("[cluster-daily] step 6: generazione audio post aggiornati");
-
-const podcastResult = spawnSync(
-  "tsx",
-  ["src/podcast-generate.ts"],
-  { cwd: scriptsCwd, stdio: "inherit" }
-);
-
-if (podcastResult.status !== 0) {
+if (!process.env["SESSION_SECRET"]) {
   console.warn(
-    "[cluster-daily] ⚠ podcast:generate fallito con codice",
-    podcastResult.status,
-    "— il pipeline si conclude comunque"
+    "[cluster-daily] ⚠ SESSION_SECRET non impostato — step 6 saltato. Aggiungere SESSION_SECRET alle env vars per abilitare la generazione audio automatica."
   );
+} else {
+  const { db: dailyDb, postsTable: dailyPostsTable } = await import("@workspace/db");
+  const { isNull } = await import("drizzle-orm");
+  const pendingPosts = await dailyDb.select({ slug: dailyPostsTable.slug }).from(dailyPostsTable).where(isNull(dailyPostsTable.audioUrl));
+  console.log(`[cluster-daily] step 6: generazione audio — ${pendingPosts.length} post senza audio da processare`);
+
+  const podcastResult = spawnSync(
+    "tsx",
+    ["src/podcast-generate.ts"],
+    { cwd: scriptsCwd, stdio: "inherit" }
+  );
+
+  if (podcastResult.status !== 0) {
+    console.warn(
+      "[cluster-daily] ⚠ podcast:generate fallito con codice",
+      podcastResult.status,
+      "— il pipeline si conclude comunque"
+    );
+  }
 }
 
 await pool.end();

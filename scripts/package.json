@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "pip install edge-tts --quiet && echo '[postinstall] edge-tts installato' || echo '[postinstall] WARN: edge-tts non installato — la generazione audio non sarà disponibile'",
     "hello": "tsx ./src/hello.ts",
     "inbox:fetch": "tsx ./src/inbox-fetch.ts",
     "fetch:archived-tasks": "tsx ./src/fetch-archived-tasks.ts",
@@ -11,7 +12,6 @@
     "cluster:daily": "tsx ./src/run-cluster-daily.ts",
     "publish:from-clusters": "tsx ./src/publish-from-clusters.ts",
     "seed:blog": "tsx ./src/seed-blog.ts",
-    "daily-pipeline": "tsx src/daily-pipeline.ts",
     "sync": "tsx src/sync-and-publish.ts",
     "enrich:posts": "tsx src/enrich-posts-with-ai.ts",
     "diary:generate": "tsx src/generate-daily-diary.ts",

@@ -162,6 +162,13 @@ export function PostDetail() {
           </div>
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-display font-bold uppercase tracking-tight mb-6 leading-[1.1]">{displayTitle}</h1>
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl font-serif italic">{displayExcerpt}</p>
+
+          {/* Podcast Player — shown inline below excerpt when audio is available */}
+          {post.audioUrl && (
+            <div className="mt-6">
+              <PodcastPlayer audioUrl={post.audioUrl} title={displayTitle} />
+            </div>
+          )}
         </div>
       </header>
 
@@ -232,11 +239,6 @@ export function PostDetail() {
               </div>
             </div>
           </aside>
-        )}
-
-        {/* Podcast Player */}
-        {post.audioUrl && (
-          <PodcastPlayer audioUrl={post.audioUrl} title={displayTitle} />
         )}
 
         {/* Content */}

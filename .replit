@@ -24,12 +24,12 @@ args = "Daily Pipeline (23:30)"
 name = "Daily Pipeline (23:30)"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/scripts run daily-pipeline"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run cluster:daily"
 
 [agent]
 stack = "PNPM_WORKSPACE"

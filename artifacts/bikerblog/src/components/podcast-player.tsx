@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Play, Pause, Volume2 } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface PodcastPlayerProps {
@@ -14,6 +14,8 @@ export function PodcastPlayer({ audioUrl, title }: PodcastPlayerProps) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -60,12 +62,37 @@ export function PodcastPlayer({ audioUrl, title }: PodcastPlayerProps) {
     setProgress(val);
   };
 
+  const handleVolume = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current;
+    const val = Number(e.target.value);
+    setVolume(val);
+    if (audio) {
+      audio.volume = val;
+      audio.muted = val === 0;
+      setMuted(val === 0);
+    }
+  };
+
+  const toggleMute = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const nextMuted = !muted;
+    audio.muted = nextMuted;
+    setMuted(nextMuted);
+    if (!nextMuted && volume === 0) {
+      audio.volume = 0.5;
+      setVolume(0.5);
+    }
+  };
+
   const fmt = (s: number) => {
     if (!s || isNaN(s)) return "0:00";
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
+
+  const effectiveVolume = muted ? 0 : volume;
 
   return (
     <div className="flex flex-col gap-3 bg-muted/30 border border-border p-4 mb-8">
@@ -99,11 +126,32 @@ export function PodcastPlayer({ audioUrl, title }: PodcastPlayerProps) {
               value={progress}
               onChange={handleScrub}
               className="flex-1 h-1 accent-primary cursor-pointer"
+              aria-label="Avanzamento"
             />
             <span className="text-[10px] font-mono text-muted-foreground w-8 text-right shrink-0">
               {fmt(duration)}
             </span>
           </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={toggleMute}
+            className="text-muted-foreground hover:text-primary transition-colors"
+            aria-label={muted ? "Attiva audio" : "Silenzia"}
+          >
+            {effectiveVolume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={effectiveVolume}
+            onChange={handleVolume}
+            className="w-16 h-1 accent-primary cursor-pointer"
+            aria-label="Volume"
+          />
         </div>
       </div>
     </div>
