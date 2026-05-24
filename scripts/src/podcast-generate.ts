@@ -19,8 +19,8 @@
  *   pnpm --filter @workspace/scripts run podcast:generate -- --dry-run
  *   pnpm --filter @workspace/scripts run podcast:generate -- --force
  *
- * Voce: it-IT-DiegoNeural (Microsoft Edge TTS, voce maschile italiana)
- * Per listare le voci disponibili: edge-tts --list-voices
+ * Voce: configurabile via env PODCAST_VOICE o flag --voice (default: it-IT-DiegoNeural)
+ * Per listare le voci disponibili: edge-tts --list-voices | grep it-IT
  */
 
 import { createHmac } from "crypto";
@@ -34,7 +34,7 @@ import { eq, isNull } from "drizzle-orm";
 
 const execFileAsync = promisify(execFile);
 
-const VOICE = "it-IT-DiegoNeural";
+const DEFAULT_VOICE = "it-IT-DiegoNeural";
 const EDGE_TTS_BIN = "edge-tts";
 
 const API_BASE = process.env["API_BASE_URL"] ?? "http://localhost:8080";
@@ -55,6 +55,11 @@ const DRY_RUN = args.includes("--dry-run");
 const FORCE = args.includes("--force");
 const slugIdx = args.indexOf("--slug");
 const ONLY_SLUG = slugIdx !== -1 ? (args[slugIdx + 1] ?? null) : null;
+const voiceIdx = args.indexOf("--voice");
+const VOICE =
+  (voiceIdx !== -1 ? (args[voiceIdx + 1] ?? null) : null) ??
+  process.env["PODCAST_VOICE"] ??
+  DEFAULT_VOICE;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

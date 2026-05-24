@@ -16,7 +16,13 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run cluster:daily` — cron entry point: (1) aggiorna inbox chat se INBOX_URL è impostato, (2) genera cluster, (3) pubblica post cluster nel DB, (4) genera il post diaristico del giorno corrente (idempotente)
 - `pnpm --filter @workspace/scripts run publish:from-clusters` — pubblica manualmente i cluster già generati come post del blog
 - `pnpm --filter @workspace/scripts run diary:generate` — genera/aggiorna post narrativi per tutti i 73 giorni (12 mar – 23 mag 2026) usando Claude + chat + task. Flag: `--dry-run`, `--force`, `--map-only`, `--date YYYY-MM-DD`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`. Scrive la mappa sessioni in `inbox/bikerlink-chat-day-map.json`.
-- `pnpm --filter @workspace/scripts run podcast:generate` — genera audio TTS (ElevenLabs, voce George) per i post senza `audio_url` e li carica su GCS. Flag: `--slug <slug>` (solo un post), `--dry-run`, `--force` (rigenera anche chi ha già audio). Richiede `ELEVENLABS_API_KEY` (segreto da impostare) + `SESSION_SECRET` (già presente).
+- `pnpm --filter @workspace/scripts run podcast:generate` — genera audio TTS (edge-tts, voce configurabile) per i post senza `audio_url` e li carica su GCS. Flag: `--slug <slug>` (solo un post), `--dry-run`, `--force` (rigenera anche chi ha già audio), `--voice <nome>` (sovrascrive la voce). Env: `PODCAST_VOICE` (default: `it-IT-DiegoNeural`). Richiede `SESSION_SECRET` (già presente).
+  - Voci italiane disponibili (`edge-tts --list-voices | grep it-IT`):
+    - `it-IT-DiegoNeural` — maschile (default)
+    - `it-IT-ElsaNeural` — femminile
+    - `it-IT-IsabellaNeural` — femminile
+    - `it-IT-GiuseppeNeural` — maschile
+  - Esempio voce femminile: `pnpm --filter @workspace/scripts run podcast:generate -- --voice it-IT-ElsaNeural`
 - Required env: `DATABASE_URL` — Postgres connection string
 
 ## Deployment schedulato (cron 23:30 Europe/Rome)
