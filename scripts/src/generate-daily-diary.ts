@@ -32,6 +32,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { translatePostToEn } from "./translate.js";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { db, pool, postsTable, authorsTable } from "@workspace/db";
@@ -515,50 +516,6 @@ async function generatePost(prompt: string): Promise<string> {
   return block.type === "text" ? block.text.trim() : "";
 }
 
-interface TranslationResult {
-  titleEn: string;
-  excerptEn: string;
-  contentEn: string;
-}
-
-async function translateToEn(
-  title: string,
-  excerpt: string,
-  content: string,
-): Promise<TranslationResult> {
-  const prompt = `Translate the following Italian motorcycle dev-blog post into English. Be faithful but natural — use motorcycle enthusiast language for the narrative parts.
-
-Return ONLY a valid JSON object with exactly these three keys: "title", "excerpt", "content".
-No explanation, no markdown wrapper, no extra text.
-
----
-TITLE: ${title}
----
-EXCERPT: ${excerpt}
----
-CONTENT:
-${content}
----`;
-
-  const message = await anthropic.messages.create({
-    model:      "claude-haiku-4-5",
-    max_tokens: 4096,
-    messages:   [{ role: "user", content: prompt }],
-  });
-  const block = message.content[0];
-  const text = block.type === "text" ? block.text.trim() : "{}";
-  try {
-    const parsed = JSON.parse(text) as { title?: string; excerpt?: string; content?: string };
-    return {
-      titleEn:   parsed.title   ?? title,
-      excerptEn: parsed.excerpt ?? excerpt,
-      contentEn: parsed.content ?? content,
-    };
-  } catch {
-    console.warn("[diary] ⚠ translateToEn — JSON parse failed, using IT fallback");
-    return { titleEn: title, excerptEn: excerpt, contentEn: content };
-  }
-}
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
@@ -788,7 +745,7 @@ async function main() {
 
         if (!DRY_RUN) {
           // Translate to English immediately after generating IT content
-          const { titleEn, excerptEn, contentEn } = await translateToEn(title, excerpt, content);
+          const { titleEn, excerptEn, bodyEn } = await translatePostToEn(title, excerpt, content, slug);
           console.log(`[diary] 🌐 ${slug} — tradotto EN`);
 
           await db
@@ -801,14 +758,14 @@ async function main() {
               publishedAt:    new Date(`${date}T23:30:00+02:00`),
               readingMinutes,
               featured:       0,
-              titleEn, excerptEn, contentEn,
+              titleEn, excerptEn, bodyEn,
             })
             .onConflictDoUpdate({
               target: postsTable.slug,
               // Clear audioUrl so the post gets re-narrated after a rewrite
               set:    { title, excerpt, content, coverImageUrl, readingMinutes,
                         tags: ["diario", "bikerlink", "daily"], category: "Diario",
-                        audioUrl: null, titleEn, excerptEn, contentEn },
+                        audioUrl: null, titleEn, excerptEn, bodyEn },
             });
           console.log(`[diary] ✓ ${slug}`);
         } else {
@@ -843,23 +800,23 @@ async function main() {
 }
 
 /**
- * For diary posts already in the DB without contentEn, translate and update
- * just the EN columns. Idempotent: skips posts that already have contentEn.
+ * For diary posts already in the DB without bodyEn, translate and update
+ * just the EN columns. Idempotent: skips posts that already have bodyEn.
  */
 async function backfillMissingTranslations(allDates: string[]): Promise<void> {
   const slugs = allDates.map((d) => `diary-${d}`);
   const rows = await db
     .select({
-      slug:      postsTable.slug,
-      title:     postsTable.title,
-      excerpt:   postsTable.excerpt,
-      content:   postsTable.content,
-      contentEn: postsTable.contentEn,
+      slug:   postsTable.slug,
+      title:  postsTable.title,
+      excerpt: postsTable.excerpt,
+      content: postsTable.content,
+      bodyEn:  postsTable.bodyEn,
     })
     .from(postsTable)
     .where(inArray(postsTable.slug, slugs));
 
-  const needsTranslation = rows.filter((r) => !r.contentEn);
+  const needsTranslation = rows.filter((r) => !r.bodyEn);
   if (needsTranslation.length === 0) {
     console.log("[diary] 🌐 backfill EN — tutti i post hanno già la traduzione");
     return;
@@ -871,12 +828,12 @@ async function backfillMissingTranslations(allDates: string[]): Promise<void> {
     const batch = needsTranslation.slice(i, i + 2);
     await Promise.all(batch.map(async (row) => {
       try {
-        const { titleEn, excerptEn, contentEn } = await translateToEn(
-          row.title, row.excerpt, row.content
+        const { titleEn, excerptEn, bodyEn } = await translatePostToEn(
+          row.title, row.excerpt, row.content, row.slug
         );
         await db
           .update(postsTable)
-          .set({ titleEn, excerptEn, contentEn })
+          .set({ titleEn, excerptEn, bodyEn })
           .where(eq(postsTable.slug, row.slug));
         console.log(`[diary] 🌐 ✓ ${row.slug}`);
         done++;
