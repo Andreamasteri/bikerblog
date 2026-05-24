@@ -1,8 +1,39 @@
 import { useGetBlogStats, useGetFeaturedPost, useListPopularPosts, useListPosts, useListTags } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Calendar, Clock, MessageSquare, ThumbsUp } from "lucide-react";
+import { Calendar, Clock, MessageSquare, ThumbsUp, Headphones, ChevronRight, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+
+function StaticHero() {
+  return (
+    <section className="mb-16">
+      <div className="relative h-[60vh] overflow-hidden bg-black flex items-end">
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-black" />
+        <div className="absolute inset-0 opacity-10" style={{
+          backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,.15) 39px,rgba(255,255,255,.15) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,.15) 39px,rgba(255,255,255,.15) 40px)"
+        }} />
+        <div className="relative z-10 p-8 md:p-12 w-full max-w-4xl">
+          <div className="flex items-center gap-3 mb-6">
+            <Wrench className="h-6 w-6 text-primary" />
+            <span className="text-xs font-bold uppercase tracking-[0.3em] text-primary">Est. on the open road</span>
+          </div>
+          <h1 className="text-5xl md:text-7xl font-display font-bold text-white mb-4 leading-tight uppercase tracking-tighter">
+            BikerBlog
+          </h1>
+          <p className="text-lg md:text-xl text-gray-300 mb-8 max-w-2xl font-serif italic">
+            Ride reports, recensioni di gear e consigli tecnici per chi vive per la strada aperta.
+          </p>
+          <Link
+            href="/posts"
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors"
+          >
+            Leggi gli articoli <ChevronRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function Home() {
   const { data: featuredPost, isLoading: featuredLoading } = useGetFeaturedPost();
@@ -10,6 +41,8 @@ export function Home() {
   const { data: popularPosts, isLoading: popularLoading } = useListPopularPosts({ limit: 4 });
   const { data: stats } = useGetBlogStats();
   const { data: tags } = useListTags();
+
+  const podcastPosts = recentPosts?.filter(p => p.audioUrl).slice(0, 3) ?? [];
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -41,7 +74,38 @@ export function Home() {
             </div>
           </Link>
         </section>
-      ) : null}
+      ) : (
+        <StaticHero />
+      )}
+
+      {/* Podcast section */}
+      {!recentLoading && podcastPosts.length > 0 && (
+        <section className="mb-16">
+          <div className="flex items-center justify-between mb-8 border-b pb-4">
+            <h2 className="text-3xl font-display font-bold uppercase tracking-tight flex items-center gap-3">
+              <Headphones className="w-7 h-7 text-primary" />
+              Ascolta
+            </h2>
+            <Link href="/posts" className="text-primary hover:underline font-bold uppercase text-sm tracking-wider">Tutti i post</Link>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {podcastPosts.map(post => (
+              <Link key={post.id} href={`/posts/${post.slug}`} className="group flex flex-col border border-border hover:border-primary transition-colors bg-muted/10 hover:bg-muted/30 p-5">
+                <div className="flex items-center gap-2 mb-3 text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+                  <Headphones className="w-3.5 h-3.5" />
+                  <span>Episodio audio</span>
+                </div>
+                <h3 className="font-display font-bold text-base leading-tight mb-2 group-hover:text-primary transition-colors line-clamp-2">{post.title}</h3>
+                <p className="text-xs text-muted-foreground line-clamp-2 mb-4 flex-1">{post.excerpt}</p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mt-auto">
+                  <span className="uppercase tracking-wider">{post.author.name}</span>
+                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {post.readingMinutes} min</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2">
@@ -70,6 +134,12 @@ export function Home() {
                     <span>{format(new Date(post.publishedAt), "MMM d")}</span>
                     <span>&bull;</span>
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {post.readingMinutes} min</span>
+                    {post.audioUrl && (
+                      <>
+                        <span>&bull;</span>
+                        <span className="flex items-center gap-1 text-primary"><Headphones className="w-3 h-3" /> audio</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </article>
