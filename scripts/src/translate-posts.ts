@@ -59,8 +59,6 @@ async function runConcurrent<T>(
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
 }
 
-let failureCount = 0;
-
 async function main() {
   console.log(`translate-posts: dry=${dryRun} force=${forceAll} slug=${targetSlug ?? "all"}`);
 
