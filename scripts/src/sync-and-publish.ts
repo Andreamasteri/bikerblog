@@ -64,8 +64,8 @@ step(
 );
 
 step(
-  "cluster:tasks (MERGED per giornata)",
-  ["src/cluster-tasks.ts", "--state", "MERGED", "--by", "day"]
+  "cluster:tasks (tutti i task per giornata)",
+  ["src/cluster-tasks.ts", "--by", "day"]
 );
 
 console.log("\n[sync] ▶ publish-from-clusters");

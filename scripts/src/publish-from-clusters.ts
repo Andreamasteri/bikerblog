@@ -192,11 +192,14 @@ export async function publishFromClusters(
         readingMinutes,
         featured: 0,
       })
-      .onConflictDoNothing({ target: postsTable.slug });
+      .onConflictDoUpdate({
+        target: postsTable.slug,
+        set: { title, excerpt, content, coverImageUrl, readingMinutes, tags: ["recap", "bikerlink", "daily"] },
+      });
 
     const inserted = (result.rowCount ?? 0) > 0;
     if (inserted) {
-      console.log(`[publish-from-clusters] pubblicato: ${slug}`);
+      console.log(`[publish-from-clusters] upsert: ${slug}`);
       published++;
     } else {
       skipped++;
