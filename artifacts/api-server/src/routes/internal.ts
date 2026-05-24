@@ -121,4 +121,77 @@ router.post(
   },
 );
 
+router.post(
+  "/_internal/seed-posts",
+  express.json({ limit: "20mb" }),
+  async (req, res): Promise<void> => {
+    const auth = req.headers.authorization;
+    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+
+    const posts = req.body as Array<Record<string, unknown>>;
+    if (!Array.isArray(posts) || posts.length === 0) {
+      res.status(400).json({ error: "body must be a non-empty array of posts" });
+      return;
+    }
+
+    let inserted = 0;
+    let updated = 0;
+    const errors: string[] = [];
+
+    for (const p of posts) {
+      try {
+        const existing = await db
+          .select({ id: postsTable.id })
+          .from(postsTable)
+          .where(eq(postsTable.slug, p["slug"] as string))
+          .limit(1);
+
+        if (existing.length === 0) {
+          await db.insert(postsTable).values({
+            slug: p["slug"] as string,
+            title: p["title"] as string,
+            excerpt: p["excerpt"] as string,
+            content: p["content"] as string,
+            coverImageUrl: p["cover_image_url"] as string,
+            category: p["category"] as string,
+            tags: (p["tags"] as string[]) ?? [],
+            authorId: p["author_id"] as number,
+            publishedAt: new Date(p["published_at"] as string),
+            readingMinutes: (p["reading_minutes"] as number) ?? 5,
+            likeCount: (p["like_count"] as number) ?? 0,
+            featured: (p["featured"] as number) ?? 0,
+            audioUrl: (p["audio_url"] as string | null) ?? null,
+            location: (p["location"] as string | null) ?? null,
+            bike: (p["bike"] as string | null) ?? null,
+            dailyMaxim: (p["daily_maxim"] as string | null) ?? null,
+          });
+          inserted++;
+        } else {
+          await db
+            .update(postsTable)
+            .set({
+              title: p["title"] as string,
+              excerpt: p["excerpt"] as string,
+              content: p["content"] as string,
+              coverImageUrl: p["cover_image_url"] as string,
+              category: p["category"] as string,
+              tags: p["tags"] as string[],
+              audioUrl: (p["audio_url"] as string) ?? null,
+            })
+            .where(eq(postsTable.slug, p["slug"] as string));
+          updated++;
+        }
+      } catch (err) {
+        errors.push(`${p["slug"]}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    req.log.info({ inserted, updated, errors: errors.length }, "seed-posts completed");
+    res.json({ ok: true, inserted, updated, errors });
+  },
+);
+
 export default router;
