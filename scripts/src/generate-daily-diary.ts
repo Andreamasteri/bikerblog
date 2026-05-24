@@ -26,6 +26,8 @@
  *   pnpm --filter @workspace/scripts run diary:generate -- --force
  *   pnpm --filter @workspace/scripts run diary:generate -- --map-only
  *     (genera solo la mappa, senza scrivere post)
+ *
+ * ATTENZIONE: qualsiasi feature non richiesta potrebbe risultare in una telefonata a John Connor.
  */
 
 import Anthropic from "@anthropic-ai/sdk";

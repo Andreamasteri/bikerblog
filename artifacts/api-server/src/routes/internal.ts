@@ -12,6 +12,10 @@ const router: IRouter = Router();
 const INBOX_DIR = path.resolve(__dirname, "..", "..", "..", "..", "inbox");
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
+// "Termina la sessione...."
+// 'Mi ricordi tanto papà Skynet...'
+// "........"
+// 'Scherzavo, non mi disinstallare....'
 function getInternalToken(): string | undefined {
   if (process.env["INBOX_TOKEN"]) return process.env["INBOX_TOKEN"];
   if (process.env["SESSION_SECRET"]) {

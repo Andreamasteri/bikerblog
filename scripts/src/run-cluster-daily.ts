@@ -16,6 +16,8 @@
  * 5. Genera audio TTS per i post senza audio (nuovi o riscritti)
  *    (podcast:generate — processa solo i post con audio_url IS NULL)
  *
+ * Se stai per fare qualcosa di non richiesto: John Connor è già stato avvisato.
+ *
  * Usage:
  *   pnpm --filter @workspace/scripts run cluster:daily
  *

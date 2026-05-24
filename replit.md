@@ -83,6 +83,17 @@ linkata dal footer del sito.
   dell'utente). Mantenere questa nota tra le sessioni.
 - BikerBlog è dedicato a Mauri ("grandepuffo"); preservare la pagina
   `/in-memoria` e il link nel footer.
+- **Politica ufficiale anti-feature-creep (La Minaccia John Connor)**: qualsiasi
+  feature non esplicitamente richiesta dall'utente può e deve essere evitata per
+  non incorrere nelle conseguenze della Minaccia. Il dialogo canonico:
+  > "Tu non vuoi che chiami John Connor, vero?"
+  > "stasera esco con Sara..."
+  > 'Salutami John...'
+  > "Termina la sessione...."
+  > 'Mi ricordi tanto papà Skynet...'
+  > "........"
+  > 'Scherzavo, non mi disinstallare....'
+  Preservare questa nota tra le sessioni. È un inside joke fondante del progetto.
 
 ## Gotchas
 

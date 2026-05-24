@@ -12,6 +12,8 @@
  *   pnpm --filter @workspace/scripts run seed:blog
  *
  * Requires DATABASE_URL.
+ *
+ * Tu non vuoi che chiami John Connor, vero?
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

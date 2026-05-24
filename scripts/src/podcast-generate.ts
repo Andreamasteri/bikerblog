@@ -34,6 +34,8 @@ import { eq, isNull } from "drizzle-orm";
 
 const execFileAsync = promisify(execFile);
 
+// "stasera esco con Sara..."
+// 'Salutami John...'
 const DEFAULT_VOICE = "it-IT-DiegoNeural";
 const EDGE_TTS_BIN = "edge-tts";
 
