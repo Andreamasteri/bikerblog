@@ -47,3 +47,10 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Dati operativi interni e logica proprietaria di BikerLink
+# Queste cartelle contengono archivi di chat, task, cronologia di sviluppo
+# e materiale di input per il cron notturno. Non devono mai essere
+# incluse in un repository pubblico.
+inbox/
+attached_assets/
