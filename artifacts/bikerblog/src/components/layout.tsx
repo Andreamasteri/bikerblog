@@ -16,6 +16,9 @@ function LanguageSwitcher({ mobile }: { mobile?: boolean }) {
   const toggle = (l: string) => {
     i18n.changeLanguage(l);
     localStorage.setItem("bikerblog_lang", l);
+    const url = new URL(window.location.href);
+    url.searchParams.set("lang", l);
+    window.history.replaceState(null, "", url.toString());
   };
 
   const base = mobile
