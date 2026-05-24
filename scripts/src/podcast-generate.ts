@@ -43,7 +43,8 @@ function getInternalToken(): string {
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");
 const FORCE = args.includes("--force");
-const ONLY_SLUG = args[args.indexOf("--slug") + 1] ?? null;
+const slugIdx = args.indexOf("--slug");
+const ONLY_SLUG = slugIdx !== -1 ? (args[slugIdx + 1] ?? null) : null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
