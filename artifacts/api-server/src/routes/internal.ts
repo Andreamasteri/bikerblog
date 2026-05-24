@@ -6,7 +6,7 @@ import path from "path";
 const router: IRouter = Router();
 
 const INBOX_TOKEN = process.env["INBOX_TOKEN"];
-const INBOX_DIR = path.join(process.cwd(), "inbox");
+const INBOX_DIR = path.resolve(__dirname, "..", "..", "..", "..", "inbox");
 
 router.post(
   "/_internal/receive-transcript",
