@@ -3,6 +3,7 @@ import { useParams, Link } from "wouter";
 import { format } from "date-fns";
 import { Clock, MapPin, Bike, ThumbsUp, MessageSquare, ChevronLeft, Quote, Languages } from "lucide-react";
 import { PodcastPlayer } from "@/components/podcast-player";
+import { LanguageSwitch } from "@/components/language-switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,10 +62,10 @@ export function PostDetail() {
   usePostMeta(slug);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const { data: post, isLoading: postLoading, error: postError } = useGetPost(slug || "", { query: { enabled: !!slug, queryKey: ["post", slug] } });
   const { data: comments, isLoading: commentsLoading } = useListPostComments(slug || "", { query: { enabled: !!slug, queryKey: ["post-comments", slug] } });
-  
+
   const likeMutation = useLikePost();
   const commentMutation = useCreatePostComment();
 
@@ -83,7 +84,7 @@ export function PostDetail() {
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!slug || !commentName.trim() || !commentBody.trim()) return;
-    
+
     commentMutation.mutate({
       slug,
       data: { authorName: commentName, body: commentBody }
@@ -143,9 +144,16 @@ export function PostDetail() {
         <img src={post.coverImageUrl} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
         <div className="container max-w-4xl mx-auto px-4 relative z-10 pb-12">
-          <Link href="/posts" className="inline-flex items-center text-sm font-bold uppercase tracking-wider text-muted-foreground hover:text-primary mb-8 transition-colors">
-            <ChevronLeft className="w-4 h-4 mr-1" /> {t("postDetail.back")}
-          </Link>
+          <div className="flex items-center justify-between mb-8">
+            <Link href="/posts" className="inline-flex items-center text-sm font-bold uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors">
+              <ChevronLeft className="w-4 h-4 mr-1" /> {t("postDetail.back")}
+            </Link>
+            <LanguageSwitch
+              lang={lang as "it" | "en"}
+              onChange={(l) => { void i18n.changeLanguage(l); }}
+              hasEn={hasTranslation}
+            />
+          </div>
           <div className="mb-6 flex flex-wrap gap-3">
             <Badge className="bg-primary text-primary-foreground uppercase tracking-widest rounded-none">{post.category.replace('-', ' ')}</Badge>
             {post.tags.map(tag => (
@@ -171,15 +179,15 @@ export function PostDetail() {
               </div>
             </div>
           </div>
-          <div className="flex gap-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
+          <div className="flex gap-4 items-center">
+            <Button
+              variant="outline"
+              size="sm"
               className="rounded-none uppercase tracking-wider font-bold"
               onClick={handleLike}
               disabled={likeMutation.isPending}
             >
-              <ThumbsUp className={`w-4 h-4 mr-2 ${likeMutation.isPending ? 'animate-bounce' : ''}`} /> 
+              <ThumbsUp className={`w-4 h-4 mr-2 ${likeMutation.isPending ? 'animate-bounce' : ''}`} />
               {post.likeCount} {t("postDetail.likes")}
             </Button>
             <Button variant="outline" size="sm" className="rounded-none uppercase tracking-wider font-bold" asChild>
@@ -191,11 +199,18 @@ export function PostDetail() {
           </div>
         </div>
 
-        {/* Translation notice */}
+        {/* Translation notice when EN is available */}
         {useEn && hasTranslation && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/20 border border-border px-4 py-3 mb-8">
             <Languages className="w-4 h-4 text-primary shrink-0" />
             <span>{t("postDetail.translatedNote")}</span>
+          </div>
+        )}
+
+        {/* EN not yet available notice */}
+        {useEn && !hasTranslation && (
+          <div className="mb-8 px-4 py-3 border border-border bg-muted/20 text-sm text-muted-foreground">
+            {t("postDetail.translationUnavailable")}
           </div>
         )}
 
@@ -254,12 +269,12 @@ export function PostDetail() {
         {/* Comments Section */}
         <section id="comments" className="border-t border-border pt-12">
           <h3 className="font-display text-3xl uppercase font-bold mb-8">{t("postDetail.discuss", { count: post.commentCount })}</h3>
-          
+
           <form onSubmit={handleCommentSubmit} className="mb-12 bg-muted/20 p-6 border border-border">
             <h4 className="font-bold uppercase tracking-wider mb-4 text-sm text-primary">{t("postDetail.leaveComment")}</h4>
             <div className="space-y-4">
               <div>
-                <Input 
+                <Input
                   placeholder={t("postDetail.yourName")}
                   value={commentName}
                   onChange={e => setCommentName(e.target.value)}
@@ -269,7 +284,7 @@ export function PostDetail() {
                 />
               </div>
               <div>
-                <Textarea 
+                <Textarea
                   placeholder={t("postDetail.yourThoughts")}
                   value={commentBody}
                   onChange={e => setCommentBody(e.target.value)}

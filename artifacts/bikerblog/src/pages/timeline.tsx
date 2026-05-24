@@ -6,6 +6,7 @@ import { Calendar, ChevronRight } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
+import { LanguageSwitch } from "@/components/language-switch";
 
 export function Timeline() {
   const { t, i18n } = useTranslation();
@@ -23,6 +24,8 @@ export function Timeline() {
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
 
   const { data: posts, isLoading } = useListPosts();
+
+  const anyHasEn = posts?.some(p => !!p.bodyEn) ?? false;
 
   const sortedPosts = useMemo(() => {
     if (!posts) return [];
@@ -54,11 +57,18 @@ export function Timeline() {
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mb-12 border-b border-border pb-8">
-        <div className="flex items-center gap-2 text-primary mb-2">
-          <Calendar className="w-4 h-4" />
-          <span className="text-sm font-bold uppercase tracking-widest">
-            {t("timeline.days")}
-          </span>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-primary">
+            <Calendar className="w-4 h-4" />
+            <span className="text-sm font-bold uppercase tracking-widest">
+              {t("timeline.days")}
+            </span>
+          </div>
+          <LanguageSwitch
+            lang={lang as "it" | "en"}
+            onChange={(l) => { void i18n.changeLanguage(l); }}
+            hasEn={anyHasEn}
+          />
         </div>
         <h1 className="text-4xl md:text-6xl font-display font-bold uppercase tracking-tight leading-none mb-4">
           {t("timeline.title")}
@@ -128,7 +138,7 @@ export function Timeline() {
                         <div className="min-w-0">
                           <Link href={`/posts/${post.slug}`}>
                             <h3 className="font-display font-bold text-base leading-snug group-hover:text-primary transition-colors truncate">
-                              {postTitle(post)}
+              {postTitle(post)}
                             </h3>
                           </Link>
                           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">

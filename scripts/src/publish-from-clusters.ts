@@ -13,6 +13,7 @@ import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { db, pool, postsTable, authorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import Anthropic from "@anthropic-ai/sdk";
 
 const MONTHS_IT = [
   "gennaio",
@@ -148,6 +149,56 @@ function contentHash(s: string): string {
   return createHash("md5").update(s).digest("hex");
 }
 
+const anthropic = new Anthropic({
+  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+  apiKey:  process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy",
+});
+
+interface TranslationResult {
+  titleEn: string;
+  excerptEn: string;
+  contentEn: string;
+}
+
+async function translateToEn(
+  title: string,
+  excerpt: string,
+  content: string,
+): Promise<TranslationResult> {
+  const prompt = `Translate the following Italian motorcycle dev-blog post into English. Be faithful but natural.
+
+Return ONLY a valid JSON object with exactly these three keys: "title", "excerpt", "content".
+No explanation, no markdown wrapper, no extra text.
+
+---
+TITLE: ${title}
+---
+EXCERPT: ${excerpt}
+---
+CONTENT:
+${content}
+---`;
+
+  const message = await anthropic.messages.create({
+    model:      "claude-haiku-4-5",
+    max_tokens: 4096,
+    messages:   [{ role: "user", content: prompt }],
+  });
+  const block = message.content[0];
+  const text = block.type === "text" ? block.text.trim() : "{}";
+  try {
+    const parsed = JSON.parse(text) as { title?: string; excerpt?: string; content?: string };
+    return {
+      titleEn:   parsed.title   ?? title,
+      excerptEn: parsed.excerpt ?? excerpt,
+      contentEn: parsed.content ?? content,
+    };
+  } catch {
+    console.warn("[publish-from-clusters] ⚠ translateToEn — JSON parse failed, using IT fallback");
+    return { titleEn: title, excerptEn: excerpt, contentEn: content };
+  }
+}
+
 /** Returns slugs whose audio was cleared because content changed (or was new). */
 export async function publishFromClusters(
   clustersPath?: string
@@ -185,15 +236,31 @@ export async function publishFromClusters(
     const coverImageUrl = pickCover(cluster.date);
     const readingMinutes = Math.max(2, Math.ceil(cluster.taskCount * 0.5));
 
-    // Check if content has changed (to decide whether to clear audio_url)
+    // Check if content has changed (to decide whether to clear audio_url and re-translate)
     const existing = await db
-      .select({ content: postsTable.content })
+      .select({ content: postsTable.content, contentEn: postsTable.contentEn })
       .from(postsTable)
       .where(eq(postsTable.slug, slug))
       .limit(1);
 
     const contentChanged =
       existing.length === 0 || contentHash(existing[0].content) !== contentHash(content);
+    const needsTranslation =
+      contentChanged || !existing[0]?.contentEn;
+
+    let translationResult: { titleEn: string; excerptEn: string; contentEn: string } | null = null;
+
+    if (needsTranslation) {
+      try {
+        translationResult = await translateToEn(title, excerpt, content);
+        console.log(`[publish-from-clusters] 🌐 tradotto EN: ${slug}`);
+      } catch (err) {
+        console.warn(
+          `[publish-from-clusters] ⚠ traduzione EN fallita per ${slug}:`,
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    }
 
     const conflictSet: Record<string, unknown> = {
       title, excerpt, content, coverImageUrl, readingMinutes,
@@ -201,6 +268,11 @@ export async function publishFromClusters(
     };
     if (contentChanged) {
       conflictSet["audioUrl"] = null;
+    }
+    if (translationResult) {
+      conflictSet["titleEn"]   = translationResult.titleEn;
+      conflictSet["excerptEn"] = translationResult.excerptEn;
+      conflictSet["contentEn"] = translationResult.contentEn;
     }
 
     await db
@@ -217,6 +289,9 @@ export async function publishFromClusters(
         publishedAt: new Date(`${cluster.date}T23:30:00+02:00`),
         readingMinutes,
         featured: 0,
+        titleEn: translationResult?.titleEn ?? null,
+        excerptEn: translationResult?.excerptEn ?? null,
+        contentEn: translationResult?.contentEn ?? null,
       })
       .onConflictDoUpdate({
         target: postsTable.slug,

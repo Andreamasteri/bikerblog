@@ -48,3 +48,12 @@ Usa `bash` tool con questo comando e mostra all'utente l'output (quanti post pub
 - Se `INBOX_URL` non è impostata, il fetch chat è skippato senza errori.
 - Dopo il sync, il blog è aggiornato in tempo reale (nessun restart necessario).
 - Script: `scripts/src/sync-and-publish.ts`
+
+## Comportamento bilingue (IT/EN)
+
+Ogni post pubblicato viene generato **in italiano e in inglese**. La traduzione avviene automaticamente via Claude (modello Haiku) subito dopo la generazione del contenuto IT.
+
+- **Nuovi post** (`publish:from-clusters`, `diary:generate`): generati in IT, poi tradotti in EN nello stesso run. I campi `title_en`, `excerpt_en`, `content_en` vengono popolati nell'upsert.
+- **Post già esistenti senza traduzione**: `diary:generate` esegue un backfill automatico al termine del run — traduce i post del range che non hanno ancora `content_en`.
+- **Idempotenza**: se `content_en` è già presente e il contenuto IT non è cambiato, la ritraduzione viene saltata.
+- **Frontend**: il selettore IT/EN è visibile nella pagina del post, nella home e nella timeline. La lingua scelta viene salvata in `localStorage` e ripristinata al reload. Se la traduzione EN non è disponibile per un post, il selettore mostra un fallback all'italiano con avviso visivo.

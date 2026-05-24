@@ -5,6 +5,7 @@ import { Calendar, Clock, MessageSquare, ThumbsUp, Headphones, ChevronRight, Wre
 import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
+import { LanguageSwitch } from "@/components/language-switch";
 
 function StaticHero() {
   const { t } = useTranslation();
@@ -39,7 +40,7 @@ function StaticHero() {
 }
 
 export function Home() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { postTitle, postExcerpt } = usePostLocale();
   const { data: featuredPost, isLoading: featuredLoading } = useGetFeaturedPost();
   const { data: recentPosts, isLoading: recentLoading } = useListPosts({});
@@ -48,12 +49,20 @@ export function Home() {
   const { data: tags } = useListTags();
 
   const podcastPosts = recentPosts?.filter(p => p.audioUrl).slice(0, 3) ?? [];
+  const anyHasEn = recentPosts?.some(p => !!p.bodyEn) ?? false;
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <p className="text-sm md:text-base italic text-muted-foreground/70 tracking-widest font-serif mb-4 select-none">
-        {t("home.motto")}
-      </p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm md:text-base italic text-muted-foreground/70 tracking-widest font-serif select-none">
+          {t("home.motto")}
+        </p>
+        <LanguageSwitch
+          lang={i18n.language as "it" | "en"}
+          onChange={(l) => { void i18n.changeLanguage(l); }}
+          hasEn={anyHasEn}
+        />
+      </div>
 
       {featuredLoading ? (
         <div className="h-[60vh] bg-muted animate-pulse mb-12"></div>
@@ -118,7 +127,7 @@ export function Home() {
             <h2 className="text-3xl font-display font-bold uppercase tracking-tight">{t("home.recentDispatches")}</h2>
             <Link href="/posts" className="text-primary hover:underline font-bold uppercase text-sm tracking-wider">{t("home.viewAll")}</Link>
           </div>
-          
+
           <div className="space-y-12">
             {recentLoading ? (
               Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-64 bg-muted animate-pulse"></div>)
