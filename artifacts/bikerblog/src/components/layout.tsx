@@ -12,6 +12,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
           <nav className="flex items-center gap-6 text-sm font-medium">
             <Link href="/posts" className="hover:text-primary transition-colors uppercase tracking-wider">Posts</Link>
+            <Link href="/timeline" className="hover:text-primary transition-colors uppercase tracking-wider">Timeline</Link>
             <Link href="/authors" className="hover:text-primary transition-colors uppercase tracking-wider">Authors</Link>
             <Link href="/new" className="hover:text-primary transition-colors uppercase tracking-wider bg-primary text-primary-foreground px-4 py-2 hover:bg-primary/90">Write</Link>
           </nav>
@@ -28,7 +29,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <p className="max-w-md mx-auto mb-6">For those who live for the open road. Ride reports, gear reviews, and technical tips.</p>
           <p className="text-sm">&copy; {new Date().getFullYear()} BikerBlog. All rights reserved.</p>
-          <p className="text-sm mt-2">
+          <p className="text-sm mt-2 flex justify-center gap-6">
+            <Link href="/timeline" className="hover:text-primary transition-colors">Timeline</Link>
             <Link href="/in-memoria" className="hover:text-primary transition-colors">In memoria di Mauri</Link>
           </p>
         </div>

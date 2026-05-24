@@ -11,6 +11,7 @@ import { Categories } from "@/pages/categories";
 import { Authors } from "@/pages/authors";
 import { NewPost } from "@/pages/new-post";
 import { InMemoria } from "@/pages/in-memoria";
+import { Timeline } from "@/pages/timeline";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
 
@@ -35,6 +36,7 @@ function Router() {
         <Route path="/authors" component={Authors} />
         <Route path="/new" component={NewPost} />
         <Route path="/in-memoria" component={InMemoria} />
+        <Route path="/timeline" component={Timeline} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
