@@ -8,9 +8,13 @@
  *    (cluster:tasks --state MERGED --by day)
  * 3. Pubblica i cluster nuovi come post del blog
  *    (publish-from-clusters)
+ *    Se il contenuto di un post è cambiato, azzera audio_url per la rinarrazione.
  * 4. Genera il post diaristico per la data odierna (Europe/Rome)
  *    (diary:generate --date YYYY-MM-DD)
  *    Idempotente: se il post esiste già, non lo riscrive.
+ *    In caso di riscrittura (--force), azzera audio_url.
+ * 5. Genera audio TTS per i post senza audio (nuovi o riscritti)
+ *    (podcast:generate — processa solo i post con audio_url IS NULL)
  *
  * Usage:
  *   pnpm --filter @workspace/scripts run cluster:daily
@@ -121,6 +125,24 @@ if (diaryResult.status !== 0) {
     diaryResult.status
   );
   process.exit(diaryResult.status ?? 1);
+}
+
+// ── Step 5: generazione audio per i post senza audio (nuovi o riscritti) ──────
+
+console.log("[cluster-daily] step 5: generazione audio post aggiornati");
+
+const podcastResult = spawnSync(
+  "tsx",
+  ["src/podcast-generate.ts"],
+  { cwd: scriptsCwd, stdio: "inherit" }
+);
+
+if (podcastResult.status !== 0) {
+  console.warn(
+    "[cluster-daily] ⚠ podcast:generate fallito con codice",
+    podcastResult.status,
+    "— il pipeline si conclude comunque"
+  );
 }
 
 await pool.end();

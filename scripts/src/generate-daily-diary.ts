@@ -751,8 +751,10 @@ async function main() {
             })
             .onConflictDoUpdate({
               target: postsTable.slug,
+              // Clear audioUrl so the post gets re-narrated after a rewrite
               set:    { title, excerpt, content, coverImageUrl, readingMinutes,
-                        tags: ["diario", "bikerlink", "daily"], category: "Diario" },
+                        tags: ["diario", "bikerlink", "daily"], category: "Diario",
+                        audioUrl: null },
             });
           console.log(`[diary] ✓ ${slug}`);
         } else {

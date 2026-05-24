@@ -10,7 +10,9 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 import { db, pool, postsTable, authorsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const MONTHS_IT = [
   "gennaio",
@@ -142,9 +144,14 @@ async function getFirstAuthorId(): Promise<number> {
   return author.id;
 }
 
+function contentHash(s: string): string {
+  return createHash("md5").update(s).digest("hex");
+}
+
+/** Returns slugs whose audio was cleared because content changed (or was new). */
 export async function publishFromClusters(
   clustersPath?: string
-): Promise<void> {
+): Promise<string[]> {
   const root = resolve(process.cwd(), "..");
   const filePath =
     clustersPath ??
@@ -154,7 +161,7 @@ export async function publishFromClusters(
     console.warn(
       `[publish-from-clusters] File non trovato: ${filePath} — skip`
     );
-    return;
+    return [];
   }
 
   const markdown = readFileSync(filePath, "utf8");
@@ -162,12 +169,13 @@ export async function publishFromClusters(
 
   if (clusters.length === 0) {
     console.log("[publish-from-clusters] Nessun cluster trovato — skip");
-    return;
+    return [];
   }
 
   const authorId = await getFirstAuthorId();
   let published = 0;
   let skipped = 0;
+  const audioCleared: string[] = [];
 
   for (const cluster of clusters) {
     const slug = `recap-${cluster.date}`;
@@ -177,7 +185,25 @@ export async function publishFromClusters(
     const coverImageUrl = pickCover(cluster.date);
     const readingMinutes = Math.max(2, Math.ceil(cluster.taskCount * 0.5));
 
-    const result = await db
+    // Check if content has changed (to decide whether to clear audio_url)
+    const existing = await db
+      .select({ content: postsTable.content })
+      .from(postsTable)
+      .where(eq(postsTable.slug, slug))
+      .limit(1);
+
+    const contentChanged =
+      existing.length === 0 || contentHash(existing[0].content) !== contentHash(content);
+
+    const conflictSet: Record<string, unknown> = {
+      title, excerpt, content, coverImageUrl, readingMinutes,
+      tags: ["recap", "bikerlink", "daily"],
+    };
+    if (contentChanged) {
+      conflictSet["audioUrl"] = null;
+    }
+
+    await db
       .insert(postsTable)
       .values({
         slug,
@@ -194,12 +220,12 @@ export async function publishFromClusters(
       })
       .onConflictDoUpdate({
         target: postsTable.slug,
-        set: { title, excerpt, content, coverImageUrl, readingMinutes, tags: ["recap", "bikerlink", "daily"] },
+        set: conflictSet,
       });
 
-    const inserted = (result.rowCount ?? 0) > 0;
-    if (inserted) {
-      console.log(`[publish-from-clusters] upsert: ${slug}`);
+    if (contentChanged) {
+      console.log(`[publish-from-clusters] upsert (content changed): ${slug}`);
+      audioCleared.push(slug);
       published++;
     } else {
       skipped++;
@@ -207,8 +233,9 @@ export async function publishFromClusters(
   }
 
   console.log(
-    `[publish-from-clusters] done — pubblicati: ${published}, già presenti: ${skipped}`
+    `[publish-from-clusters] done — aggiornati: ${published}, invariati: ${skipped}`
   );
+  return audioCleared;
 }
 
 if (
