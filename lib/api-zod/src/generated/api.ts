@@ -55,27 +55,6 @@ export const ListPostsResponse = zod.array(ListPostsResponseItem)
 
 
 /**
- * @summary Create a new blog post
- */
-
-
-
-
-
-export const CreatePostBody = zod.object({
-  "title": zod.string().min(1),
-  "excerpt": zod.string().min(1),
-  "content": zod.string().min(1),
-  "coverImageUrl": zod.string(),
-  "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
-  "tags": zod.array(zod.string()),
-  "authorId": zod.number(),
-  "location": zod.string().nullish(),
-  "bike": zod.string().nullish()
-})
-
-
-/**
  * @summary Get the featured (hero) post
  */
 export const GetFeaturedPostResponse = zod.object({

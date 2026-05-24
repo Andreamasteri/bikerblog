@@ -42,7 +42,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {NAV_LINKS.map(l => (
               <Link key={l.href} href={l.href} className="hover:text-primary transition-colors uppercase tracking-wider">{l.label}</Link>
             ))}
-            <Link href="/new" className="hover:text-primary transition-colors uppercase tracking-wider bg-primary text-primary-foreground px-4 py-2 hover:bg-primary/90">Write</Link>
           </nav>
 
           {/* Mobile hamburger */}
@@ -67,12 +66,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {l.label}
               </Link>
             ))}
-            <Link
-              href="/new"
-              className="mt-3 block text-center py-3 text-sm font-bold uppercase tracking-wider bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              Write
-            </Link>
           </div>
         )}
       </header>

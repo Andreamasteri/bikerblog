@@ -61,23 +61,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Post"
-    post:
-      operationId: createPost
-      tags: [posts]
-      summary: Create a new blog post
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PostInput"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Post"
 
   /posts/featured:
     get:

@@ -29,7 +29,6 @@ import type {
   ListPopularPostsParams,
   ListPostsParams,
   Post,
-  PostInput,
   TagCount
 } from './api.schemas';
 
@@ -205,77 +204,6 @@ export function useListPosts<TData = Awaited<ReturnType<typeof listPosts>>, TErr
 
 
 
-
-export const getCreatePostUrl = () => {
-
-
-
-
-  return `/api/posts`
-}
-
-/**
- * @summary Create a new blog post
- */
-export const createPost = async (postInput: PostInput, options?: RequestInit): Promise<Post> => {
-
-  return customFetch<Post>(getCreatePostUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postInput,)
-  }
-);}
-
-
-
-
-export const getCreatePostMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPost>>, TError,{data: BodyType<PostInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createPost>>, TError,{data: BodyType<PostInput>}, TContext> => {
-
-const mutationKey = ['createPost'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPost>>, {data: BodyType<PostInput>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  createPost(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreatePostMutationResult = NonNullable<Awaited<ReturnType<typeof createPost>>>
-    export type CreatePostMutationBody = BodyType<PostInput>
-    export type CreatePostMutationError = ErrorType<unknown>
-
-    /**
- * @summary Create a new blog post
- */
-export const useCreatePost = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPost>>, TError,{data: BodyType<PostInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof createPost>>,
-        TError,
-        {data: BodyType<PostInput>},
-        TContext
-      > => {
-      return useMutation(getCreatePostMutationOptions(options));
-    }
 
 export const getGetFeaturedPostUrl = () => {
 

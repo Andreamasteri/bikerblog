@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { Router, type IRouter } from "express";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
@@ -5,14 +6,43 @@ import {
   postsTable,
   authorsTable,
   commentsTable,
+  postLikesTable,
 } from "@workspace/db";
 import {
   ListPostsQueryParams,
   ListPopularPostsQueryParams,
   GetPostParams,
   LikePostParams,
-  CreatePostBody,
 } from "@workspace/api-zod";
+
+function hashIp(ip: string): string {
+  return createHash("sha256").update(ip).digest("hex");
+}
+
+const LIKE_RATE_WINDOW_MS = 60_000;
+const LIKE_RATE_MAX = 10;
+const likeRateMap = new Map<string, number[]>();
+
+setInterval(() => {
+  const cutoff = Date.now() - LIKE_RATE_WINDOW_MS;
+  for (const [key, timestamps] of likeRateMap) {
+    const remaining = timestamps.filter((t) => t > cutoff);
+    if (remaining.length === 0) likeRateMap.delete(key);
+    else likeRateMap.set(key, remaining);
+  }
+}, 5 * 60_000).unref();
+
+function checkLikeRateLimit(connectionIp: string): boolean {
+  const now = Date.now();
+  const cutoff = now - LIKE_RATE_WINDOW_MS;
+  const bucket = (likeRateMap.get(connectionIp) ?? []).filter(
+    (t) => t > cutoff,
+  );
+  if (bucket.length >= LIKE_RATE_MAX) return false;
+  bucket.push(now);
+  likeRateMap.set(connectionIp, bucket);
+  return true;
+}
 
 const router: IRouter = Router();
 
@@ -123,50 +153,6 @@ router.get("/posts", async (req, res): Promise<void> => {
   res.json(data);
 });
 
-router.post("/posts", async (req, res): Promise<void> => {
-  const parsed = CreatePostBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const body = parsed.data;
-  const slugBase = body.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 80) || "post";
-  const slug = `${slugBase}-${Math.random().toString(36).slice(2, 7)}`;
-  const readingMinutes = Math.max(
-    1,
-    Math.round(body.content.split(/\s+/).length / 200),
-  );
-  const [author] = await db
-    .select()
-    .from(authorsTable)
-    .where(eq(authorsTable.id, body.authorId));
-  if (!author) {
-    res.status(400).json({ error: "Author not found" });
-    return;
-  }
-  const [inserted] = await db
-    .insert(postsTable)
-    .values({
-      slug,
-      title: body.title,
-      excerpt: body.excerpt,
-      content: body.content,
-      coverImageUrl: body.coverImageUrl,
-      category: body.category,
-      tags: body.tags,
-      authorId: body.authorId,
-      readingMinutes,
-      location: body.location ?? null,
-      bike: body.bike ?? null,
-    })
-    .returning();
-  res.status(201).json(shapePost(inserted, author, 0));
-});
-
 router.get("/posts/featured", async (_req, res): Promise<void> => {
   const [row] = await db
     .select({ post: postsTable, author: authorsTable })
@@ -218,11 +204,42 @@ router.post("/posts/:slug/like", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [updated] = await db
-    .update(postsTable)
-    .set({ likeCount: sql`${postsTable.likeCount} + 1` })
-    .where(eq(postsTable.slug, parsed.data.slug))
-    .returning();
+  const [row] = await db
+    .select({ id: postsTable.id })
+    .from(postsTable)
+    .where(eq(postsTable.slug, parsed.data.slug));
+  if (!row) {
+    res.status(404).json({ error: "Post not found" });
+    return;
+  }
+  const connectionIp = req.socket.remoteAddress ?? "unknown";
+  if (!checkLikeRateLimit(connectionIp)) {
+    res.status(429).json({ error: "Too many requests. Please slow down." });
+    return;
+  }
+  const ip = req.ip ?? connectionIp;
+  const ipHash = hashIp(ip);
+  let updated: typeof postsTable.$inferSelect | undefined;
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(postLikesTable).values({ postId: row.id, ipHash });
+      const [u] = await tx
+        .update(postsTable)
+        .set({ likeCount: sql`${postsTable.likeCount} + 1` })
+        .where(eq(postsTable.slug, parsed.data.slug))
+        .returning();
+      updated = u;
+    });
+  } catch (err) {
+    const pgCode = (err as { code?: string }).code;
+    if (pgCode === "23505") {
+      res.status(429).json({ error: "You already liked this post." });
+    } else {
+      req.log.error({ err, slug: parsed.data.slug }, "like transaction failed");
+      res.status(500).json({ error: "Failed to record like." });
+    }
+    return;
+  }
   if (!updated) {
     res.status(404).json({ error: "Post not found" });
     return;
