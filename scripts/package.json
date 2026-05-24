@@ -13,9 +13,11 @@
     "seed:blog": "tsx ./src/seed-blog.ts",
     "daily-pipeline": "tsx src/daily-pipeline.ts",
     "sync": "tsx src/sync-and-publish.ts",
+    "enrich:posts": "tsx src/enrich-posts-with-ai.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
     "@workspace/db": "workspace:*",
     "drizzle-orm": "catalog:"
   },
