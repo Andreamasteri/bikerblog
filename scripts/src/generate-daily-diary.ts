@@ -45,6 +45,7 @@ const CLUSTERS_FILE  = resolve(ROOT, "inbox", "clusters-by-day.md");
 const CHAT_FILE      = resolve(ROOT, "inbox", "bikerlink-chat-latest.md");
 const TASKS_META     = resolve(ROOT, "inbox", "bikerlink-history", "tasks-meta.json");
 const DAY_MAP_FILE   = resolve(ROOT, "inbox", "bikerlink-chat-day-map.json");
+const NOTES_DIR      = resolve(ROOT, "inbox");
 
 const DATE_START = "2026-03-12";
 
@@ -161,6 +162,30 @@ function buildTaskRefDateMap(tasksMetaPath: string): Map<number, string> {
     // ignore parse errors
   }
   return result;
+}
+
+// ── Diary notes loader ────────────────────────────────────────────────────────
+
+/**
+ * Loads developer-provided context for a given day from
+ * `inbox/diary-notes-YYYY-MM-DD.md` (if it exists).
+ *
+ * Drop this file before the 23:30 pipeline to override or supplement the
+ * auto-generated context for days where the inbox chat has no useful data
+ * (e.g. zero-activity days where the developer was coding but BikerLink had
+ * no users active).
+ *
+ * Returns null when the file is missing or contains fewer than 10 chars.
+ */
+function loadDiaryNotes(date: string): string | null {
+  const notesPath = resolve(NOTES_DIR, `diary-notes-${date}.md`);
+  if (!existsSync(notesPath)) return null;
+  try {
+    const content = readFileSync(notesPath, "utf8").trim();
+    return content.length >= 10 ? content : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Parser cluster ────────────────────────────────────────────────────────────
@@ -415,6 +440,7 @@ function buildPromptWithTasks(
   cluster: Cluster,
   relevant:   string[],
   contextual: string[],
+  notes: string | null,
 ): string {
   const taskList = cluster.taskTitles
     .map((t, i) => `- ${cluster.taskRefs[i]}: ${t}`)
@@ -426,6 +452,13 @@ function buildPromptWithTasks(
     .slice(0, 2800);
 
   let chatSection = "";
+
+  if (notes) {
+    chatSection +=
+      `\n\n### Note del developer per questo giorno (PRIORITÀ ALTA)\n` +
+      `> Queste note sono state scritte manualmente dallo sviluppatore e hanno precedenza ` +
+      `su qualsiasi altra fonte. Usale come filo conduttore del post.\n\n${notes.slice(0, 2000)}`;
+  }
 
   if (relevant.length > 0) {
     chatSection +=
@@ -473,43 +506,82 @@ Regole:
 - Restituisci SOLO il testo del post, senza intestazioni markdown aggiuntive`;
 }
 
-function buildPromptChatOnly(date: string, sessions: string[]): string {
+function buildPromptChatOnly(date: string, sessions: string[], notes: string | null): string {
+  const hasData = sessions.length > 0 || notes;
+
+  // ── Zero-data guard ──────────────────────────────────────────────────────────
+  // When neither chat sessions nor developer notes are available, instruct
+  // Claude to be explicitly honest rather than fabricating a narrative.
+  // This prevents the "silence of the terminal" antipattern where Claude
+  // invents poetic reflections on nothingness because the inbox was empty.
+  if (!hasData) {
+    return `${PERSONA}
+
+## Giorno: ${date} (${formatDateIt(date)})
+
+**ATTENZIONE — DATI ASSENTI**: Per questo giorno non sono disponibili né sessioni di chat di sviluppo né note del developer. Le metriche utente di BikerLink erano tutte zero (nessun nuovo utente, nessun messaggio, nessun match), il che indica semplicemente che non c'era attività utente — non che lo sviluppo fosse fermo.
+
+## Istruzioni OBBLIGATORIE
+Scrivi un post blog breve (150-200 parole) che:
+1. Riconosce apertamente che per questo giorno i dati di sviluppo non sono stati acquisiti
+2. NON inventa dettagli tecnici, bug, feature o conversazioni
+3. NON usa metafore poetiche sul silenzio, il terminale, o la pausa — è fuorviante
+4. Può menzionare che si trattava di una giornata di lavoro in background o di sviluppo non documentato
+5. Mantiene il tono diaristico e onesto tipico del blog
+
+Esempio di tono accettabile: "Oggi i log tacciono, ma non per mancanza di lavoro. Per questo giorno i dati non sono stati acquisiti — una lacuna nella documentazione, non nel codice."
+
+Regole invariate:
+- Prima persona singolare
+- NON usare emoji
+- Restituisci SOLO il testo del post`;
+  }
+
+  // ── Normal path ───────────────────────────────────────────────────────────────
+  let notesSection = "";
+  if (notes) {
+    notesSection =
+      `\n\n### Note del developer per questo giorno (PRIORITÀ ALTA)\n` +
+      `> Queste note sono state scritte manualmente dallo sviluppatore. Usale come ` +
+      `filo conduttore del post — hanno precedenza sulle sessioni di chat.\n\n${notes.slice(0, 2000)}\n`;
+  }
+
   const snippetsText = sessions
     .slice(0, 12)
     .map((s, i) => `\n**[Scambio ${i + 1}]**\n${s.slice(0, 650)}`)
     .join("\n\n")
     .slice(0, 4000);
 
+  const chatSection = sessions.length > 0
+    ? `\n\n### Estratti dalla chat di sviluppo (${sessions.length} scambi)\n${snippetsText}`
+    : `\n\n*Nessuna sessione di chat disponibile per questo giorno — basati sulle note del developer.*`;
+
   return `${PERSONA}
 
 ## Giorno: ${date} (${formatDateIt(date)})
 
-Non ci sono task formali registrati per questo giorno. Di seguito sono riportati gli scambi della chat di sviluppo.
-
-### Estratti dalla chat di sviluppo (${sessions.length} scambi)
-${snippetsText}
+Non ci sono task formali registrati per questo giorno.${notesSection}${chatSection}
 
 ## Istruzioni
-Analizza gli scambi della chat e scrivi un post blog in **italiano** di circa **400-500 parole** che racconta cosa stava succedendo quel giorno nello sviluppo di BikerLink.
+Analizza il materiale disponibile e scrivi un post blog in **italiano** di circa **400-500 parole** che racconta cosa stava succedendo quel giorno nello sviluppo di BikerLink.
 
-La chat contiene code snippets, commenti dell'agente, richieste dell'utente. Da questo materiale deduci:
+${notes ? "Le note del developer sono la fonte primaria — usale come struttura narrativa del post." : "La chat contiene code snippets, commenti dell'agente, richieste dell'utente. Da questo materiale deduci:"}
 - Quale funzionalità o problema era al centro del lavoro
 - Quali decisioni tecniche emergono dagli scambi
 - Qual era lo stato dell'app in quel momento
 
 Formato:
 1. **Apertura narrativa** (1-2 frasi): cattura il momento senza iniziare con "Oggi" o "Questa settimana"
-2. **Il lavoro del giorno** (3-4 paragrafi): cosa stava succedendo, basato sugli estratti di chat
-3. **Un dettaglio** (1 paragrafo): qualcosa di specifico emerso dagli scambi
+2. **Il lavoro del giorno** (3-4 paragrafi): cosa stava succedendo, basato sul materiale disponibile
+3. **Un dettaglio** (1 paragrafo): qualcosa di specifico emerso
 4. **Chiusura** (1 frase): dove sta andando il progetto
 
 Regole:
 - Prima persona singolare ("ho", "sto", "mi")
 - Tono diaristico, diretto, con personalità — non corporate
-- NON inventare fatti non presenti nella chat
+- NON inventare fatti non presenti nel materiale fornito
 - NON usare emoji nel testo
 - Usa "BikerLink" (non "l'app" genericamente)
-- Se la chat è scarna, scrivi un post breve e onesto su quello che riesci a dedurre
 - Restituisci SOLO il testo del post, senza intestazioni markdown aggiuntive`;
 }
 
@@ -727,14 +799,19 @@ async function main() {
       const cluster = clusterMap.get(date);
 
       const { relevant, contextual } = selectSessionsForDay(cluster, sessions, entry);
+      const notes = loadDiaryNotes(date);
+      if (notes) console.log(`[diary] 📝 ${date} — note developer caricate (${notes.length} chars)`);
 
       const prompt = cluster
-        ? buildPromptWithTasks(date, cluster, relevant, contextual)
-        : buildPromptChatOnly(date, contextual);
+        ? buildPromptWithTasks(date, cluster, relevant, contextual, notes)
+        : buildPromptChatOnly(date, contextual, notes);
 
+      const noData = !cluster && contextual.length === 0 && !notes;
       const kind = cluster
-        ? `${cluster.taskCount} task, ${relevant.length} sess rilevanti + ${contextual.length} contesto`
-        : `solo chat, ${contextual.length} sess`;
+        ? `${cluster.taskCount} task, ${relevant.length} sess rilevanti + ${contextual.length} contesto${notes ? " + note" : ""}`
+        : noData
+          ? "⚠ zero dati — post onesto"
+          : `solo chat, ${contextual.length} sess${notes ? " + note" : ""}`;
       console.log(`[diary] ▶ ${slug} (${kind})`);
 
       try {
