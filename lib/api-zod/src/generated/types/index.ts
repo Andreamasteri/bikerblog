@@ -23,3 +23,4 @@ export * from './postCategory';
 export * from './postInput';
 export * from './postInputCategory';
 export * from './tagCount';
+export * from './visitCount';

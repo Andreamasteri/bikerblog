@@ -5,6 +5,7 @@ import {
   postsTable,
   authorsTable,
   commentsTable,
+  siteStatsTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -17,6 +18,18 @@ router.get("/tags", async (_req, res): Promise<void> => {
         ORDER BY count DESC, tag ASC`,
   );
   res.json(rows.rows.map((r) => ({ tag: r.tag, count: Number(r.count) })));
+});
+
+router.post("/stats/visit", async (_req, res): Promise<void> => {
+  const [row] = await db
+    .insert(siteStatsTable)
+    .values({ id: 1, visits: 1 })
+    .onConflictDoUpdate({
+      target: siteStatsTable.id,
+      set: { visits: sql`${siteStatsTable.visits} + 1` },
+    })
+    .returning({ visits: siteStatsTable.visits });
+  res.json({ visits: Number(row?.visits ?? 0) });
 });
 
 router.get("/stats", async (_req, res): Promise<void> => {
@@ -39,12 +52,17 @@ router.get("/stats", async (_req, res): Promise<void> => {
     })
     .from(postsTable)
     .groupBy(postsTable.category);
+  const [statsRow] = await db
+    .select({ visits: siteStatsTable.visits })
+    .from(siteStatsTable)
+    .where(eq(siteStatsTable.id, 1));
 
   res.json({
     totalPosts: Number(postsAgg?.total ?? 0),
     totalComments: Number(commentsAgg?.total ?? 0),
     totalLikes: Number(postsAgg?.totalLikes ?? 0),
     totalAuthors: Number(authorsAgg?.total ?? 0),
+    totalVisits: Number(statsRow?.visits ?? 0),
     categories: categoryRows.map((r) => ({
       category: r.category,
       count: Number(r.count),

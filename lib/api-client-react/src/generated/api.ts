@@ -29,7 +29,8 @@ import type {
   ListPopularPostsParams,
   ListPostsParams,
   Post,
-  TagCount
+  TagCount,
+  VisitCount
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -815,6 +816,76 @@ export function useGetBlogStats<TData = Awaited<ReturnType<typeof getBlogStats>>
 
 
 
+
+export const getRecordVisitUrl = () => {
+
+
+
+
+  return `/api/stats/visit`
+}
+
+/**
+ * @summary Increment site visit counter and return new total
+ */
+export const recordVisit = async ( options?: RequestInit): Promise<VisitCount> => {
+
+  return customFetch<VisitCount>(getRecordVisitUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRecordVisitMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordVisit>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordVisit>>, TError,void, TContext> => {
+
+const mutationKey = ['recordVisit'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordVisit>>, void> = () => {
+
+
+          return  recordVisit(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordVisitMutationResult = NonNullable<Awaited<ReturnType<typeof recordVisit>>>
+
+    export type RecordVisitMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Increment site visit counter and return new total
+ */
+export const useRecordVisit = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordVisit>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordVisit>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRecordVisitMutationOptions(options));
+    }
 
 export const getListAuthorsUrl = () => {
 

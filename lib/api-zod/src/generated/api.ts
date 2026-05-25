@@ -265,10 +265,19 @@ export const GetBlogStatsResponse = zod.object({
   "totalComments": zod.number(),
   "totalLikes": zod.number(),
   "totalAuthors": zod.number(),
+  "totalVisits": zod.number(),
   "categories": zod.array(zod.object({
   "category": zod.enum(['postmortem', 'debugging', 'backend', 'product', 'security']),
   "count": zod.number()
 }))
+})
+
+
+/**
+ * @summary Increment site visit counter and return new total
+ */
+export const RecordVisitResponse = zod.object({
+  "visits": zod.number()
 })
 
 

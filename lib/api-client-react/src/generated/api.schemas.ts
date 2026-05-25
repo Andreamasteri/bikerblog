@@ -163,11 +163,16 @@ export interface CategoryCount {
   count: number;
 }
 
+export interface VisitCount {
+  visits: number;
+}
+
 export interface BlogStats {
   totalPosts: number;
   totalComments: number;
   totalLikes: number;
   totalAuthors: number;
+  totalVisits: number;
   categories: CategoryCount[];
 }
 

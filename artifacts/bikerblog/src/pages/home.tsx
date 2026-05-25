@@ -1,7 +1,8 @@
-import { useGetBlogStats, useGetFeaturedPost, useListPopularPosts, useListPosts, useListTags } from "@workspace/api-client-react";
+import { useGetBlogStats, useGetFeaturedPost, useListPopularPosts, useListPosts, useListTags, useRecordVisit } from "@workspace/api-client-react";
 import { Link } from "wouter";
+import { useEffect } from "react";
 import { format } from "date-fns";
-import { Calendar, Clock, MessageSquare, ThumbsUp, Headphones, ChevronRight, Wrench } from "lucide-react";
+import { Calendar, Clock, MessageSquare, ThumbsUp, Headphones, ChevronRight, Wrench, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
@@ -45,8 +46,15 @@ export function Home() {
   const { data: featuredPost, isLoading: featuredLoading } = useGetFeaturedPost();
   const { data: recentPosts, isLoading: recentLoading } = useListPosts({});
   const { data: popularPosts, isLoading: popularLoading } = useListPopularPosts({ limit: 4 });
-  const { data: stats } = useGetBlogStats();
+  const { data: stats, refetch: refetchStats } = useGetBlogStats();
   const { data: tags } = useListTags();
+  const { mutate: recordVisit } = useRecordVisit();
+
+  useEffect(() => {
+    if (sessionStorage.getItem("visited")) return;
+    sessionStorage.setItem("visited", "1");
+    recordVisit(undefined, { onSuccess: () => { void refetchStats(); } });
+  }, [recordVisit, refetchStats]);
 
   const podcastPosts = recentPosts?.filter(p => p.audioUrl).slice(0, 3) ?? [];
   const anyHasEn = recentPosts?.some(p => !!p.bodyEn) ?? false;
@@ -57,11 +65,19 @@ export function Home() {
         <p className="text-sm md:text-base italic text-muted-foreground/70 tracking-widest font-serif select-none">
           {t("home.motto")}
         </p>
-        <LanguageSwitch
-          lang={i18n.language as "it" | "en"}
-          onChange={(l) => { void i18n.changeLanguage(l); }}
-          hasEn={anyHasEn}
-        />
+        <div className="flex items-center gap-3">
+          {stats?.totalVisits !== undefined && stats.totalVisits > 0 && (
+            <span className="flex items-center gap-1.5 text-xs font-mono font-semibold text-green-500 border border-green-500/30 bg-green-500/5 px-2.5 py-1 rounded-sm select-none">
+              <Eye className="w-3.5 h-3.5" />
+              {stats.totalVisits.toLocaleString("it-IT")}
+            </span>
+          )}
+          <LanguageSwitch
+            lang={i18n.language as "it" | "en"}
+            onChange={(l) => { void i18n.changeLanguage(l); }}
+            hasEn={anyHasEn}
+          />
+        </div>
       </div>
 
       {featuredLoading ? (

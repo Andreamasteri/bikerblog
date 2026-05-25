@@ -12,5 +12,6 @@ export interface BlogStats {
   totalComments: number;
   totalLikes: number;
   totalAuthors: number;
+  totalVisits: number;
   categories: CategoryCount[];
 }

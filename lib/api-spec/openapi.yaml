@@ -206,6 +206,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/BlogStats"
 
+  /stats/visit:
+    post:
+      operationId: recordVisit
+      tags: [stats]
+      summary: Increment site visit counter and return new total
+      responses:
+        "200":
+          description: Updated visit count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisitCount"
+
   /authors:
     get:
       operationId: listAuthors
@@ -362,14 +375,21 @@ components:
           enum: [postmortem, debugging, backend, product, security]
         count: { type: integer }
 
+    VisitCount:
+      type: object
+      required: [visits]
+      properties:
+        visits: { type: integer }
+
     BlogStats:
       type: object
-      required: [totalPosts, totalComments, totalLikes, totalAuthors, categories]
+      required: [totalPosts, totalComments, totalLikes, totalAuthors, categories, totalVisits]
       properties:
         totalPosts: { type: integer }
         totalComments: { type: integer }
         totalLikes: { type: integer }
         totalAuthors: { type: integer }
+        totalVisits: { type: integer }
         categories:
           type: array
           items:
