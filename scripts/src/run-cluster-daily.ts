@@ -176,6 +176,28 @@ if (!process.env["SESSION_SECRET"]) {
   }
 }
 
+// ── Step 7: self-check produzione (verifica + riparazione automatica) ────────
+
+console.log("[cluster-daily] step 7: self-check produzione");
+
+if (!process.env["SEED_TOKEN"]) {
+  console.warn(
+    "[cluster-daily] ⚠ SEED_TOKEN non impostato — step 7 saltato. Aggiungere SEED_TOKEN alle env vars condivise per abilitare la verifica e riparazione automatica dev→prod."
+  );
+} else {
+  const selfCheckResult = spawnSync(
+    "tsx",
+    ["src/self-check.ts"],
+    { cwd: scriptsCwd, stdio: "inherit" }
+  );
+
+  if (selfCheckResult.status !== 0) {
+    console.warn(
+      "[cluster-daily] ⚠ self-check ha rilevato gap non risolvibili automaticamente — controllare i log sopra"
+    );
+  }
+}
+
 await pool.end();
 
 console.log("[cluster-daily] completato —", new Date().toISOString());

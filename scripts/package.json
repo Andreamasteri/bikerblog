@@ -18,6 +18,7 @@
     "podcast:generate": "tsx src/podcast-generate.ts",
     "translate:posts": "tsx src/translate-posts.ts",
     "translate:backfill": "tsx src/translate-backfill.ts",
+    "self-check": "tsx src/self-check.ts",
     "migrate:author-mendo": "tsx src/migrate-author-mendo.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

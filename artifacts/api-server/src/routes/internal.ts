@@ -175,6 +175,9 @@ router.post(
             location: (p["location"] as string | null) ?? null,
             bike: (p["bike"] as string | null) ?? null,
             dailyMaxim: (p["daily_maxim"] as string | null) ?? null,
+            titleEn: (p["title_en"] as string | null) ?? null,
+            excerptEn: (p["excerpt_en"] as string | null) ?? null,
+            bodyEn: (p["body_en"] as string | null) ?? null,
           });
           inserted++;
         } else {
@@ -187,7 +190,10 @@ router.post(
               coverImageUrl: p["cover_image_url"] as string,
               category: p["category"] as string,
               tags: p["tags"] as string[],
-              audioUrl: (p["audio_url"] as string) ?? null,
+              audioUrl: (p["audio_url"] as string | null) ?? null,
+              titleEn: (p["title_en"] as string | null) ?? null,
+              excerptEn: (p["excerpt_en"] as string | null) ?? null,
+              bodyEn: (p["body_en"] as string | null) ?? null,
             })
             .where(eq(postsTable.slug, p["slug"] as string));
           updated++;
