@@ -112,9 +112,25 @@ try {
   throw err;
 }
 
-// ── Step 4: generazione post diario del giorno ───────────────────────────────
+// ── Step 3.5: auto-fetch attività BikerLink dal DB live ───────────────────────
 
 const today = todayRome();
+console.log(`[cluster-daily] step 3.5: auto-fetch attività BikerLink per ${today}`);
+
+const bikerActivityResult = spawnSync(
+  "tsx",
+  ["src/fetch-bikerlink-activity.ts", "--date", today],
+  { cwd: scriptsCwd, stdio: "inherit" }
+);
+
+if (bikerActivityResult.status !== 0) {
+  console.warn(
+    "[cluster-daily] ⚠ fetch-bikerlink-activity fallito — il diary verrà generato senza dati BikerLink freschi"
+  );
+}
+
+// ── Step 4: generazione post diario del giorno ───────────────────────────────
+
 console.log(`[cluster-daily] step 4: generazione post diario per ${today}`);
 
 const diaryResult = spawnSync(
