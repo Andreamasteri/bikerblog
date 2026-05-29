@@ -1,5 +1,5 @@
 import { db, postsTable } from "@workspace/db";
-import { eq, isNull, or } from "drizzle-orm";
+import { eq, isNull, or, sql } from "drizzle-orm";
 import { translatePostToEn } from "./translate.js";
 
 const args = process.argv.slice(2);
@@ -18,7 +18,13 @@ async function processPost(post: {
   excerpt: string;
   content: string;
   titleEn: string | null;
+  bodyEn: string | null;
 }): Promise<void> {
+  if (!forceAll && post.bodyEn && post.bodyEn.trim().length > 0) {
+    console.log(`\n[${post.slug}] Already translated — skipped`);
+    return;
+  }
+
   console.log(`\n[${post.slug}] Translating...`);
 
   if (dryRun) {
@@ -69,6 +75,7 @@ async function main() {
     excerpt: string;
     content: string;
     titleEn: string | null;
+    bodyEn: string | null;
   }>;
 
   if (targetSlug) {
@@ -80,6 +87,7 @@ async function main() {
         excerpt: postsTable.excerpt,
         content: postsTable.content,
         titleEn: postsTable.titleEn,
+        bodyEn: postsTable.bodyEn,
       })
       .from(postsTable)
       .where(eq(postsTable.slug, targetSlug));
@@ -97,6 +105,7 @@ async function main() {
         excerpt: postsTable.excerpt,
         content: postsTable.content,
         titleEn: postsTable.titleEn,
+        bodyEn: postsTable.bodyEn,
       })
       .from(postsTable);
   } else {
@@ -108,9 +117,15 @@ async function main() {
         excerpt: postsTable.excerpt,
         content: postsTable.content,
         titleEn: postsTable.titleEn,
+        bodyEn: postsTable.bodyEn,
       })
       .from(postsTable)
-      .where(or(isNull(postsTable.titleEn), isNull(postsTable.excerptEn), isNull(postsTable.bodyEn)));
+      .where(
+        or(
+          isNull(postsTable.bodyEn),
+          sql`trim(${postsTable.bodyEn}) = ''`,
+        )
+      );
   }
 
   console.log(`Found ${posts.length} post(s) to translate (concurrency=${CONCURRENCY}).`);

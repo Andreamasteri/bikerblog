@@ -13,7 +13,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { db, postsTable } from "@workspace/db";
-import { eq, isNull, or } from "drizzle-orm";
+import { eq, isNull, or, sql } from "drizzle-orm";
 
 const client = new Anthropic();
 
@@ -22,6 +22,17 @@ const DRY_RUN = args.includes("--dry-run");
 const FORCE = args.includes("--force");
 const slugIdx = args.indexOf("--slug");
 const TARGET_SLUG = slugIdx !== -1 ? args[slugIdx + 1] : null;
+
+const PRIVACY_SYSTEM_PROMPT = `You are a professional translator specializing in Italian motorcycle enthusiast content.
+
+MANDATORY PRIVACY RULE — matching engine:
+BikerLink has a proprietary matching engine. In all translations, NEVER reveal:
+- The internal logic of the matching algorithm (formulas, weights, numerical criteria, SQL, specific GPS functions)
+- The names of database tables related to matching (e.g. join table names, internal state columns)
+- Numerical values of match types or internal states (e.g. numerical codes, internal enums)
+- Details on how GPS distance or search radius is calculated
+- Source file names or internal code paths of the matching engine
+Describe matching in an anecdotal, user-impact way: "improved the matching", "the system now recognizes similar bikes", "fixed a bug in the match flow". NEVER the internal technical how.`;
 
 async function translatePost(post: {
   id: number;
@@ -48,6 +59,7 @@ ${post.content}
   const message = await client.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 4096,
+    system: PRIVACY_SYSTEM_PROMPT,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -141,9 +153,8 @@ async function main() {
       .from(postsTable)
       .where(
         or(
-          isNull(postsTable.titleEn),
-          isNull(postsTable.excerptEn),
-          isNull(postsTable.bodyEn)
+          isNull(postsTable.bodyEn),
+          sql`trim(${postsTable.bodyEn}) = ''`,
         )
       );
   }
@@ -164,7 +175,7 @@ async function main() {
     const post = posts[i];
     const prefix = `[${i + 1}/${total}] [${post.slug}]`;
 
-    if (!FORCE && post.titleEn && post.excerptEn && post.bodyEn) {
+    if (!FORCE && post.titleEn && post.excerptEn && post.bodyEn && post.bodyEn.trim().length > 0) {
       console.log(`${prefix} Already translated — skipped`);
       skipped++;
       continue;

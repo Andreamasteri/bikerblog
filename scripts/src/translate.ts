@@ -20,6 +20,17 @@ export interface TranslationResult {
   bodyEn:    string;
 }
 
+const PRIVACY_SYSTEM_PROMPT = `You are a professional translator specializing in Italian motorcycle enthusiast content.
+
+MANDATORY PRIVACY RULE — matching engine:
+BikerLink has a proprietary matching engine. In all translations, NEVER reveal:
+- The internal logic of the matching algorithm (formulas, weights, numerical criteria, SQL, specific GPS functions)
+- The names of database tables related to matching (e.g. join table names, internal state columns)
+- Numerical values of match types or internal states (e.g. numerical codes, internal enums)
+- Details on how GPS distance or search radius is calculated
+- Source file names or internal code paths of the matching engine
+Describe matching in an anecdotal, user-impact way: "improved the matching", "the system now recognizes similar bikes", "fixed a bug in the match flow". NEVER the internal technical how.`;
+
 /**
  * Translates an Italian motorcycle blog post to English.
  *
@@ -55,6 +66,7 @@ ${body}
   const message = await anthropic.messages.create({
     model:      "claude-haiku-4-5",
     max_tokens: 4096,
+    system:     PRIVACY_SYSTEM_PROMPT,
     messages:   [{ role: "user", content: prompt }],
   });
 
