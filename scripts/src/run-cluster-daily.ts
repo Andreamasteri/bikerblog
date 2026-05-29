@@ -212,6 +212,15 @@ async function getDiaryPostBodyEn(date: string): Promise<string | null | undefin
 const today = todayRome();
 const report = new PipelineReport(today);
 
+/**
+ * Tracks whether any step recorded a hard failure.
+ * Steps 2 and 4 previously called process.exit() immediately on failure,
+ * which prevented step 7 from running and surfacing additional gaps.
+ * Now they set this flag instead so the full pipeline (including self-check)
+ * always completes, and we exit non-zero at the very end if needed.
+ */
+let pipelineHardFailed = false;
+
 console.log("[cluster-daily] avvio —", new Date().toISOString());
 
 // ── Step 1: aggiorna inbox chat (opzionale) ───────────────────────────────────
@@ -279,7 +288,8 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
 
   if (clusterResult.status !== 0) {
     const errMsg = `cluster-tasks exited with code ${clusterResult.status}`;
-    console.error("[cluster-daily]", errMsg);
+    console.error("[cluster-daily]", errMsg, "— pipeline continua per permettere al self-check di rilevare gap");
+    pipelineHardFailed = true;
     report.addStep({
       step: 2,
       name: "cluster generation",
@@ -288,19 +298,16 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
       errors: [errMsg],
       warnings: [],
     });
-    report.write();
-    await pool.end();
-    process.exit(clusterResult.status ?? 1);
+  } else {
+    report.addStep({
+      step: 2,
+      name: "cluster generation",
+      status: "ok",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [],
+    });
   }
-
-  report.addStep({
-    step: 2,
-    name: "cluster generation",
-    status: "ok",
-    duration_ms: Date.now() - stepStart,
-    errors: [],
-    warnings: [],
-  });
 }
 
 // ── Step 3: pubblicazione post cluster ───────────────────────────────────────
@@ -389,7 +396,8 @@ let diaryPostCreatedThisRun = false;
 
   if (diaryResult.status !== 0) {
     const errMsg = `diary:generate exited with code ${diaryResult.status}`;
-    console.error("[cluster-daily] ✗", errMsg);
+    console.error("[cluster-daily] ✗", errMsg, "— pipeline continua per permettere al self-check di rilevare gap");
+    pipelineHardFailed = true;
     report.addStep({
       step: 4,
       name: "diary post generation",
@@ -398,10 +406,8 @@ let diaryPostCreatedThisRun = false;
       errors: [errMsg],
       warnings: [],
     });
-    report.write();
-    await pool.end();
-    process.exit(diaryResult.status ?? 1);
-  }
+    // Skip the rest of this block — postsAfter would be inaccurate
+  } else {
 
   const postsAfter = await countPosts();
   const newPostsCount = Math.max(0, postsAfter - postsBefore);
@@ -422,6 +428,8 @@ let diaryPostCreatedThisRun = false;
     errors: [],
     warnings: [],
   });
+
+  } // end else (diaryResult.status === 0)
 }
 
 // ── Step 5: traduzione EN dei post senza contenuto inglese ───────────────────
@@ -594,3 +602,9 @@ report.write();
 await pool.end();
 
 console.log("[cluster-daily] completato —", new Date().toISOString());
+
+// Exit non-zero if any step had a hard failure so cron schedulers and
+// monitoring tools see the pipeline didn't fully succeed.
+if (pipelineHardFailed) {
+  process.exit(1);
+}

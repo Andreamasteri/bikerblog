@@ -27,6 +27,11 @@ const PROD_URL   = process.env["PROD_URL"] ?? "https://bikerlink-blog.replit.app
 const SEED_TOKEN = process.env["SEED_TOKEN"];
 const DAYS       = Math.max(1, Number(process.env["SELF_CHECK_DAYS"] ?? 7) || 7);
 
+/** Returns today's date as YYYY-MM-DD in the Europe/Rome timezone. */
+function todayRome(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Rome" }).format(new Date());
+}
+
 type DevPost = typeof postsTable.$inferSelect;
 
 interface Gap {
@@ -167,51 +172,78 @@ async function main() {
     }
   }
 
+  // Track whether any unresolvable gap remains — used for exit code at the end.
+  let hasUnresolvableGap = false;
+
   if (gaps.length === 0) {
     console.log("[self-check] ✓ tutto allineato — nessun gap rilevato");
-    await pool.end();
-    return;
-  }
+  } else {
+    console.log(`[self-check] ⚠ ${gaps.length} post con gap:`);
+    for (const { gap } of gaps) {
+      console.log(`  - ${gap.slug}: ${gapLabel(gap)}`);
+    }
 
-  console.log(`[self-check] ⚠ ${gaps.length} post con gap:`);
-  for (const { gap } of gaps) {
-    console.log(`  - ${gap.slug}: ${gapLabel(gap)}`);
-  }
+    console.log("[self-check] tentativo di riparazione via /_internal/seed-posts...");
+    const pushResult = await pushToProd(gaps.map((g) => g.dev));
+    console.log(
+      `[self-check] push result: ${pushResult.ok ? "OK" : "FAIL"} — ${pushResult.message}`
+    );
 
-  console.log("[self-check] tentativo di riparazione via /_internal/seed-posts...");
-  const pushResult = await pushToProd(gaps.map((g) => g.dev));
-  console.log(
-    `[self-check] push result: ${pushResult.ok ? "OK" : "FAIL"} — ${pushResult.message}`
-  );
+    if (!pushResult.ok) {
+      console.error("[self-check] ✗ riparazione fallita");
+      hasUnresolvableGap = true;
+    } else {
+      console.log("[self-check] verifica post-push...");
+      const remaining: Gap[] = [];
+      for (const { dev } of gaps) {
+        const prod = await fetchProdPost(dev.slug);
+        const gap  = checkGap(dev, prod);
+        if (gap.missing || gap.missingEn || gap.missingAudio || gap.staleContent) {
+          remaining.push(gap);
+        }
+      }
 
-  if (!pushResult.ok) {
-    console.error("[self-check] ✗ riparazione fallita");
-    await pool.end();
-    process.exit(1);
-  }
-
-  console.log("[self-check] verifica post-push...");
-  const remaining: Gap[] = [];
-  for (const { dev } of gaps) {
-    const prod = await fetchProdPost(dev.slug);
-    const gap  = checkGap(dev, prod);
-    if (gap.missing || gap.missingEn || gap.missingAudio || gap.staleContent) {
-      remaining.push(gap);
+      if (remaining.length === 0) {
+        console.log("[self-check] ✓ tutti i gap risolti");
+      } else {
+        console.error(`[self-check] ✗ ${remaining.length} gap rimasti dopo il push:`);
+        for (const gap of remaining) {
+          console.error(`  - ${gap.slug}: ${gapLabel(gap)}`);
+        }
+        hasUnresolvableGap = true;
+      }
     }
   }
 
-  if (remaining.length === 0) {
-    console.log("[self-check] ✓ tutti i gap risolti");
-    await pool.end();
-    return;
+  // ── Explicit diary check ─────────────────────────────────────────────────
+  // Regardless of the general gap loop above, explicitly verify that today's
+  // diary post exists in production with body_en non-null.
+  // The general checkGap() only sets missingEn=true when dev.bodyEn is truthy;
+  // if translation never ran, dev.bodyEn is null and the issue goes undetected.
+  // This check surfaces the gap with a clear label so the pipeline report shows
+  // overall=warn and the operator knows exactly what is missing.
+  const today = todayRome();
+  const diarySlug = `diary-${today}`;
+  const prodDiary = await fetchProdPost(diarySlug);
+  let diaryIssue = false;
+
+  if (!prodDiary) {
+    console.error(`[self-check] ✗ DIARY-MISSING: ${diarySlug} non trovato in produzione`);
+    diaryIssue = true;
+  } else {
+    const prodBodyEn = prodDiary.bodyEn ?? prodDiary.body_en ?? null;
+    if (!prodBodyEn || (typeof prodBodyEn === "string" && prodBodyEn.trim().length === 0)) {
+      console.warn(`[self-check] ⚠ DIARY-NO-EN: ${diarySlug} esiste in prod ma body_en è null/vuoto — traduzione non completata`);
+      diaryIssue = true;
+    } else {
+      console.log(`[self-check] ✓ ${diarySlug}: presente in prod con body_en`);
+    }
   }
 
-  console.error(`[self-check] ✗ ${remaining.length} gap rimasti dopo il push:`);
-  for (const gap of remaining) {
-    console.error(`  - ${gap.slug}: ${gapLabel(gap)}`);
-  }
   await pool.end();
-  process.exit(1);
+  if (hasUnresolvableGap || diaryIssue) {
+    process.exit(1);
+  }
 }
 
 main().catch(async (err) => {
