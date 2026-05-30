@@ -37,6 +37,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import {
   writeFileSync,
+  readFileSync,
   mkdirSync,
   readdirSync,
   unlinkSync,
@@ -353,6 +354,20 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
   const stepStart = Date.now();
   console.log(`[cluster-daily] step 3.5: auto-fetch attività BikerLink per ${today}`);
 
+  // Cancella le note auto-generate di oggi prima di riscriverle, così ogni
+  // sera partono dai dati freschi del giorno (le note manuali NON vengono
+  // toccate — fetch-bikerlink-activity le sovrascrive solo se auto-generate).
+  const todayNotesPath = resolve(projectRoot, "inbox", `diary-notes-${today}.md`);
+  try {
+    if (existsSync(todayNotesPath)) {
+      const existing = readFileSync(todayNotesPath, "utf8");
+      if (existing.includes("(auto-generate da BikerLink)")) {
+        unlinkSync(todayNotesPath);
+        console.log(`[cluster-daily] step 3.5: rimosso diary-notes-${today}.md auto-generato (verrà riscritto)`);
+      }
+    }
+  } catch { /* ignore */ }
+
   const bikerActivityResult = spawnSync(
     "tsx",
     ["src/fetch-bikerlink-activity.ts", "--date", today],
@@ -390,7 +405,7 @@ let diaryPostCreatedThisRun = false;
 
   const diaryResult = spawnSync(
     "tsx",
-    ["src/generate-daily-diary.ts", "--date", today],
+    ["src/generate-daily-diary.ts", "--date", today, "--force"],
     { cwd: scriptsCwd, stdio: "inherit" }
   );
 
@@ -411,12 +426,14 @@ let diaryPostCreatedThisRun = false;
 
   const postsAfter = await countPosts();
   const newPostsCount = Math.max(0, postsAfter - postsBefore);
-  diaryPostCreatedThisRun = newPostsCount > 0;
+  // Con --force il post viene sempre riscritto, anche se esisteva già.
+  // diaryPostCreatedThisRun = true garantisce che step 5 verifichi la traduzione.
+  diaryPostCreatedThisRun = true;
 
-  if (diaryPostCreatedThisRun) {
+  if (newPostsCount > 0) {
     console.log(`[cluster-daily] step 4: nuovo post diaristico creato (diary-${today})`);
   } else {
-    console.log(`[cluster-daily] step 4: post diaristico già esistente — nessuna nuova scrittura`);
+    console.log(`[cluster-daily] step 4: post diaristico aggiornato con --force (diary-${today})`);
   }
 
   report.addStep({
