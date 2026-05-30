@@ -436,27 +436,23 @@ let diaryPostCreatedThisRun = false;
     console.log(`[cluster-daily] step 4: post diaristico aggiornato con --force (diary-${today})`);
   }
 
-  // Controlla se il post appena scritto ha contenuto generico da dati scarsi
+  // Controlla la sparsità basandosi sulle note sorgente (deterministico),
+  // non sul testo generato (phrase-matching inaffidabile).
+  // Se il file diary-notes ha una sezione "Limiti", significa che fetch-bikerlink-activity
+  // ha rilevato fonti mancanti — segnale strutturato e verificabile a priori.
   const step4Warnings: string[] = [];
-  const SPARSE_PATTERNS = [
-    "dati di sviluppo non sono stati acquisiti",
-    "per questo giorno i dati non ci sono",
-    "nessun dato disponibile",
-    "lacuna nella documentazione",
-  ];
   try {
-    const { db: d, postsTable: pt } = await import("@workspace/db");
-    const { eq } = await import("drizzle-orm");
-    const diarySlug = `diary-${today}`;
-    const rows = await d
-      .select({ excerpt: pt.excerpt })
-      .from(pt)
-      .where(eq(pt.slug, diarySlug))
-      .limit(1);
-    const excerpt = rows[0]?.excerpt?.toLowerCase() ?? "";
-    const matched = SPARSE_PATTERNS.find((p) => excerpt.includes(p));
-    if (matched) {
-      const msg = `diary-${today}: contenuto generato da dati insufficienti (pattern: "${matched}") — richiede revisione manuale`;
+    const notesFilePath = resolve(projectRoot, "inbox", `diary-notes-${today}.md`);
+    if (existsSync(notesFilePath)) {
+      const notesContent = readFileSync(notesFilePath, "utf8");
+      if (notesContent.includes("## Limiti di questo report")) {
+        const msg = `diary-${today}: generato con fonti incomplete (sezione "Limiti" presente nelle note) — potrebbe richiedere revisione`;
+        step4Warnings.push(msg);
+        console.warn(`[cluster-daily] ⚠ DIARY-SPARSE: ${msg}`);
+      }
+    } else {
+      // Nessun file di note = nessuna fonte disponibile
+      const msg = `diary-${today}: generato senza note di contesto (nessuna fonte disponibile)`;
       step4Warnings.push(msg);
       console.warn(`[cluster-daily] ⚠ DIARY-SPARSE: ${msg}`);
     }
@@ -621,13 +617,15 @@ let diaryPostCreatedThisRun = false;
     );
 
     const warnings: string[] = [];
-    if (selfCheckResult.status !== 0) {
-      warnings.push(
-        `self-check exited with code ${selfCheckResult.status} — unresolvable gaps remain`
-      );
-      console.warn(
-        "[cluster-daily] ⚠ self-check ha rilevato gap non risolvibili automaticamente"
-      );
+    // exit 0 = tutto ok
+    // exit 1 = hard failure (gap non risolvibili)
+    // exit 2 = soft warning (DIARY-SPARSE: post generato da dati insufficienti)
+    if (selfCheckResult.status === 1) {
+      warnings.push("self-check: gap non risolvibili in produzione (hard failure)");
+      console.warn("[cluster-daily] ⚠ self-check ha rilevato gap non risolvibili automaticamente");
+    } else if (selfCheckResult.status === 2) {
+      warnings.push("self-check: DIARY-SPARSE — post diaristico generato da dati insufficienti, richiede revisione manuale");
+      console.warn("[cluster-daily] ⚠ self-check: DIARY-SPARSE rilevato in produzione");
     }
 
     report.addStep({

@@ -129,12 +129,11 @@ if (BIKERLINK_URL) {
 
 const hasOta = otas.length > 0;
 const hasRestarts = restarts.length >= 3;
+const hasAnyData = hasChatData || hasOta || hasRestarts;
 
-// Serve almeno una fonte dati
-if (!hasChatData && !hasOta && !hasRestarts) {
-  console.log(`[bikerlink-activity] ${date} — nessun dato disponibile, skip`);
-  process.exit(0);
-}
+// Non ci fermiamo quando tutte le fonti sono vuote: scriviamo comunque le note
+// con SOLO la sezione "Limiti", così il generatore sa esplicitamente cosa manca
+// e può dire "non ho dati" invece di inventare un contesto plausibile.
 
 // ── 3. Costruisci il file di note ─────────────────────────────────────────────
 
@@ -142,6 +141,15 @@ const lines: string[] = [
   `# Note sviluppatore — ${date} (auto-generate da BikerLink)`,
   "",
 ];
+
+if (!hasAnyData) {
+  lines.push(`## Nessun dato disponibile`);
+  lines.push("");
+  lines.push(`Nessuna delle fonti configurate ha restituito dati per questa data.`);
+  lines.push(`Il post diaristico deve riconoscere esplicitamente questa assenza`);
+  lines.push(`invece di inventare un contesto di sviluppo non documentato.`);
+  lines.push("");
+}
 
 // Sezione attività utenti dalla chat
 if (hasChatData) {

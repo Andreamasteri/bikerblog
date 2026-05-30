@@ -45,6 +45,7 @@ interface Gap {
 interface ProdPost {
   slug?: string;
   excerpt?: string | null;
+  content?: string | null;
   bodyEn?: string | null;
   body_en?: string | null;
   audioUrl?: string | null;
@@ -228,7 +229,7 @@ async function main() {
   let diaryIssue = false;
 
   // Patterns that indicate the diary post was generated from sparse/missing data.
-  // These are early-warning signals for human review — not hard failures.
+  // Checked against the full post body (not just excerpt) to catch all occurrences.
   const DIARY_SPARSE_PATTERNS = [
     "dati di sviluppo non sono stati acquisiti",
     "per questo giorno i dati non ci sono",
@@ -237,6 +238,8 @@ async function main() {
     "lacuna nella documentazione",
     "dati non sono stati acquisiti",
   ];
+
+  let diarySparse = false;
 
   if (!prodDiary) {
     console.error(`[self-check] ✗ DIARY-MISSING: ${diarySlug} non trovato in produzione`);
@@ -250,21 +253,27 @@ async function main() {
       console.log(`[self-check] ✓ ${diarySlug}: presente in prod con body_en`);
     }
 
-    // Check for sparse-data content patterns — warn but don't fail
-    const prodExcerpt = (prodDiary.excerpt ?? "").toLowerCase();
-    const matchedPattern = DIARY_SPARSE_PATTERNS.find((p) => prodExcerpt.includes(p));
+    // Check the full post body (content), not just excerpt, for sparse-data patterns.
+    // Falls back to excerpt when content is not returned by the API.
+    const bodyToCheck = (prodDiary.content ?? prodDiary.excerpt ?? "").toLowerCase();
+    const matchedPattern = DIARY_SPARSE_PATTERNS.find((p) => bodyToCheck.includes(p));
     if (matchedPattern) {
       console.warn(
-        `[self-check] ⚠ DIARY-SPARSE: ${diarySlug} sembra generato da dati insufficienti` +
-        ` (pattern rilevato: "${matchedPattern}") — potrebbe richiedere revisione manuale`
+        `[self-check] ⚠ DIARY-SPARSE: ${diarySlug} generato da dati insufficienti` +
+        ` (pattern nel body: "${matchedPattern}") — richiede revisione manuale`
       );
-      // Not a hard failure — sparse is better than invented content
+      diarySparse = true;
     }
   }
 
   await pool.end();
   if (hasUnresolvableGap || diaryIssue) {
     process.exit(1);
+  }
+  // Exit code 2 = soft warning: sparse diary content detected but no hard failure.
+  // run-cluster-daily.ts step 7 differentiates this from hard failures (exit 1).
+  if (diarySparse) {
+    process.exit(2);
   }
 }
 
