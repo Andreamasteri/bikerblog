@@ -436,25 +436,48 @@ let diaryPostCreatedThisRun = false;
     console.log(`[cluster-daily] step 4: post diaristico aggiornato con --force (diary-${today})`);
   }
 
-  // Controlla la sparsità basandosi sulle note sorgente (deterministico),
-  // non sul testo generato (phrase-matching inaffidabile).
-  // Se il file diary-notes ha una sezione "Limiti", significa che fetch-bikerlink-activity
-  // ha rilevato fonti mancanti — segnale strutturato e verificabile a priori.
+  // Controllo sparsità — due segnali complementari:
+  // 1. DETERMINISTICO: note sorgente con sezione "Limiti" (fonti mancanti a priori)
+  // 2. PROBABILISTICO:  excerpt/content del post generato contiene pattern da dati scarsi
   const step4Warnings: string[] = [];
+  const SPARSE_PATTERNS_STEP4 = [
+    "dati di sviluppo non sono stati acquisiti",
+    "per questo giorno i dati non ci sono",
+    "nessun dato disponibile",
+    "lacuna nella documentazione",
+  ];
   try {
+    // Segnale 1: note sorgente
     const notesFilePath = resolve(projectRoot, "inbox", `diary-notes-${today}.md`);
     if (existsSync(notesFilePath)) {
       const notesContent = readFileSync(notesFilePath, "utf8");
       if (notesContent.includes("## Limiti di questo report")) {
-        const msg = `diary-${today}: generato con fonti incomplete (sezione "Limiti" presente nelle note) — potrebbe richiedere revisione`;
+        const msg = `diary-${today}: fonti incomplete segnalate nelle note ("Limiti" presente) — potrebbe richiedere revisione`;
         step4Warnings.push(msg);
-        console.warn(`[cluster-daily] ⚠ DIARY-SPARSE: ${msg}`);
+        console.warn(`[cluster-daily] ⚠ DIARY-SPARSE (fonti): ${msg}`);
       }
     } else {
-      // Nessun file di note = nessuna fonte disponibile
       const msg = `diary-${today}: generato senza note di contesto (nessuna fonte disponibile)`;
       step4Warnings.push(msg);
-      console.warn(`[cluster-daily] ⚠ DIARY-SPARSE: ${msg}`);
+      console.warn(`[cluster-daily] ⚠ DIARY-SPARSE (no note): ${msg}`);
+    }
+
+    // Segnale 2: pattern nel contenuto generato (excerpt + content)
+    const { db: d2, postsTable: pt2 } = await import("@workspace/db");
+    const { eq: eq2 } = await import("drizzle-orm");
+    const rows2 = await d2
+      .select({ excerpt: pt2.excerpt, content: pt2.content })
+      .from(pt2)
+      .where(eq2(pt2.slug, `diary-${today}`))
+      .limit(1);
+    const postText = ((rows2[0]?.excerpt ?? "") + " " + (rows2[0]?.content ?? "")).toLowerCase();
+    const matched = SPARSE_PATTERNS_STEP4.find((p) => postText.includes(p));
+    if (matched) {
+      const msg = `diary-${today}: testo generato sembra da dati insufficienti (pattern: "${matched}") — richiede revisione`;
+      // Evita duplicati: aggiungi solo se non è già stato segnalato da segnale 1
+      if (step4Warnings.length === 0) step4Warnings.push(msg);
+      else step4Warnings[0] = step4Warnings[0] + `; pattern nel testo: "${matched}"`;
+      console.warn(`[cluster-daily] ⚠ DIARY-SPARSE (testo): ${msg}`);
     }
   } catch {
     // non bloccante
