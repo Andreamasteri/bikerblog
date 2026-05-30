@@ -188,6 +188,65 @@ function loadDiaryNotes(date: string): string | null {
   }
 }
 
+/**
+ * Counts "concrete fact lines" in a notes string — lines that contain
+ * actual verifiable data (not headings, empty lines, or generic boilerplate).
+ *
+ * A fact line is a non-empty line that:
+ *   - Does NOT start with # (heading)
+ *   - Does NOT start with > (blockquote / instruction)
+ *   - Has more than 20 characters
+ *   - Is not part of the "Limiti di questo report" boilerplate
+ */
+function countConcreteFacts(notes: string | null): number {
+  if (!notes) return 0;
+  const boilerplatePatterns = [
+    "Le seguenti fonti non erano disponibili",
+    "Il generatore del post DEVE",
+    "invece di speculare",
+    "Limiti di questo report",
+    "auto-generate da BikerLink",
+    "Note sviluppatore",
+  ];
+  const lines = notes.split("\n");
+  let count = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith("#")) continue;
+    if (trimmed.startsWith(">")) continue;
+    if (trimmed.startsWith("-") && trimmed.length < 30) continue; // short list items (boilerplate)
+    if (trimmed.length <= 20) continue;
+    if (boilerplatePatterns.some((p) => trimmed.includes(p))) continue;
+    count++;
+  }
+  return count;
+}
+
+/** Minimum concrete fact lines to consider notes "sufficient" */
+const MIN_FACT_LINES = 3;
+
+/**
+ * Returns the anti-fabrication instruction block to inject into the prompt
+ * when notes are sparse (below the MIN_FACT_LINES threshold).
+ *
+ * This block overrides Claude's tendency to invent plausible context.
+ */
+function sparseDataWarningBlock(factCount: number): string {
+  return `
+**⚠ ATTENZIONE — DATI INSUFFICIENTI (${factCount} righe di fatto trovate, minimo ${MIN_FACT_LINES}):**
+Le note disponibili contengono pochi fatti verificati. Questo è un limite documentato, non una lacuna da colmare.
+
+Regole OBBLIGATORIE per questo post (attive perché i dati sono scarsi):
+1. Riporta SOLO i fatti esplicitamente presenti nelle note — niente di più.
+2. Se qualcosa non è documentato, dillo chiaramente ("non ho dati su questo").
+3. NON inventare dettagli tecnici, bug, feature o conversazioni non presenti nel materiale.
+4. NON usare frasi tipo "probabilmente", "è plausibile che", "di solito in questi giorni" — sono segnali di invenzione.
+5. Se le note indicano fonti mancanti (sezione "Limiti"), menziona esplicitamente che quel contesto non era disponibile.
+6. Preferisci un post più corto ma onesto a uno lungo ma inventato.
+`;
+}
+
 // ── Parser cluster ────────────────────────────────────────────────────────────
 
 function parseClusters(md: string): Map<string, Cluster> {
@@ -441,6 +500,7 @@ function buildPromptWithTasks(
   relevant:   string[],
   contextual: string[],
   notes: string | null,
+  factCount: number,
 ): string {
   const taskList = cluster.taskTitles
     .map((t, i) => `- ${cluster.taskRefs[i]}: ${t}`)
@@ -480,6 +540,8 @@ function buildPromptWithTasks(
         .slice(0, 1500);
   }
 
+  const sparseBlock = factCount < MIN_FACT_LINES ? sparseDataWarningBlock(factCount) : "";
+
   return `${PERSONA}
 
 ## Dati del giorno: ${date} (${formatDateIt(date)})
@@ -489,7 +551,7 @@ ${taskList}
 
 ### Descrizioni tecniche dei task
 ${cleanDetails}${chatSection}
-
+${sparseBlock}
 ## Istruzioni
 Scrivi un post blog in **italiano** di circa **450-550 parole** con questo formato:
 
@@ -506,7 +568,7 @@ Regole:
 - Restituisci SOLO il testo del post, senza intestazioni markdown aggiuntive`;
 }
 
-function buildPromptChatOnly(date: string, sessions: string[], notes: string | null): string {
+function buildPromptChatOnly(date: string, sessions: string[], notes: string | null, factCount: number): string {
   const hasData = sessions.length > 0 || notes;
 
   // ── Zero-data guard ──────────────────────────────────────────────────────────
@@ -556,12 +618,14 @@ Regole invariate:
     ? `\n\n### Estratti dalla chat di sviluppo (${sessions.length} scambi)\n${snippetsText}`
     : `\n\n*Nessuna sessione di chat disponibile per questo giorno — basati sulle note del developer.*`;
 
+  const sparseBlock = factCount < MIN_FACT_LINES ? sparseDataWarningBlock(factCount) : "";
+
   return `${PERSONA}
 
 ## Giorno: ${date} (${formatDateIt(date)})
 
 Non ci sono task formali registrati per questo giorno.${notesSection}${chatSection}
-
+${sparseBlock}
 ## Istruzioni
 Analizza il materiale disponibile e scrivi un post blog in **italiano** di circa **400-500 parole** che racconta cosa stava succedendo quel giorno nello sviluppo di BikerLink.
 
@@ -802,9 +866,17 @@ async function main() {
       const notes = loadDiaryNotes(date);
       if (notes) console.log(`[diary] 📝 ${date} — note developer caricate (${notes.length} chars)`);
 
+      const factCount = countConcreteFacts(notes);
+      const isSparse = factCount < MIN_FACT_LINES;
+      if (isSparse) {
+        console.warn(
+          `[diary] ⚠ ${date} — note scarse (${factCount}/${MIN_FACT_LINES} righe di fatto): attivo guard anti-invenzione`
+        );
+      }
+
       const prompt = cluster
-        ? buildPromptWithTasks(date, cluster, relevant, contextual, notes)
-        : buildPromptChatOnly(date, contextual, notes);
+        ? buildPromptWithTasks(date, cluster, relevant, contextual, notes, factCount)
+        : buildPromptChatOnly(date, contextual, notes, factCount);
 
       const noData = !cluster && contextual.length === 0 && !notes;
       const kind = cluster

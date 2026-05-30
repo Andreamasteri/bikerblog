@@ -54,7 +54,18 @@ function loadChatFiles(targetDate: string): string[] {
 const chatContents = loadChatFiles(date);
 const hasChatData = chatContents.length > 0;
 
-// ── 2. Query BikerLink DB (opzionale) ────────────────────────────────────────
+// Tracker fonti mancanti — popola man mano, usato per la sezione Limiti
+const missingSourceLabels: string[] = [];
+
+if (!hasChatData) {
+  missingSourceLabels.push(
+    `File chat del giorno (inbox/bikerlink-chat-${date}*.md): non trovati`
+  );
+} else {
+  console.log(`[bikerlink-activity] chat: ${chatContents.length} file trovati`);
+}
+
+// ── 2. Query BikerLink DB (opzionale, sempre tentata se URL disponibile) ──────
 
 interface OtaRelease {
   message: string;
@@ -103,10 +114,17 @@ if (BIKERLINK_URL) {
   if (otas.length > 0 || restarts.length > 0) {
     console.log(`[bikerlink-activity] DB: ${otas.length} OTA, ${restarts.length} restart`);
   } else {
+    // Endpoint disabilitato o giornata senza attività — entrambi restituiscono []
     console.log(`[bikerlink-activity] DB: nessun dato (endpoint disabilitato o giornata vuota)`);
+    missingSourceLabels.push(
+      "DB BikerLink (OTA + server restart): connessione fallita o nessun dato per questa data"
+    );
   }
 } else {
   console.log(`[bikerlink-activity] BIKERLINK_DATABASE_URL non impostato — solo chat`);
+  missingSourceLabels.push(
+    "DB BikerLink (OTA + server restart): BIKERLINK_DATABASE_URL non impostato"
+  );
 }
 
 const hasOta = otas.length > 0;
@@ -155,8 +173,31 @@ if (hasOta) {
   }
 }
 
+// ── 4. Sezione "Limiti" — documenta sempre cosa mancava ──────────────────────
+// Fondamentale: dice al generatore esattamente cosa NON SA, così Claude
+// dichiara l'incertezza invece di inventare spiegazioni per colmare i vuoti.
+
+if (missingSourceLabels.length > 0) {
+  lines.push(`## Limiti di questo report`);
+  lines.push("");
+  lines.push(
+    `Le seguenti fonti non erano disponibili al momento della generazione.`
+  );
+  lines.push(
+    `Il generatore del post DEVE dichiarare esplicitamente queste lacune`
+  );
+  lines.push(
+    `invece di speculare o inventare informazioni per colmarle.`
+  );
+  lines.push("");
+  for (const label of missingSourceLabels) {
+    lines.push(`- ${label}`);
+  }
+  lines.push("");
+}
+
 const content = lines.join("\n");
 writeFileSync(notesPath, content, "utf8");
 console.log(
-  `[bikerlink-activity] ${date} — note scritte: ${chatContents.length} chat, ${otas.length} OTA, ${restarts.length} restart → ${notesPath}`
+  `[bikerlink-activity] ${date} — note scritte: ${chatContents.length} chat, ${otas.length} OTA, ${restarts.length} restart, ${missingSourceLabels.length} fonti mancanti → ${notesPath}`
 );

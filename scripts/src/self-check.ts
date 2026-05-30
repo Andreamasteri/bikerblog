@@ -227,6 +227,17 @@ async function main() {
   const prodDiary = await fetchProdPost(diarySlug);
   let diaryIssue = false;
 
+  // Patterns that indicate the diary post was generated from sparse/missing data.
+  // These are early-warning signals for human review — not hard failures.
+  const DIARY_SPARSE_PATTERNS = [
+    "dati di sviluppo non sono stati acquisiti",
+    "per questo giorno i dati non ci sono",
+    "nessun dato disponibile",
+    "i dati non sono stati acquisiti",
+    "lacuna nella documentazione",
+    "dati non sono stati acquisiti",
+  ];
+
   if (!prodDiary) {
     console.error(`[self-check] ✗ DIARY-MISSING: ${diarySlug} non trovato in produzione`);
     diaryIssue = true;
@@ -237,6 +248,17 @@ async function main() {
       diaryIssue = true;
     } else {
       console.log(`[self-check] ✓ ${diarySlug}: presente in prod con body_en`);
+    }
+
+    // Check for sparse-data content patterns — warn but don't fail
+    const prodExcerpt = (prodDiary.excerpt ?? "").toLowerCase();
+    const matchedPattern = DIARY_SPARSE_PATTERNS.find((p) => prodExcerpt.includes(p));
+    if (matchedPattern) {
+      console.warn(
+        `[self-check] ⚠ DIARY-SPARSE: ${diarySlug} sembra generato da dati insufficienti` +
+        ` (pattern rilevato: "${matchedPattern}") — potrebbe richiedere revisione manuale`
+      );
+      // Not a hard failure — sparse is better than invented content
     }
   }
 

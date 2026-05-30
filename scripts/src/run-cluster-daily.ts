@@ -436,14 +436,42 @@ let diaryPostCreatedThisRun = false;
     console.log(`[cluster-daily] step 4: post diaristico aggiornato con --force (diary-${today})`);
   }
 
+  // Controlla se il post appena scritto ha contenuto generico da dati scarsi
+  const step4Warnings: string[] = [];
+  const SPARSE_PATTERNS = [
+    "dati di sviluppo non sono stati acquisiti",
+    "per questo giorno i dati non ci sono",
+    "nessun dato disponibile",
+    "lacuna nella documentazione",
+  ];
+  try {
+    const { db: d, postsTable: pt } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+    const diarySlug = `diary-${today}`;
+    const rows = await d
+      .select({ excerpt: pt.excerpt })
+      .from(pt)
+      .where(eq(pt.slug, diarySlug))
+      .limit(1);
+    const excerpt = rows[0]?.excerpt?.toLowerCase() ?? "";
+    const matched = SPARSE_PATTERNS.find((p) => excerpt.includes(p));
+    if (matched) {
+      const msg = `diary-${today}: contenuto generato da dati insufficienti (pattern: "${matched}") — richiede revisione manuale`;
+      step4Warnings.push(msg);
+      console.warn(`[cluster-daily] ⚠ DIARY-SPARSE: ${msg}`);
+    }
+  } catch {
+    // non bloccante
+  }
+
   report.addStep({
     step: 4,
     name: "diary post generation",
-    status: "ok",
+    status: step4Warnings.length > 0 ? "warn" : "ok",
     duration_ms: Date.now() - stepStart,
     posts_published: newPostsCount,
     errors: [],
-    warnings: [],
+    warnings: step4Warnings,
   });
 
   } // end else (diaryResult.status === 0)
