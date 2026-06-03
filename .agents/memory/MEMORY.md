@@ -1,0 +1,2 @@
+- [Pipeline late-start guard](pipeline-late-start.md) — Replit scheduler può ritardare la pipeline oltre mezzanotte; step 3.75 copre il catch-up automatico.
+- [Post futuri nascosti](posts-future-filter.md) — API posts/featured e fetchPostsShaped filtrano publishedAt <= now() per evitare anticipi.

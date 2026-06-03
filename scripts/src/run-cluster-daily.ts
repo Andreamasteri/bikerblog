@@ -58,6 +58,24 @@ function todayRome(): string {
   );
 }
 
+/** Returns yesterday's date as YYYY-MM-DD in the Europe/Rome timezone. */
+function yesterdayRome(): string {
+  const d = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Rome" }).format(d);
+}
+
+/** Returns the current hour (0-23) in the Europe/Rome timezone. */
+function currentHourRome(): number {
+  return parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Rome",
+      hour: "numeric",
+      hour12: false,
+    }).format(new Date()),
+    10
+  );
+}
+
 // ── Pipeline Report ───────────────────────────────────────────────────────────
 
 interface StepReport {
@@ -192,6 +210,18 @@ async function countPosts(): Promise<number> {
   const { sql } = await import("drizzle-orm");
   const rows = await d.select({ count: sql<number>`count(*)` }).from(pt);
   return Number(rows[0]?.count ?? 0);
+}
+
+/** Returns true if a diary post for the given date exists in the DB. */
+async function diaryPostExists(date: string): Promise<boolean> {
+  const { db: d, postsTable: pt } = await import("@workspace/db");
+  const { eq } = await import("drizzle-orm");
+  const rows = await d
+    .select({ id: pt.id })
+    .from(pt)
+    .where(eq(pt.slug, `diary-${date}`))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /** Returns bodyEn for today's diary post (slug diary-YYYY-MM-DD), or null if not found/untranslated. */
@@ -391,6 +421,98 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
     errors: [],
     warnings,
   });
+}
+
+// ── Step 3.75: catch-up giorno precedente (pipeline partita dopo mezzanotte) ──
+// Se la pipeline gira tra le 00:00 e le 01:59 ora italiana, il task scheduler
+// ha sforato mezzanotte. In quel caso il "giorno corrente" è già il giorno
+// successivo rispetto alla notte programmata: verifichiamo che il diario
+// di ieri esista e, se manca, lo generiamo subito.
+
+{
+  const stepStart = Date.now();
+  const hour = currentHourRome();
+  const yesterday = yesterdayRome();
+  const CATCHUP_WINDOW_END = 2; // ore 00:00–01:59 Roma
+
+  if (hour < CATCHUP_WINDOW_END) {
+    console.log(
+      `[cluster-daily] step 3.75: pipeline partita dopo mezzanotte (ora Roma: ${hour}:xx) — ` +
+      `verifico diary-${yesterday}`
+    );
+
+    const exists = await diaryPostExists(yesterday);
+
+    if (exists) {
+      console.log(`[cluster-daily] step 3.75: diary-${yesterday} già presente — nessun catch-up necessario`);
+      report.addStep({
+        step: 3.75,
+        name: "previous-day diary catch-up",
+        status: "skipped",
+        duration_ms: Date.now() - stepStart,
+        errors: [],
+        warnings: [],
+      });
+    } else {
+      console.log(`[cluster-daily] step 3.75: diary-${yesterday} MANCANTE — avvio catch-up`);
+
+      const catchupWarnings: string[] = [];
+      const catchupErrors: string[] = [];
+
+      // 3.75a — fetch attività BikerLink per ieri
+      const yesterdayNotesPath = resolve(projectRoot, "inbox", `diary-notes-${yesterday}.md`);
+      try {
+        if (existsSync(yesterdayNotesPath)) {
+          const existing = readFileSync(yesterdayNotesPath, "utf8");
+          if (existing.includes("(auto-generate da BikerLink)")) {
+            unlinkSync(yesterdayNotesPath);
+          }
+        }
+      } catch { /* ignore */ }
+
+      const activityResult = spawnSync(
+        "tsx",
+        ["src/fetch-bikerlink-activity.ts", "--date", yesterday],
+        { cwd: scriptsCwd, stdio: "inherit" }
+      );
+      if (activityResult.status !== 0) {
+        catchupWarnings.push(`fetch-bikerlink-activity per ${yesterday} exited with code ${activityResult.status}`);
+      }
+
+      // 3.75b — genera il diario di ieri (senza --force: è nuovo, non va sovrascritto)
+      const postsBefore375 = await countPosts();
+      const diaryResult375 = spawnSync(
+        "tsx",
+        ["src/generate-daily-diary.ts", "--date", yesterday],
+        { cwd: scriptsCwd, stdio: "inherit" }
+      );
+
+      if (diaryResult375.status !== 0) {
+        const errMsg = `diary:generate per ${yesterday} exited with code ${diaryResult375.status}`;
+        catchupErrors.push(errMsg);
+        console.error("[cluster-daily] ✗ step 3.75:", errMsg);
+      } else {
+        const postsAfter375 = await countPosts();
+        if (postsAfter375 > postsBefore375) {
+          console.log(`[cluster-daily] step 3.75: ✓ diary-${yesterday} creato (catch-up completato)`);
+        } else {
+          console.log(`[cluster-daily] step 3.75: diary-${yesterday} già esistente dopo generazione (idempotente)`);
+        }
+      }
+
+      report.addStep({
+        step: 3.75,
+        name: "previous-day diary catch-up",
+        status: catchupErrors.length > 0 ? "failed" : catchupWarnings.length > 0 ? "warn" : "ok",
+        duration_ms: Date.now() - stepStart,
+        posts_published: catchupErrors.length === 0 ? 1 : 0,
+        errors: catchupErrors,
+        warnings: catchupWarnings,
+      });
+    }
+  }
+  // Se non siamo nella finestra di catch-up, lo step non viene registrato nel report
+  // (pipeline nel suo orario normale — nessun rumore aggiuntivo).
 }
 
 // ── Step 4: generazione post diario del giorno ───────────────────────────────
