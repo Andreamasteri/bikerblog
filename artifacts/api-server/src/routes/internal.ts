@@ -208,4 +208,43 @@ router.post(
   },
 );
 
+router.delete(
+  "/_internal/posts/:slug",
+  async (req, res): Promise<void> => {
+    const auth = req.headers.authorization;
+    const seedToken = process.env["SEED_TOKEN"];
+    const validTokens: string[] = [];
+    if (INBOX_TOKEN) validTokens.push(`Bearer ${INBOX_TOKEN}`);
+    if (seedToken) validTokens.push(`Bearer ${seedToken}`);
+    if (validTokens.length === 0 || !auth || !validTokens.includes(auth)) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+
+    const { slug } = req.params;
+    if (!slug) {
+      res.status(400).json({ error: "slug param required" });
+      return;
+    }
+
+    try {
+      const deleted = await db
+        .delete(postsTable)
+        .where(eq(postsTable.slug, slug))
+        .returning({ slug: postsTable.slug });
+
+      if (deleted.length === 0) {
+        res.status(404).json({ ok: false, error: "post not found" });
+        return;
+      }
+
+      req.log.info({ slug }, "post deleted via internal API");
+      res.json({ ok: true, deleted: deleted[0]!.slug });
+    } catch (err) {
+      req.log.error({ slug, err }, "delete post failed");
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+);
+
 export default router;

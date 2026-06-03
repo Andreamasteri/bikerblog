@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { Router, type IRouter } from "express";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, lte, or, sql } from "drizzle-orm";
 import {
   db,
   postsTable,
@@ -109,12 +109,14 @@ async function fetchPostsShaped(
   order: "recent" | "popular" = "recent",
   limit?: number,
 ): Promise<Record<string, unknown>[]> {
+  const notFuture = lte(postsTable.publishedAt, new Date());
+  const combined = whereClause ? and(notFuture, whereClause) : notFuture;
   let q = db
     .select({ post: postsTable, author: authorsTable })
     .from(postsTable)
     .innerJoin(authorsTable, eq(postsTable.authorId, authorsTable.id))
     .$dynamic();
-  if (whereClause) q = q.where(whereClause);
+  if (combined) q = q.where(combined);
   q =
     order === "popular"
       ? q.orderBy(desc(postsTable.likeCount), desc(postsTable.publishedAt))
@@ -157,11 +159,12 @@ router.get("/posts", async (req, res): Promise<void> => {
 });
 
 router.get("/posts/featured", async (_req, res): Promise<void> => {
-  // Mostra sempre il post più recente — la home si aggiorna giorno per giorno.
+  // Mostra sempre il post più recente non futuro — la home si aggiorna giorno per giorno.
   const [row] = await db
     .select({ post: postsTable, author: authorsTable })
     .from(postsTable)
     .innerJoin(authorsTable, eq(postsTable.authorId, authorsTable.id))
+    .where(lte(postsTable.publishedAt, new Date()))
     .orderBy(desc(postsTable.publishedAt))
     .limit(1);
   if (!row) {
