@@ -1,7 +1,9 @@
 import { Link, useLocation } from "wouter";
-import { Wrench, Menu, X } from "lucide-react";
+import { Wrench, Menu, X, Download } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+
+const APK_URL = "https://drive.google.com/file/d/15teG0lCIWFi6YuXtcfIMPjuWcctPc5cH/view?usp=drive_link";
 
 const NAV_LINK_KEYS = [
   { href: "/posts", key: "nav.posts" },
@@ -82,6 +84,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {NAV_LINK_KEYS.map(l => (
               <Link key={l.href} href={l.href} className="hover:text-primary transition-colors uppercase tracking-wider">{t(l.key)}</Link>
             ))}
+            <a
+              href={APK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/50 text-primary hover:bg-primary/10 transition-colors uppercase tracking-wider text-xs font-bold"
+            >
+              <Download className="h-3.5 w-3.5" />
+              APK
+            </a>
             <LanguageSwitcher />
           </nav>
 
@@ -102,11 +113,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={l.href}
                 href={l.href}
-                className="block py-3 text-sm font-bold uppercase tracking-wider hover:text-primary transition-colors border-b border-border/30 last:border-0"
+                className="block py-3 text-sm font-bold uppercase tracking-wider hover:text-primary transition-colors border-b border-border/30"
               >
                 {t(l.key)}
               </Link>
             ))}
+            <a
+              href={APK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 py-3 text-sm font-bold uppercase tracking-wider text-primary border-b border-border/30"
+            >
+              <Download className="h-4 w-4" />
+              {t("footer.downloadApk")}
+            </a>
             <LanguageSwitcher mobile />
           </div>
         )}
@@ -124,10 +144,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <p className="max-w-md mx-auto mb-6">{t("footer.tagline")}</p>
           <p className="text-sm">{t("footer.copyright", { year: new Date().getFullYear() })}</p>
-          <p className="text-sm mt-2 flex justify-center gap-6">
+          <p className="text-sm mt-2 flex justify-center flex-wrap gap-6">
             <Link href="/podcast" className="hover:text-primary transition-colors">Podcast</Link>
             <Link href="/timeline" className="hover:text-primary transition-colors">Timeline</Link>
             <Link href="/in-memoria" className="hover:text-primary transition-colors">{t("footer.inMemoria")}</Link>
+            <a
+              href={APK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-primary hover:text-primary/80 transition-colors font-medium"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {t("footer.downloadApk")}
+            </a>
           </p>
         </div>
       </footer>

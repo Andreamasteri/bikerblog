@@ -12,7 +12,8 @@
   "footer": {
     "tagline": "For those who live for the open road. Ride reports, gear reviews, and technical tips.",
     "copyright": "© {{year}} BikerBlog. All rights reserved.",
-    "inMemoria": "In memory of Mauri"
+    "inMemoria": "In memory of Mauri",
+    "downloadApk": "Download Android APK"
   },
   "home": {
     "motto": "— How we built it",
