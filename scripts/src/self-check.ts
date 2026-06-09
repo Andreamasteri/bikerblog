@@ -111,31 +111,53 @@ function devPostToSeedPayload(p: DevPost): Record<string, unknown> {
   };
 }
 
+async function pushBatch(
+  payload: ReturnType<typeof devPostToSeedPayload>[],
+): Promise<{ inserted: number; updated: number; errors: number }> {
+  const r = await fetch(`${PROD_URL}/api/_internal/seed-posts`, {
+    method:  "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization:  `Bearer ${SEED_TOKEN}`,
+    },
+    body:   JSON.stringify(payload),
+    signal: AbortSignal.timeout(30000),
+  });
+  const body = (await r.json()) as {
+    ok?: boolean; inserted?: number; updated?: number;
+    error?: string; errors?: string[];
+  };
+  if (!r.ok || !body.ok) {
+    throw new Error(`HTTP ${r.status}: ${body.error ?? JSON.stringify(body)}`);
+  }
+  return {
+    inserted: body.inserted ?? 0,
+    updated:  body.updated  ?? 0,
+    errors:   body.errors?.length ?? 0,
+  };
+}
+
+const PUSH_BATCH_SIZE = 10;
+
 async function pushToProd(posts: DevPost[]): Promise<{ ok: boolean; message: string }> {
   if (!SEED_TOKEN) {
     return { ok: false, message: "SEED_TOKEN non impostato — impossibile fare push" };
   }
   const payload = posts.map(devPostToSeedPayload);
+  let totalInserted = 0;
+  let totalUpdated  = 0;
+  let totalErrors   = 0;
   try {
-    const r = await fetch(`${PROD_URL}/api/_internal/seed-posts`, {
-      method:  "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization:  `Bearer ${SEED_TOKEN}`,
-      },
-      body:   JSON.stringify(payload),
-      signal: AbortSignal.timeout(30000),
-    });
-    const body = (await r.json()) as {
-      ok?: boolean; inserted?: number; updated?: number;
-      error?: string; errors?: string[];
-    };
-    if (!r.ok || !body.ok) {
-      return { ok: false, message: `HTTP ${r.status}: ${body.error ?? JSON.stringify(body)}` };
+    for (let i = 0; i < payload.length; i += PUSH_BATCH_SIZE) {
+      const chunk = payload.slice(i, i + PUSH_BATCH_SIZE);
+      const result = await pushBatch(chunk);
+      totalInserted += result.inserted;
+      totalUpdated  += result.updated;
+      totalErrors   += result.errors;
     }
     return {
       ok: true,
-      message: `inserted=${body.inserted} updated=${body.updated} errors=${body.errors?.length ?? 0}`,
+      message: `inserted=${totalInserted} updated=${totalUpdated} errors=${totalErrors}`,
     };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : String(err) };
