@@ -40,12 +40,46 @@ if (existsSync(notesPath)) {
 
 // ── 1. Leggi file chat del giorno dall'inbox ──────────────────────────────────
 
+/**
+ * Rimuove le sezioni "### Conversazione [private]" dal contenuto della chat.
+ * Le conversazioni private tra admin e utenti non devono apparire nel blog.
+ * Aggiorna anche il testo descrittivo della sezione messaggi per indicare
+ * che le private sono omesse.
+ */
+function stripPrivateConversations(content: string): string {
+  // Conta quante conversazioni private vengono rimosse e quanti messaggi contengono
+  const privateBlocks: string[] = content.match(/### Conversazione \[private\][^\n]*\n(?:- [^\n]*\n)*/g) ?? [];
+  const privateMsgCount = privateBlocks.reduce((n: number, block: string) => {
+    return n + (block.match(/^- /gm)?.length ?? 0);
+  }, 0);
+
+  // Rimuovi i blocchi privati
+  let filtered = content.replace(/### Conversazione \[private\][^\n]*\n(?:- [^\n]*\n)*/g, "");
+
+  // Se c'erano blocchi privati, aggiungi una nota esplicativa sotto l'intestazione messaggi
+  if (privateBlocks.length > 0) {
+    filtered = filtered.replace(
+      /(## Messaggi di oggi \(\d+\)\n)/,
+      `$1_Le conversazioni private sono omesse. ${privateMsgCount} msg su ${"$TOTAL"} erano in chat private._\n\n`,
+    );
+    // Sostituisce il placeholder con il totale corretto
+    const totalMatch = content.match(/## Messaggi di oggi \((\d+)\)/);
+    const total = totalMatch ? totalMatch[1] : "?";
+    filtered = filtered.replace("$TOTAL", total);
+  }
+
+  return filtered.trim();
+}
+
 function loadChatFiles(targetDate: string): string[] {
   try {
     const files = readdirSync(INBOX)
       .filter((f) => f.startsWith(`bikerlink-chat-${targetDate}`) && f.endsWith(".md"))
       .sort();
-    return files.map((f) => readFileSync(resolve(INBOX, f), "utf8").trim());
+    return files.map((f) => {
+      const raw = readFileSync(resolve(INBOX, f), "utf8").trim();
+      return stripPrivateConversations(raw);
+    });
   } catch {
     return [];
   }
