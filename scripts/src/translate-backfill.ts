@@ -15,7 +15,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db, postsTable } from "@workspace/db";
 import { eq, isNull, or, sql } from "drizzle-orm";
 
-const client = new Anthropic();
+const client = new Anthropic({
+  baseURL: process.env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"],
+  apiKey:  process.env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"] ?? "dummy",
+});
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");
@@ -168,23 +171,24 @@ async function main() {
   }
 
   let translated = 0;
-  let skipped = 0;
-  let failed = 0;
+  let skipped    = 0;
+  let failed     = 0;
 
-  for (let i = 0; i < posts.length; i++) {
-    const post = posts[i];
-    const prefix = `[${i + 1}/${total}] [${post.slug}]`;
+  const CONCURRENCY = 5;
+
+  async function processOne(post: typeof posts[number], idx: number) {
+    const prefix = `[${idx + 1}/${total}] [${post.slug}]`;
 
     if (!FORCE && post.titleEn && post.excerptEn && post.bodyEn && post.bodyEn.trim().length > 0) {
       console.log(`${prefix} Already translated — skipped`);
       skipped++;
-      continue;
+      return;
     }
 
     if (DRY_RUN) {
       console.log(`${prefix} [dry-run] Would translate: "${post.title}"`);
       skipped++;
-      continue;
+      return;
     }
 
     console.log(`${prefix} Translating...`);
@@ -209,6 +213,11 @@ async function main() {
       );
       failed++;
     }
+  }
+
+  for (let i = 0; i < posts.length; i += CONCURRENCY) {
+    const chunk = posts.slice(i, i + CONCURRENCY);
+    await Promise.all(chunk.map((p, j) => processOne(p, i + j)));
   }
 
   console.log(

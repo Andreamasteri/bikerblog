@@ -77,13 +77,14 @@ function checkGap(dev: DevPost, prod: ProdPost | null): Gap {
   }
   const prodBodyEn = prod.bodyEn ?? prod.body_en ?? null;
   const prodAudio  = prod.audioUrl ?? prod.audio_url ?? null;
-  const stale      = !!prod.excerpt && prod.excerpt !== dev.excerpt;
+  const staleIt    = !!prod.excerpt && prod.excerpt !== dev.excerpt;
+  const staleEn    = !!dev.bodyEn && !!prodBodyEn && prodBodyEn !== dev.bodyEn;
   return {
     slug: dev.slug,
     missing: false,
     missingEn: !!dev.bodyEn && !prodBodyEn,
     missingAudio: !!dev.audioUrl && !prodAudio,
-    staleContent: stale,
+    staleContent: staleIt || staleEn,
   };
 }
 

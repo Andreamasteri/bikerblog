@@ -70,8 +70,13 @@ ${body}
     messages:   [{ role: "user", content: prompt }],
   });
 
-  const block = message.content[0];
-  const text  = block.type === "text" ? block.text.trim() : "{}";
+  const block   = message.content[0];
+  const rawText = block.type === "text" ? block.text.trim() : "{}";
+  // Claude sometimes wraps JSON in ```json ... ``` fences despite instructions — strip them
+  const text = rawText
+    .replace(/^```(?:json)?\s*\n?/i, "")
+    .replace(/\n?```\s*$/,           "")
+    .trim();
 
   try {
     const parsed = JSON.parse(text) as {

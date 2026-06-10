@@ -1,2 +1,2 @@
-- [Pipeline late-start guard](pipeline-late-start.md) — Replit scheduler può ritardare la pipeline oltre mezzanotte; step 3.75 copre il catch-up automatico.
-- [Post futuri nascosti](posts-future-filter.md) — API posts/featured e fetchPostsShaped filtrano publishedAt <= now() per evitare anticipi.
+- [translate-backfill auth fix](translate-backfill-auth.md) — must pass AI_INTEGRATIONS env vars explicitly to `new Anthropic({...})`; bare `new Anthropic()` silently fails with auth error.
+- [self-check staleEn](self-check-stale-en.md) — self-check now detects stale body_en (dev != prod); previously only compared IT excerpt.
