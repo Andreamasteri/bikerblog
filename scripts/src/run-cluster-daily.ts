@@ -64,6 +64,17 @@ function yesterdayRome(): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Rome" }).format(d);
 }
 
+/** Returns the last N days before today (excluding today) as YYYY-MM-DD, oldest first. */
+function lastNDatesRome(n: number): string[] {
+  const fmt = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Rome" });
+  const dates: string[] = [];
+  for (let i = n; i >= 1; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    dates.push(fmt.format(d));
+  }
+  return dates;
+}
+
 /** Returns the current hour (0-23) in the Europe/Rome timezone. */
 function currentHourRome(): number {
   return parseInt(
@@ -513,6 +524,94 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
   }
   // Se non siamo nella finestra di catch-up, lo step non viene registrato nel report
   // (pipeline nel suo orario normale — nessun rumore aggiuntivo).
+}
+
+// ── Step 3.8: catch-up multi-giorno ──────────────────────────────────────────
+// Controlla gli ultimi 7 giorni (escluso oggi) e genera i diari mancanti.
+// Copre il caso in cui il cron del deployment salti più notti di fila
+// (es. deployment offline, container bloccato). Idempotente: salta i giorni
+// che hanno già il post. Si attiva sempre, indipendentemente dall'orario.
+
+{
+  const stepStart = Date.now();
+  const LOOKBACK_DAYS = 7;
+  const pastDates = lastNDatesRome(LOOKBACK_DAYS);
+
+  // Verifica quali date mancano nel DB
+  const missingDates: string[] = [];
+  for (const d of pastDates) {
+    const exists = await diaryPostExists(d);
+    if (!exists) missingDates.push(d);
+  }
+
+  if (missingDates.length === 0) {
+    // Nessun gap — step silenzioso (non registrato nel report)
+  } else {
+    console.log(
+      `[cluster-daily] step 3.8: ${missingDates.length} diari mancanti negli ultimi ${LOOKBACK_DAYS} giorni — avvio catch-up: ${missingDates.join(", ")}`
+    );
+
+    const catchupWarnings: string[] = [];
+    const catchupErrors: string[] = [];
+    let catchupCreated = 0;
+
+    for (const d of missingDates) {
+      console.log(`[cluster-daily] step 3.8: recupero diary-${d}`);
+
+      // 3.8a — fetch attività BikerLink per il giorno mancante
+      const notesPath = resolve(projectRoot, "inbox", `diary-notes-${d}.md`);
+      try {
+        if (existsSync(notesPath)) {
+          const existing = readFileSync(notesPath, "utf8");
+          if (existing.includes("(auto-generate da BikerLink)")) {
+            unlinkSync(notesPath);
+          }
+        }
+      } catch { /* ignore */ }
+
+      const actRes = spawnSync(
+        "tsx",
+        ["src/fetch-bikerlink-activity.ts", "--date", d],
+        { cwd: scriptsCwd, stdio: "inherit" }
+      );
+      if (actRes.status !== 0) {
+        catchupWarnings.push(`fetch-bikerlink-activity per ${d} exited with code ${actRes.status}`);
+      }
+
+      // 3.8b — genera il post del giorno mancante
+      const postsBefore = await countPosts();
+      const diaryRes = spawnSync(
+        "tsx",
+        ["src/generate-daily-diary.ts", "--date", d],
+        { cwd: scriptsCwd, stdio: "inherit" }
+      );
+
+      if (diaryRes.status !== 0) {
+        catchupErrors.push(`diary:generate per ${d} exited with code ${diaryRes.status}`);
+        console.error(`[cluster-daily] ✗ step 3.8: diary-${d} fallito`);
+      } else {
+        const postsAfter = await countPosts();
+        if (postsAfter > postsBefore) {
+          catchupCreated++;
+          console.log(`[cluster-daily] step 3.8: ✓ diary-${d} creato`);
+        }
+      }
+    }
+
+    report.addStep({
+      step: 3.8,
+      name: "multi-day diary catch-up",
+      status: catchupErrors.length > 0 ? "failed" : catchupWarnings.length > 0 ? "warn" : "ok",
+      duration_ms: Date.now() - stepStart,
+      posts_published: catchupCreated,
+      errors: catchupErrors,
+      warnings: catchupWarnings,
+    });
+
+    console.log(
+      `[cluster-daily] step 3.8: completato — creati: ${catchupCreated}/${missingDates.length}, errori: ${catchupErrors.length}`
+    );
+  }
 }
 
 // ── Step 4: generazione post diario del giorno ───────────────────────────────
