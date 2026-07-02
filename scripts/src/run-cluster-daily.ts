@@ -19,6 +19,9 @@
  * 6. Genera audio TTS per i post senza audio (nuovi o riscritti)
  *    (podcast:generate — processa solo i post con audio_url IS NULL)
  * 7. Self-check produzione (verifica + riparazione automatica)
+ * 9. Connettività Horus/Bowie sul tunnel Cloudflare reale contro PROD_URL
+ *    (riusa horus-sse-smoke.ts — Task #104); silenzioso se non configurato,
+ *    un fallimento reale finisce nella notifica di fallimento pipeline.
  *
  * Dopo ogni run scrive:
  *   inbox/pipeline-last-run.json         — report strutturato dell'ultima run
@@ -938,6 +941,58 @@ let diaryPostCreatedThisRun = false;
       duration_ms: Date.now() - stepStart,
       errors: [],
       warnings: draftSlugs.map((slug) => `${slug} è in draft — richiede revisione manuale prima della pubblicazione`),
+    });
+  }
+}
+
+// ── Step 9: connettività Horus/Bowie (tunnel Cloudflare reale) ───────────────
+// Riusa la stessa logica di `horus:sse-smoke` (Task #104) ma la chiama contro
+// PROD_URL invece che localhost: questo processo cron gira separato dal
+// workflow dell'api-server, quindi l'unico modo di verificare il tunnel reale
+// è colpire il dominio pubblico, come fa già il self-check per seed-posts.
+// Silenzioso se HORUS_CHAT_PASSWORD/HORUS_OLLAMA_URL non sono configurati
+// (nessun Horus in questo ambiente); un fallimento reale finisce nei
+// criticalWarnings così la notifica di fallimento pipeline scatta comunque.
+
+{
+  const stepStart = Date.now();
+  console.log("[cluster-daily] step 9: connettività Horus/Bowie (tunnel reale)");
+
+  const { runHorusSseSmoke } = await import("./horus-sse-smoke.js");
+  const prodUrl = process.env["PROD_URL"] ?? "https://bikerlink-blog.replit.app";
+  const outcome = await runHorusSseSmoke({ apiBaseUrl: prodUrl });
+
+  if (outcome.skipped) {
+    console.log(`[cluster-daily] step 9: SKIP — ${outcome.skipReason}`);
+    report.addStep({
+      step: 9,
+      name: "Horus/Bowie connectivity check",
+      status: "skipped",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [],
+    });
+  } else {
+    const failed = outcome.results.filter((r) => !r.ok);
+    const warnings = failed.map((r) => `${r.name}: ${r.detail}`);
+
+    for (const r of outcome.results) {
+      console.log(`[cluster-daily] step 9: ${r.ok ? "OK  " : "FAIL"} ${r.name} — ${r.detail}`);
+    }
+
+    if (warnings.length > 0) {
+      const msg = `${failed.length}/${outcome.results.length} endpoint Horus/Bowie senza eventi reali entro il timeout`;
+      criticalWarnings.push(`step 9 (Horus/Bowie connectivity): ${msg} — ${warnings.join("; ")}`);
+      console.warn("[cluster-daily] ⚠", msg);
+    }
+
+    report.addStep({
+      step: 9,
+      name: "Horus/Bowie connectivity check",
+      status: warnings.length > 0 ? "warn" : "ok",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings,
     });
   }
 }

@@ -25,3 +25,9 @@ next morning.
   through to the end-of-run finalize/notify block — never `throw`/`exit`
   early from inside a step's catch. An early throw skips the alert entirely,
   silently defeating the whole point of the notification system.
+- The cron process runs separately from the api-server workflow, so any step
+  that needs to prove a *real* external dependency works (e.g. a tunnel to a
+  self-hosted service) must hit the public production URL, not localhost —
+  localhost only proves the cron process itself is alive, not the dependency.
+  Feed the failure into the same `criticalWarnings` array other soft-failing
+  steps use, rather than inventing a parallel alert path.

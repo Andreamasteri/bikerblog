@@ -1,15 +1,9 @@
 #!/usr/bin/env tsx
 /**
- * horus-sse-smoke — smoke check opt-in che parla DAVVERO con Horus/Bowie
+ * horus-sse-smoke — smoke check che parla DAVVERO con Horus/Bowie
  * attraverso il tunnel Cloudflare (nessun `chatRaw` finto), per intercettare
  * regressioni di streaming/tunnel reale che il test mockato
  * (`artifacts/api-server/src/routes/horus.sse.test.ts`) non può vedere.
- *
- * Colpisce l'api-server realmente in esecuzione (non uno mock in-process),
- * quindi va lanciato mentre il workflow dell'api-server è attivo — è lì che
- * le env var di Horus/Bowie sono presenti in modo affidabile (vedi nota in
- * replit.md sull'instabilità di queste env var nella sessione bash diretta
- * dell'agente).
  *
  * Verifica, per ogni endpoint SSE configurato:
  *   - che arrivi almeno un evento reale (token, heartbeat ": ping" o
@@ -17,15 +11,16 @@
  *     silenziosamente, qui non arriva nulla e il check fallisce esplicitamente
  *     invece di restare a guardare uno stream vuoto.
  *
- * Skip (exit 0, nessun errore) se:
+ * Skip (nessun fallimento) se:
  *   - HORUS_CHAT_PASSWORD non è impostata (impossibile autenticarsi)
  *   - Horus non è configurato (HORUS_OLLAMA_URL mancante)
  *   - Bowie non è configurato — solo il check di Bowie viene saltato, quello
  *     di Horus gira comunque
  *
- * Non è pensato per la pipeline notturna né per la CI: è un check manuale
- * "il tunnel funziona davvero adesso?", da lanciare quando si sospetta un
- * problema di rete reale.
+ * La logica di controllo vive in `runHorusSseSmoke()`, riusabile sia dal CLI
+ * qui sotto (uso manuale — "il tunnel funziona davvero adesso?") sia da
+ * `run-cluster-daily.ts` come step schedulato che instrada i fallimenti
+ * verso `sendPipelineAlert` (vedi "Pipeline failure alerts" in replit.md).
  *
  * Env:
  *   - API_BASE_URL (opzionale, default http://localhost:8080) — base
@@ -39,14 +34,31 @@
  */
 import { isHorusConfigured, isBowieConfigured } from "@workspace/horus";
 
-const API_BASE_URL = (process.env["API_BASE_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
-const HORUS_CHAT_PASSWORD = process.env["HORUS_CHAT_PASSWORD"];
-const FIRST_EVENT_TIMEOUT_MS = Math.max(5_000, Number(process.env["HORUS_SMOKE_TIMEOUT_MS"] ?? 45_000) || 45_000);
+const DEFAULT_API_BASE_URL = "http://localhost:8080";
+const DEFAULT_TIMEOUT_MS = 45_000;
 
-interface SmokeResult {
+export interface SmokeResult {
   name: string;
   ok: boolean;
   detail: string;
+}
+
+export interface SmokeRunOptions {
+  /** Base URL of the api-server, e.g. http://localhost:8080 or https://bikerlink-blog.replit.app */
+  apiBaseUrl?: string;
+  /** X-Horus-Password header value. */
+  password?: string;
+  /** How long to wait for the first real SSE event before failing. */
+  timeoutMs?: number;
+}
+
+export interface SmokeRunOutcome {
+  /** True if the check was skipped entirely (no password / Horus not configured). */
+  skipped: boolean;
+  skipReason?: string;
+  /** True if all executed checks succeeded (vacuously true when skipped). */
+  ok: boolean;
+  results: SmokeResult[];
 }
 
 /**
@@ -59,6 +71,7 @@ interface SmokeResult {
 async function waitForFirstRealEvent(
   url: string,
   body: unknown,
+  password: string,
   timeoutMs: number
 ): Promise<{ sawEvent: boolean; firstLine: string | null; httpStatus: number | null; error?: string }> {
   const controller = new AbortController();
@@ -69,7 +82,7 @@ async function waitForFirstRealEvent(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Horus-Password": HORUS_CHAT_PASSWORD!,
+        "X-Horus-Password": password,
       },
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -125,8 +138,8 @@ async function waitForFirstRealEvent(
   }
 }
 
-async function runCheck(name: string, url: string, body: unknown): Promise<SmokeResult> {
-  const result = await waitForFirstRealEvent(url, body, FIRST_EVENT_TIMEOUT_MS);
+async function runCheck(name: string, url: string, body: unknown, password: string, timeoutMs: number): Promise<SmokeResult> {
+  const result = await waitForFirstRealEvent(url, body, password, timeoutMs);
   if (result.sawEvent) {
     return { name, ok: true, detail: `primo evento reale ricevuto: ${result.firstLine}` };
   }
@@ -134,54 +147,88 @@ async function runCheck(name: string, url: string, body: unknown): Promise<Smoke
   return { name, ok: false, detail: `${statusPart}${result.error ?? "nessun evento ricevuto"}` };
 }
 
-async function main(): Promise<void> {
-  if (!HORUS_CHAT_PASSWORD) {
-    console.log("[horus-sse-smoke] SKIP — HORUS_CHAT_PASSWORD non impostata, impossibile autenticarsi.");
-    return;
+/**
+ * Esegue il controllo di connettività reale contro Horus (e Bowie, se
+ * configurato) e restituisce un esito strutturato senza mai chiamare
+ * `process.exit` — così può essere richiamato sia dal CLI di questo file
+ * sia come step di `run-cluster-daily.ts`.
+ */
+export async function runHorusSseSmoke(options: SmokeRunOptions = {}): Promise<SmokeRunOutcome> {
+  const apiBaseUrl = (options.apiBaseUrl ?? process.env["API_BASE_URL"] ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
+  const password = options.password ?? process.env["HORUS_CHAT_PASSWORD"];
+  const envTimeoutMs = Number(process.env["HORUS_SMOKE_TIMEOUT_MS"] ?? DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
+  const timeoutMs = Math.max(5_000, options.timeoutMs ?? envTimeoutMs);
+
+  if (!password) {
+    return { skipped: true, skipReason: "HORUS_CHAT_PASSWORD non impostata, impossibile autenticarsi.", ok: true, results: [] };
   }
 
   if (!isHorusConfigured()) {
-    console.log("[horus-sse-smoke] SKIP — Horus non configurato su questo ambiente (HORUS_OLLAMA_URL mancante).");
-    return;
+    return { skipped: true, skipReason: "Horus non configurato su questo ambiente (HORUS_OLLAMA_URL mancante).", ok: true, results: [] };
   }
 
   const checks: Array<Promise<SmokeResult>> = [
-    runCheck("POST /horus/chat", `${API_BASE_URL}/api/horus/chat`, {
-      message: "Rispondi con una sola parola: ciao",
-      history: [],
-    }),
+    runCheck(
+      "POST /horus/chat",
+      `${apiBaseUrl}/api/horus/chat`,
+      { message: "Rispondi con una sola parola: ciao", history: [] },
+      password,
+      timeoutMs
+    ),
   ];
 
   if (isBowieConfigured()) {
     checks.push(
-      runCheck("POST /horus/bowie-chat", `${API_BASE_URL}/api/horus/bowie-chat`, {
-        message: "Rispondi con una sola parola: ciao",
-        history: [],
-      }),
-      runCheck("POST /horus/bowie-conversation", `${API_BASE_URL}/api/horus/bowie-conversation`, {
-        topic: "smoke test — ignora, nessun contenuto reale da salvare",
-        maxTurns: 2,
-      })
+      runCheck(
+        "POST /horus/bowie-chat",
+        `${apiBaseUrl}/api/horus/bowie-chat`,
+        { message: "Rispondi con una sola parola: ciao", history: [] },
+        password,
+        timeoutMs
+      ),
+      runCheck(
+        "POST /horus/bowie-conversation",
+        `${apiBaseUrl}/api/horus/bowie-conversation`,
+        { topic: "smoke test — ignora, nessun contenuto reale da salvare", maxTurns: 2 },
+        password,
+        timeoutMs
+      )
     );
-  } else {
-    console.log("[horus-sse-smoke] Bowie non configurato — salto i check su bowie-chat e bowie-conversation.");
   }
 
   const results = await Promise.all(checks);
+  const ok = results.every((r) => r.ok);
+  return { skipped: false, ok, results };
+}
 
-  for (const r of results) {
+async function main(): Promise<void> {
+  const outcome = await runHorusSseSmoke();
+
+  if (outcome.skipped) {
+    console.log(`[horus-sse-smoke] SKIP — ${outcome.skipReason}`);
+    return;
+  }
+
+  if (!isBowieConfigured()) {
+    console.log("[horus-sse-smoke] Bowie non configurato — salto i check su bowie-chat e bowie-conversation.");
+  }
+
+  for (const r of outcome.results) {
     console.log(`[horus-sse-smoke] ${r.ok ? "OK  " : "FAIL"} ${r.name} — ${r.detail}`);
   }
 
-  const failed = results.filter((r) => !r.ok);
+  const failed = outcome.results.filter((r) => !r.ok);
   if (failed.length > 0) {
     console.error(
-      `[horus-sse-smoke] ${failed.length}/${results.length} endpoint SSE non hanno prodotto alcun evento reale entro ${FIRST_EVENT_TIMEOUT_MS}ms.`
+      `[horus-sse-smoke] ${failed.length}/${outcome.results.length} endpoint SSE non hanno prodotto alcun evento reale.`
     );
     process.exit(1);
   }
 
-  console.log(`[horus-sse-smoke] tutti i ${results.length} endpoint SSE reali hanno risposto correttamente.`);
+  console.log(`[horus-sse-smoke] tutti i ${outcome.results.length} endpoint SSE reali hanno risposto correttamente.`);
 }
 
-await main();
+const isMain = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
+if (isMain) {
+  await main();
+}
