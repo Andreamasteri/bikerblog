@@ -5,6 +5,7 @@ import commentsRouter from "./comments";
 import metaRouter from "./meta";
 import internalRouter from "./internal";
 import podcastRouter from "./podcast";
+import horusRouter from "./horus";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(commentsRouter);
 router.use(metaRouter);
 router.use(internalRouter);
 router.use(podcastRouter);
+router.use(horusRouter);
 
 export default router;

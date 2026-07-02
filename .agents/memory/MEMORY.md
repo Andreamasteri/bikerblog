@@ -1,3 +1,4 @@
 - [self-check staleEn](self-check-stale-en.md) — self-check now detects stale body_en (dev != prod); previously only compared IT excerpt.
 - [Pipeline gap catch-up](pipeline-gap-catchup.md) — step 3.8 recupera i diari mancanti degli ultimi 7 giorni; senza questo il cron offline lasciava buchi nel blog.
 - [Horus (Ollama) integration lessons](horus-integration.md) — Cloudflare Tunnel needs streaming for long generations; bash tool can't reliably read new secrets or host background processes; fine-grained GitHub PATs pasted as secrets can lose their `github_pat_` prefix (401s).
+- [Horus shared lib + web chat](horus-shared-lib.md) — Horus client/tools live in `@workspace/horus` so scripts (CLI) and api-server (web chat) share one implementation; web chat streams via SSE, gated by `HORUS_CHAT_PASSWORD`.

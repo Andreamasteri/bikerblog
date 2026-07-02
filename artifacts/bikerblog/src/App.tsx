@@ -12,6 +12,7 @@ import { Authors } from "@/pages/authors";
 import { InMemoria } from "@/pages/in-memoria";
 import { Timeline } from "@/pages/timeline";
 import { Podcast } from "@/pages/podcast";
+import { HorusChat } from "@/pages/horus-chat";
 import NotFound from "@/pages/not-found";
 import { useEffect } from "react";
 import { I18nextProvider, useTranslation } from "react-i18next";
@@ -48,6 +49,7 @@ function Router() {
         <Route path="/in-memoria" component={InMemoria} />
         <Route path="/timeline" component={Timeline} />
         <Route path="/podcast" component={Podcast} />
+        <Route path="/horus" component={HorusChat} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
