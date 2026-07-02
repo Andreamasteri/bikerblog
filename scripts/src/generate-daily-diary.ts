@@ -30,7 +30,7 @@
  * ATTENZIONE: qualsiasi feature non richiesta potrebbe risultare in una telefonata a John Connor.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { horusChat } from "./horus-client.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { translatePostToEn } from "./translate.js";
 import { resolve, dirname } from "node:path";
@@ -77,12 +77,7 @@ const TO_DATE   = args.includes("--to")   ? args[args.indexOf("--to")   + 1] : n
  */
 const DATE_END = ONLY_DATE && ONLY_DATE > DATE_END_BASE ? ONLY_DATE : DATE_END_BASE;
 
-// ── Anthropic ─────────────────────────────────────────────────────────────────
-
-const anthropic = new Anthropic({
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-  apiKey:  process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy",
-});
+// ── Horus ─────────────────────────────────────────────────────────────────────
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 
@@ -675,16 +670,10 @@ Regole:
 - Restituisci SOLO il testo del post, senza intestazioni markdown aggiuntive`;
 }
 
-// ── Claude call ───────────────────────────────────────────────────────────────
+// ── Horus call ────────────────────────────────────────────────────────────────
 
 async function generatePost(prompt: string): Promise<string> {
-  const message = await anthropic.messages.create({
-    model:      "claude-sonnet-4-6",
-    max_tokens: 8192,
-    messages:   [{ role: "user", content: prompt }],
-  });
-  const block = message.content[0];
-  return block.type === "text" ? block.text.trim() : "";
+  return horusChat([{ role: "user", content: prompt }], { maxTokens: 8192 });
 }
 
 

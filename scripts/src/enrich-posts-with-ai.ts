@@ -5,7 +5,7 @@
  * Per ogni giornata dei cluster:
  *   1. Estrae i task (titoli + descrizioni) da clusters-merged-by-day.md
  *   2. Cerca nella chat i passaggi rilevanti (menzioni di #N o parole chiave)
- *   3. Chiama Claude per generare un post narrativo in italiano
+ *   3. Chiama Horus per generare un post narrativo in italiano
  *   4. Aggiorna il DB (upsert su slug)
  *
  * Usage:
@@ -14,12 +14,12 @@
  *   pnpm --filter @workspace/scripts run enrich:posts -- --dry-run           (stampa senza salvare)
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { db, pool, postsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { horusChat } from "./horus-client.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", "..");
@@ -30,13 +30,6 @@ const CHAT_FILE = resolve(ROOT, "inbox", "bikerlink-chat-latest.md");
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");
 const ONLY_DATE = args[args.indexOf("--date") + 1] ?? null;
-
-// ── Anthropic ────────────────────────────────────────────────────────────────
-
-const anthropic = new Anthropic({
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy",
-});
 
 // ── Tipi ─────────────────────────────────────────────────────────────────────
 
@@ -178,14 +171,7 @@ async function generatePost(cluster: Cluster, chatMd: string): Promise<string> {
   const chatSnippets = extractRelevantChat(chatMd, cluster);
   const prompt = buildPrompt(cluster, chatSnippets);
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 8192,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const block = message.content[0];
-  return block.type === "text" ? block.text.trim() : "";
+  return horusChat([{ role: "user", content: prompt }], { maxTokens: 8192 });
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

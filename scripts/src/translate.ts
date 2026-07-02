@@ -3,16 +3,10 @@
  *
  * Used by: translate-posts.ts, generate-daily-diary.ts, publish-from-clusters.ts
  *
- * Model: claude-haiku-4-5 (fast, cost-effective for translation)
- * Client: Replit AI Integrations proxy (AI_INTEGRATIONS_ANTHROPIC_* env vars)
+ * Model: Horus (bikerlink:latest su Ollama, server TC via Cloudflare Access)
  */
 
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-  apiKey:  process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy",
-});
+import { horusChat } from "./horus-client.js";
 
 export interface TranslationResult {
   titleEn:   string;
@@ -63,16 +57,15 @@ CONTENT:
 ${body}
 ---`;
 
-  const message = await anthropic.messages.create({
-    model:      "claude-haiku-4-5",
-    max_tokens: 4096,
-    system:     PRIVACY_SYSTEM_PROMPT,
-    messages:   [{ role: "user", content: prompt }],
-  });
+  const rawText = await horusChat(
+    [
+      { role: "system", content: PRIVACY_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+    { maxTokens: 4096 }
+  );
 
-  const block   = message.content[0];
-  const rawText = block.type === "text" ? block.text.trim() : "{}";
-  // Claude sometimes wraps JSON in ```json ... ``` fences despite instructions — strip them
+  // I modelli locali a volte avvolgono il JSON in fence ```json ... ``` nonostante le istruzioni — le rimuoviamo
   const text = rawText
     .replace(/^```(?:json)?\s*\n?/i, "")
     .replace(/\n?```\s*$/,           "")

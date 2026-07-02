@@ -8,17 +8,12 @@
  *   pnpm --filter @workspace/scripts run translate:backfill -- --dry-run
  *   pnpm --filter @workspace/scripts run translate:backfill -- --force
  *
- * Uses claude-haiku-4-5 for cost-efficient bulk translation.
+ * Uses Horus (bikerlink:latest via Ollama, server TC) for bulk translation.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { db, postsTable } from "@workspace/db";
 import { eq, isNull, or, sql } from "drizzle-orm";
-
-const client = new Anthropic({
-  baseURL: process.env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"],
-  apiKey:  process.env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"] ?? "dummy",
-});
+import { horusChat } from "./horus-client.js";
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");
@@ -59,19 +54,17 @@ BODY (Markdown):
 ${post.content}
 ---`;
 
-  const message = await client.messages.create({
-    model: "claude-haiku-4-5",
-    max_tokens: 4096,
-    system: PRIVACY_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const block = message.content[0];
-  const rawText = block.type === "text" ? block.text.trim() : "{}";
+  const rawText = await horusChat(
+    [
+      { role: "system", content: PRIVACY_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+    { maxTokens: 4096 }
+  );
 
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error(`No JSON found in Claude response for slug: ${post.slug}`);
+    throw new Error(`No JSON found in Horus response for slug: ${post.slug}`);
   }
 
   const parsed = JSON.parse(jsonMatch[0]) as {
