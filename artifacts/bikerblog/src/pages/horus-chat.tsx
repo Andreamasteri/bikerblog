@@ -68,6 +68,11 @@ export function HorusChat() {
   const [isConvoRunning, setIsConvoRunning] = useState(false);
   const [convoError, setConvoError] = useState<string | null>(null);
 
+  const [convoHealth, setConvoHealth] = useState<"checking" | "ok" | "unreachable">("checking");
+  const [convoNotConfigured, setConvoNotConfigured] = useState<string | null>(null);
+  const [convoUnreachableMessage, setConvoUnreachableMessage] = useState<string | null>(null);
+  const [convoHealthRetryKey, setConvoHealthRetryKey] = useState(0);
+
   const [historyItems, setHistoryItems] = useState<ConvoHistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -87,6 +92,74 @@ export function HorusChat() {
     void loadHistoryList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, password]);
+
+  // Controllo di raggiungibilità di Bowie eseguito all'apertura della tab
+  // "Horus ↔ Bowie", prima che l'utente proponga un argomento: la conversazione
+  // osservata riusa lo stesso Bowie della chat diretta, ma senza questo check
+  // il problema (Bowie non configurato o giù) si scopriva solo dopo aver
+  // premuto Play, quando lo stream falliva subito. Horus non viene verificato
+  // qui perché la conversazione gira nello stesso processo dell'api-server e
+  // usa lo stesso client già verificato dalla tab "Chat con Horus".
+  useEffect(() => {
+    if (mode !== "conversation" || !password) return;
+    let cancelled = false;
+
+    async function checkBowieHealth() {
+      setConvoHealth("checking");
+      setConvoNotConfigured(null);
+      setConvoUnreachableMessage(null);
+      try {
+        const base = import.meta.env.BASE_URL;
+        const res = await fetch(`${base}api/horus/bowie-health`, {
+          headers: { "X-Horus-Password": password! },
+        });
+        if (cancelled) return;
+
+        if (res.status === 401) {
+          sessionStorage.removeItem(SESSION_KEY);
+          setPassword(null);
+          setAuthError("Password errata. Riprova.");
+          return;
+        }
+
+        if (!res.ok) {
+          setConvoUnreachableMessage("Impossibile verificare lo stato della connessione. Riprova tra poco.");
+          setConvoHealth("unreachable");
+          return;
+        }
+
+        const data = (await res.json()) as {
+          status?: "ok" | "not_configured" | "unreachable";
+          message?: string;
+        };
+
+        if (data.status === "not_configured") {
+          setConvoNotConfigured(
+            data.message ?? "Bowie non è configurato su questo ambiente."
+          );
+          setConvoHealth("ok");
+        } else if (data.status === "unreachable") {
+          setConvoUnreachableMessage(
+            data.message ?? "Bowie non è raggiungibile in questo momento."
+          );
+          setConvoHealth("unreachable");
+        } else {
+          setConvoHealth("ok");
+        }
+      } catch {
+        if (!cancelled) {
+          setConvoUnreachableMessage("Impossibile verificare la connessione. Controlla la rete e riprova.");
+          setConvoHealth("unreachable");
+        }
+      }
+    }
+
+    void checkBowieHealth();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, password, convoHealthRetryKey]);
 
   async function loadHistoryList() {
     if (!password) return;
@@ -181,7 +254,7 @@ export function HorusChat() {
   async function startConversation(e?: FormEvent) {
     e?.preventDefault();
     const text = topic.trim();
-    if (!text || isConvoRunning || !password) return;
+    if (!text || isConvoRunning || !password || convoHealth !== "ok") return;
 
     setConvoError(null);
     setConvoMessages([]);
@@ -432,8 +505,34 @@ export function HorusChat() {
         />
       </div>
 
-      {mode === "conversation" ? (
+      {mode === "conversation" && convoHealth === "checking" ? (
+        <div className="flex-1 border border-border bg-muted/5 mb-4 flex items-center justify-center">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="w-4 h-4" />
+            Verifica della connessione con Bowie in corso…
+          </div>
+        </div>
+      ) : mode === "conversation" && convoHealth === "unreachable" ? (
+        <div className="flex-1 border border-border bg-muted/5 mb-4 flex flex-col items-center justify-center gap-4">
+          <p className="text-sm text-muted-foreground text-center max-w-sm px-6">
+            {convoUnreachableMessage ?? "Bowie non è raggiungibile in questo momento."}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setConvoHealthRetryKey((k) => k + 1)}
+          >
+            <RotateCcw className="w-4 h-4" />
+            Riprova
+          </Button>
+        </div>
+      ) : mode === "conversation" ? (
         <>
+          {convoNotConfigured && (
+            <div className="text-sm text-muted-foreground mb-3 px-1">{convoNotConfigured}</div>
+          )}
           <div ref={convoScrollRef} className="flex-1 border border-border bg-muted/5 mb-4 overflow-y-auto">
             <div className="p-6 space-y-6">
               {convoMessages.length === 0 && !isConvoRunning && (
