@@ -5,7 +5,10 @@ export {
   appendHorusMemory,
   horusChat,
   horusChatRaw,
+  isHorusConfigured,
+  checkHorusHealth,
   isBowieConfigured,
+  checkBowieHealth,
   bowieChatRaw,
   createOllamaAgentClient,
   extractJson,
@@ -16,6 +19,7 @@ export {
   type HorusRawResult,
   type OllamaAgentConfig,
   type OllamaAgentClient,
+  type OllamaAgentHealth,
 } from "./client.js";
 
 export { HORUS_TOOLS, getHorusTools, executeHorusTool } from "./tools.js";

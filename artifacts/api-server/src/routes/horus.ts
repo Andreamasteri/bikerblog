@@ -6,10 +6,13 @@ import {
   horusChatRaw,
   bowieChatRaw,
   isBowieConfigured,
+  checkHorusHealth,
+  checkBowieHealth,
   BOWIE_AGENT_NAME,
   getHorusTools,
   executeHorusTool,
   type HorusMessage,
+  type OllamaAgentHealth,
 } from "@workspace/horus";
 
 const router: IRouter = Router();
@@ -233,6 +236,63 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     }
   };
 }
+
+interface HealthAgentConfig {
+  agentName: string;
+  checkHealth: () => Promise<OllamaAgentHealth>;
+  notConfiguredMessage: string;
+}
+
+/**
+ * Handler generico per il controllo di raggiungibilità di un agente (Horus o
+ * Bowie), chiamato dal frontend all'apertura della tab di chat diretta prima
+ * ancora che l'utente scriva un messaggio. Distingue esplicitamente "non
+ * configurato" (env var mancanti, da correggere nei Secrets) da "configurato
+ * ma non risponde ora" (tunnel/Ollama giù sul server dell'utente), invece di
+ * lasciare che l'utente scopra il problema solo dopo aver inviato un messaggio.
+ */
+function createHealthHandler(config: HealthAgentConfig) {
+  return async (req: express.Request, res: express.Response): Promise<void> => {
+    if (!requireHorusPassword(req, res)) return;
+
+    const health = await config.checkHealth();
+
+    if (health.status === "not_configured") {
+      res.json({ status: "not_configured", message: config.notConfiguredMessage });
+      return;
+    }
+
+    if (health.status === "unreachable") {
+      res.json({
+        status: "unreachable",
+        message:
+          `${config.agentName} sembra configurato ma non risponde in questo momento ` +
+          "(server o tunnel non raggiungibile). Riprova tra poco.",
+      });
+      return;
+    }
+
+    res.json({ status: "ok" });
+  };
+}
+
+router.get(
+  "/horus/health",
+  createHealthHandler({
+    agentName: "Horus",
+    checkHealth: checkHorusHealth,
+    notConfiguredMessage: "Horus non è configurato su questo ambiente.",
+  })
+);
+
+router.get(
+  "/horus/bowie-health",
+  createHealthHandler({
+    agentName: BOWIE_AGENT_NAME,
+    checkHealth: checkBowieHealth,
+    notConfiguredMessage: `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. Aggiungilo dalla scheda Secrets per abilitare la chat diretta con Bowie.`,
+  })
+);
 
 router.post(
   "/horus/chat",

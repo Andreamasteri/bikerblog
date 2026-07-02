@@ -408,6 +408,7 @@ export function HorusChat() {
         <AgentChatPanel
           key={horusChatKey}
           endpoint="api/horus/chat"
+          healthEndpoint="api/horus/health"
           password={password}
           onUnauthorized={handleUnauthorized}
           agentIcon={<Flame className="w-4 h-4" />}
@@ -421,6 +422,7 @@ export function HorusChat() {
         <AgentChatPanel
           key={bowieChatKey}
           endpoint="api/horus/bowie-chat"
+          healthEndpoint="api/horus/bowie-health"
           password={password}
           onUnauthorized={handleUnauthorized}
           agentIcon={<Cpu className="w-4 h-4" />}

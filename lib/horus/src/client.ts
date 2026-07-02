@@ -135,6 +135,19 @@ export interface HorusRawResult {
   toolCalls: HorusToolCall[];
 }
 
+/**
+ * Esito di un controllo di raggiungibilità leggero verso un agente Ollama,
+ * distinto in tre stati: env var mancanti ("not_configured", errore di setup
+ * da correggere), configurato ma non risponde ("unreachable", es. tunnel o
+ * Ollama giù sul server dell'utente), oppure raggiungibile ("ok"). Usato per
+ * mostrare all'utente un messaggio chiaro prima ancora che apra la chat,
+ * invece di un pannello vuoto che sembra pronto ma non lo è.
+ */
+export type OllamaAgentHealth =
+  | { status: "not_configured" }
+  | { status: "ok" }
+  | { status: "unreachable"; detail?: string };
+
 /** Configurazione di un agente Ollama generico (Horus, Bowie, o altri in futuro). */
 export interface OllamaAgentConfig {
   /** Nome leggibile dell'agente, usato solo nei messaggi di errore. */
@@ -151,7 +164,13 @@ export interface OllamaAgentClient {
   chatRaw: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<HorusRawResult>;
   chat: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<string>;
   isConfigured: () => boolean;
+  checkHealth: () => Promise<OllamaAgentHealth>;
 }
+
+/** Timeout per il controllo di raggiungibilità: deve essere molto più corto
+ * del timeout di chat (5 minuti) perché qui vogliamo solo sapere in fretta
+ * se il server risponde, non aspettare una generazione. */
+const HEALTH_CHECK_TIMEOUT_MS = 6_000;
 
 /**
  * Crea un client per un agente Ollama parametrico (URL, credenziali
@@ -305,7 +324,46 @@ export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentC
     return content;
   }
 
-  return { chatRaw, chat, isConfigured };
+  /**
+   * Controllo di raggiungibilità leggero: distingue "non configurato" (env
+   * var mancanti, errore di setup) da "configurato ma non risponde" (tunnel
+   * Cloudflare o Ollama giù sul server dell'utente), usando l'endpoint più
+   * economico di Ollama (/api/version) invece di /api/chat, che caricherebbe
+   * inutilmente il modello in RAM solo per un ping.
+   */
+  async function checkHealth(): Promise<OllamaAgentHealth> {
+    if (!isConfigured()) return { status: "not_configured" };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${config.ollamaUrl!.replace(/\/$/, "")}/api/version`, {
+        method: "GET",
+        headers: {
+          ...(config.cfAccessClientId && config.cfAccessClientSecret
+            ? {
+                "CF-Access-Client-Id": config.cfAccessClientId,
+                "CF-Access-Client-Secret": config.cfAccessClientSecret,
+              }
+            : {}),
+        },
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        return { status: "unreachable", detail: `HTTP ${res.status}` };
+      }
+      return { status: "ok" };
+    } catch (err) {
+      return {
+        status: "unreachable",
+        detail: err instanceof Error ? err.message : "errore sconosciuto",
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return { chatRaw, chat, isConfigured, checkHealth };
 }
 
 const horusClient = createOllamaAgentClient({
@@ -328,6 +386,16 @@ export function horusChatRaw(
   options: HorusChatOptions = {}
 ): Promise<HorusRawResult> {
   return horusClient.chatRaw(messages, options);
+}
+
+/** True se Horus è configurato (HORUS_OLLAMA_URL impostato). */
+export function isHorusConfigured(): boolean {
+  return horusClient.isConfigured();
+}
+
+/** Controllo di raggiungibilità leggero per Horus, vedi `OllamaAgentHealth`. */
+export function checkHorusHealth(): Promise<OllamaAgentHealth> {
+  return horusClient.checkHealth();
 }
 
 /**
@@ -365,6 +433,11 @@ const bowieClient = createOllamaAgentClient({
 /** True se Bowie è configurato (BOWIE_OLLAMA_MODEL impostato e un URL disponibile). */
 export function isBowieConfigured(): boolean {
   return bowieClient.isConfigured();
+}
+
+/** Controllo di raggiungibilità leggero per Bowie, vedi `OllamaAgentHealth`. */
+export function checkBowieHealth(): Promise<OllamaAgentHealth> {
+  return bowieClient.checkHealth();
 }
 
 /** Invia una conversazione a Bowie e restituisce testo + eventuali tool_calls. */
