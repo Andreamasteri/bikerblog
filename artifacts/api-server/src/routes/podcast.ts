@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { isNotNull } from "drizzle-orm";
+import { and, isNotNull } from "drizzle-orm";
 import { desc, eq } from "drizzle-orm";
 import { db, postsTable } from "@workspace/db";
 import { Storage } from "@google-cloud/storage";
@@ -52,7 +52,9 @@ router.get("/podcast/audio/:slug", async (req, res): Promise<void> => {
   const [post] = await db
     .select({ audioUrl: postsTable.audioUrl })
     .from(postsTable)
-    .where(eq(postsTable.slug, slug))
+    .where(
+      and(eq(postsTable.slug, slug), eq(postsTable.status, "published")),
+    )
     .limit(1);
 
   if (!post?.audioUrl) {
@@ -101,7 +103,9 @@ router.get("/podcast/feed.xml", async (req, res): Promise<void> => {
   const posts = await db
     .select()
     .from(postsTable)
-    .where(isNotNull(postsTable.audioUrl))
+    .where(
+      and(isNotNull(postsTable.audioUrl), eq(postsTable.status, "published")),
+    )
     .orderBy(desc(postsTable.publishedAt));
 
   const domains = process.env["REPLIT_DOMAINS"] ?? "localhost";

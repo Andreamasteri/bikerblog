@@ -33,6 +33,7 @@
 import { horusChat } from "@workspace/horus";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { translatePostToEn } from "./translate.js";
+import { auditPost } from "./content-audit.js";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { db, pool, postsTable, authorsTable } from "@workspace/db";
@@ -867,6 +868,7 @@ async function main() {
 
   const authorId = await getFirstAuthorId();
   let ok = 0, fail = 0;
+  const flaggedSlugs: string[] = [];
 
   // 6. Generate posts 2 at a time
   for (let i = 0; i < toProcess.length; i += 2) {
@@ -921,6 +923,15 @@ async function main() {
           const { titleEn, excerptEn, bodyEn } = await translatePostToEn(title, excerpt, content, slug);
           console.log(`[diary] 🌐 ${slug} — tradotto EN`);
 
+          const audit = auditPost({ title, excerpt, content });
+          const status = audit.flagged ? "draft" : "published";
+          if (audit.flagged) {
+            flaggedSlugs.push(slug);
+            console.warn(
+              `[diary] ⚠ AUDIT: ${slug} contiene termini vietati (${audit.matches.join(", ")}) — messo in stato draft invece di essere pubblicato`
+            );
+          }
+
           await db
             .insert(postsTable)
             .values({
@@ -931,6 +942,7 @@ async function main() {
               publishedAt:    new Date(`${date}T23:30:00+02:00`),
               readingMinutes,
               featured:       0,
+              status,
               titleEn, excerptEn, bodyEn,
             })
             .onConflictDoUpdate({
@@ -938,7 +950,7 @@ async function main() {
               // Clear audioUrl so the post gets re-narrated after a rewrite
               set:    { title, excerpt, content, coverImageUrl, readingMinutes,
                         tags: ["diario", "bikerlink", "daily"], category: "Diario",
-                        audioUrl: null, titleEn, excerptEn, bodyEn },
+                        audioUrl: null, status, titleEn, excerptEn, bodyEn },
             });
           console.log(`[diary] ✓ ${slug}`);
         } else {
@@ -959,7 +971,10 @@ async function main() {
     }
   }
 
-  console.log(`\n[diary] ✅ done — ok: ${ok}, falliti: ${fail}`);
+  console.log(
+    `\n[diary] ✅ done — ok: ${ok}, falliti: ${fail}, segnalati dall'audit: ${flaggedSlugs.length}` +
+    (flaggedSlugs.length > 0 ? ` (${flaggedSlugs.join(", ")})` : "")
+  );
 
   // 7. Translate existing posts that are missing EN translation (idempotent)
   if (!DRY_RUN && !MAP_ONLY) {

@@ -110,7 +110,10 @@ async function fetchPostsShaped(
   limit?: number,
 ): Promise<Record<string, unknown>[]> {
   const notFuture = lte(postsTable.publishedAt, new Date());
-  const combined = whereClause ? and(notFuture, whereClause) : notFuture;
+  const published = eq(postsTable.status, "published");
+  const combined = whereClause
+    ? and(notFuture, published, whereClause)
+    : and(notFuture, published);
   let q = db
     .select({ post: postsTable, author: authorsTable })
     .from(postsTable)
@@ -164,7 +167,12 @@ router.get("/posts/featured", async (_req, res): Promise<void> => {
     .select({ post: postsTable, author: authorsTable })
     .from(postsTable)
     .innerJoin(authorsTable, eq(postsTable.authorId, authorsTable.id))
-    .where(lte(postsTable.publishedAt, new Date()))
+    .where(
+      and(
+        lte(postsTable.publishedAt, new Date()),
+        eq(postsTable.status, "published"),
+      ),
+    )
     .orderBy(desc(postsTable.publishedAt))
     .limit(1);
   if (!row) {
@@ -196,7 +204,12 @@ router.get("/posts/:slug", async (req, res): Promise<void> => {
     .select({ post: postsTable, author: authorsTable })
     .from(postsTable)
     .innerJoin(authorsTable, eq(postsTable.authorId, authorsTable.id))
-    .where(eq(postsTable.slug, parsed.data.slug));
+    .where(
+      and(
+        eq(postsTable.slug, parsed.data.slug),
+        eq(postsTable.status, "published"),
+      ),
+    );
   if (!row) {
     res.status(404).json({ error: "Post not found" });
     return;
@@ -214,7 +227,12 @@ router.post("/posts/:slug/like", async (req, res): Promise<void> => {
   const [row] = await db
     .select({ id: postsTable.id })
     .from(postsTable)
-    .where(eq(postsTable.slug, parsed.data.slug));
+    .where(
+      and(
+        eq(postsTable.slug, parsed.data.slug),
+        eq(postsTable.status, "published"),
+      ),
+    );
   if (!row) {
     res.status(404).json({ error: "Post not found" });
     return;
@@ -233,7 +251,12 @@ router.post("/posts/:slug/like", async (req, res): Promise<void> => {
       const [u] = await tx
         .update(postsTable)
         .set({ likeCount: sql`${postsTable.likeCount} + 1` })
-        .where(eq(postsTable.slug, parsed.data.slug))
+        .where(
+          and(
+            eq(postsTable.slug, parsed.data.slug),
+            eq(postsTable.status, "published"),
+          ),
+        )
         .returning();
       updated = u;
     });

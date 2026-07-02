@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import { db, pool, postsTable, authorsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { translatePostToEn } from "./translate.js";
+import { auditPost } from "./content-audit.js";
 
 const MONTHS_IT = [
   "gennaio",
@@ -150,10 +151,16 @@ function contentHash(s: string): string {
 }
 
 
-/** Returns slugs whose audio was cleared because content changed (or was new). */
+export interface PublishFromClustersResult {
+  /** Slugs whose audio was cleared because content changed (or was new). */
+  audioCleared: string[];
+  /** Slugs flagged by the content audit and kept/moved to "draft" status. */
+  flagged: string[];
+}
+
 export async function publishFromClusters(
   clustersPath?: string
-): Promise<string[]> {
+): Promise<PublishFromClustersResult> {
   const root = resolve(process.cwd(), "..");
   const filePath =
     clustersPath ??
@@ -163,7 +170,7 @@ export async function publishFromClusters(
     console.warn(
       `[publish-from-clusters] File non trovato: ${filePath} — skip`
     );
-    return [];
+    return { audioCleared: [], flagged: [] };
   }
 
   const markdown = readFileSync(filePath, "utf8");
@@ -171,13 +178,14 @@ export async function publishFromClusters(
 
   if (clusters.length === 0) {
     console.log("[publish-from-clusters] Nessun cluster trovato — skip");
-    return [];
+    return { audioCleared: [], flagged: [] };
   }
 
   const authorId = await getFirstAuthorId();
   let published = 0;
   let skipped = 0;
   const audioCleared: string[] = [];
+  const flagged: string[] = [];
 
   for (const cluster of clusters) {
     const slug = `recap-${cluster.date}`;
@@ -213,9 +221,19 @@ export async function publishFromClusters(
       }
     }
 
+    const audit = auditPost({ title, excerpt, content });
+    const status = audit.flagged ? "draft" : "published";
+    if (audit.flagged) {
+      flagged.push(slug);
+      console.warn(
+        `[publish-from-clusters] ⚠ AUDIT: ${slug} contiene termini vietati (${audit.matches.join(", ")}) — messo in stato draft invece di essere pubblicato`
+      );
+    }
+
     const conflictSet: Record<string, unknown> = {
       title, excerpt, content, coverImageUrl, readingMinutes,
       tags: ["recap", "bikerlink", "daily"],
+      status,
     };
     if (contentChanged) {
       conflictSet["audioUrl"] = null;
@@ -240,6 +258,7 @@ export async function publishFromClusters(
         publishedAt: new Date(`${cluster.date}T23:30:00+02:00`),
         readingMinutes,
         featured: 0,
+        status,
         titleEn: translationResult?.titleEn ?? null,
         excerptEn: translationResult?.excerptEn ?? null,
         bodyEn: translationResult?.bodyEn ?? null,
@@ -259,9 +278,10 @@ export async function publishFromClusters(
   }
 
   console.log(
-    `[publish-from-clusters] done — aggiornati: ${published}, invariati: ${skipped}`
+    `[publish-from-clusters] done — aggiornati: ${published}, invariati: ${skipped}, ` +
+    `segnalati dall'audit: ${flagged.length}`
   );
-  return audioCleared;
+  return { audioCleared, flagged };
 }
 
 if (

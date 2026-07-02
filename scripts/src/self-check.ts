@@ -21,7 +21,7 @@
  *   - SELF_CHECK_DAYS (opzionale, default 7)
  */
 import { pool, db, postsTable } from "@workspace/db";
-import { gte } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 
 const PROD_URL   = process.env["PROD_URL"] ?? "https://bikerlink-blog.replit.app";
 const SEED_TOKEN = process.env["SEED_TOKEN"];
@@ -109,6 +109,7 @@ function devPostToSeedPayload(p: DevPost): Record<string, unknown> {
     location:         p.location,
     bike:             p.bike,
     daily_maxim:      p.dailyMaxim,
+    status:           p.status,
   };
 }
 
@@ -180,12 +181,20 @@ async function main() {
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - DAYS);
 
+  // I post in "draft" (bloccati dall'audit contenuti) non vanno mai
+  // sincronizzati in produzione: restano solo nel DB dev finché non
+  // vengono corretti manualmente.
   const recentPosts = await db
     .select()
     .from(postsTable)
-    .where(gte(postsTable.publishedAt, since));
+    .where(
+      and(
+        gte(postsTable.publishedAt, since),
+        eq(postsTable.status, "published"),
+      ),
+    );
 
-  console.log(`[self-check] ${recentPosts.length} post recenti nel DB dev`);
+  console.log(`[self-check] ${recentPosts.length} post recenti (pubblicati) nel DB dev`);
 
   const gaps: Array<{ gap: Gap; dev: DevPost }> = [];
   for (const dev of recentPosts) {

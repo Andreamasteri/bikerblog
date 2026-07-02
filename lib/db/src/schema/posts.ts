@@ -32,6 +32,12 @@ export const postsTable = pgTable("posts", {
   titleEn: text("title_en"),
   excerptEn: text("excerpt_en"),
   bodyEn: text("body_en"),
+  /**
+   * "published" (default) o "draft". I post in "draft" non sono mai
+   * visibili sulle route pubbliche — usato dall'audit automatico dei
+   * contenuti per bloccare la pubblicazione di post con termini vietati.
+   */
+  status: text("status").notNull().default("published"),
 });
 
 export type PostRow = typeof postsTable.$inferSelect;

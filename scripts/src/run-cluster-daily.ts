@@ -371,19 +371,11 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
   const stepStart = Date.now();
   console.log("[cluster-daily] step 3: pubblicazione post cluster");
   const postsBefore = await countPosts();
+  let clusterAuditFlagged: string[] = [];
 
   try {
-    await publishFromClusters();
-    const postsAfter = await countPosts();
-    report.addStep({
-      step: 3,
-      name: "cluster posts publish",
-      status: "ok",
-      duration_ms: Date.now() - stepStart,
-      posts_published: Math.max(0, postsAfter - postsBefore),
-      errors: [],
-      warnings: [],
-    });
+    const result = await publishFromClusters();
+    clusterAuditFlagged = result.flagged;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error(
@@ -400,6 +392,23 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
       warnings: [],
     });
   }
+
+  const postsAfter = await countPosts();
+  const step3Warnings = clusterAuditFlagged.map(
+    (slug) => `AUDIT: ${slug} contiene termini vietati — messo in stato draft`
+  );
+  if (step3Warnings.length > 0) {
+    criticalWarnings.push(`step 3 (cluster posts publish): ${step3Warnings.join("; ")}`);
+  }
+  report.addStep({
+    step: 3,
+    name: "cluster posts publish",
+    status: step3Warnings.length > 0 ? "warn" : "ok",
+    duration_ms: Date.now() - stepStart,
+    posts_published: Math.max(0, postsAfter - postsBefore),
+    errors: [],
+    warnings: step3Warnings,
+  });
 }
 
 // ── Step 3.5: auto-fetch attività BikerLink dal DB live ───────────────────────
@@ -896,6 +905,39 @@ let diaryPostCreatedThisRun = false;
       duration_ms: Date.now() - stepStart,
       errors: [],
       warnings,
+    });
+  }
+}
+
+// ── Step 8: riepilogo audit contenuti ────────────────────────────────────────
+// Segnala tutti i post attualmente in stato "draft" (bloccati dall'audit
+// automatico dei termini vietati) così restano visibili nel report anche se
+// sono stati creati da uno step lanciato come sottoprocesso (diary:generate).
+
+{
+  const stepStart = Date.now();
+  const { db: d3, postsTable: pt3 } = await import("@workspace/db");
+  const { eq: eq3 } = await import("drizzle-orm");
+  const draftRows = await d3
+    .select({ slug: pt3.slug })
+    .from(pt3)
+    .where(eq3(pt3.status, "draft"));
+
+  if (draftRows.length > 0) {
+    const draftSlugs = draftRows.map((r) => r.slug);
+    console.warn(
+      `[cluster-daily] step 8: ⚠ ${draftSlugs.length} post in stato draft (bloccati dall'audit contenuti): ${draftSlugs.join(", ")}`
+    );
+    criticalWarnings.push(
+      `step 8 (content audit summary): ${draftSlugs.length} post in draft (${draftSlugs.join(", ")})`
+    );
+    report.addStep({
+      step: 8,
+      name: "content audit summary",
+      status: "warn",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: draftSlugs.map((slug) => `${slug} è in draft — richiede revisione manuale prima della pubblicazione`),
     });
   }
 }
