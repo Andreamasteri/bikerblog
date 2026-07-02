@@ -19,7 +19,21 @@ import * as readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { horusChat, type HorusMessage } from "./horus-client.js";
 
-const history: HorusMessage[] = [];
+// Il modello bikerlink:latest ha un system prompt di base orientato a
+// BikerLink/BikerBlog (usato per diario, traduzioni, recap). In chat libera
+// questo lo porta a ricondurre ogni argomento a BikerLink anche quando non
+// c'entra. Questo override chiede esplicitamente di comportarsi come
+// assistente generico, salvo che l'utente non parli lui stesso di BikerLink.
+const CHAT_SYSTEM_PROMPT: HorusMessage = {
+  role: "system",
+  content:
+    "Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. " +
+    "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
+    "NON riportare la conversazione su BikerLink, sviluppo software, moto o sul blog a meno che sia l'utente stesso a parlarne esplicitamente. " +
+    "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink.",
+};
+
+const history: HorusMessage[] = [CHAT_SYSTEM_PROMPT];
 
 function checkEnv(): void {
   if (!process.env["HORUS_OLLAMA_URL"]) {
@@ -53,6 +67,7 @@ async function main(): Promise<void> {
 
     if (userInput === "/reset") {
       history.length = 0;
+      history.push(CHAT_SYSTEM_PROMPT);
       console.log("↺ Cronologia svuotata.\n");
       continue;
     }
