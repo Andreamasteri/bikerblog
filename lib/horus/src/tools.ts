@@ -39,6 +39,16 @@
  *  - remember_note — salva una nota permanente in inbox/horus-memory.md, decisa
  *                     autonomamente dal modello quando ritiene qualcosa degno di
  *                     essere ricordato tra una sessione e l'altra
+ *  - read_blog     — legge i contenuti PUBBLICATI di BikerBlog (non il codice)
+ *                     tramite gli endpoint pubblici e di sola lettura
+ *                     dell'api-server (GET /posts, /posts/:slug,
+ *                     /posts/featured, /posts/popular). Usato da Horus per
+ *                     studiare stile e argomenti già trattati prima di
+ *                     proporre bozze di nuovi post. Nessuna scrittura né
+ *                     pubblicazione: solo lettura di ciò che è già visibile
+ *                     pubblicamente sul sito. Nessun nuovo secret richiesto
+ *                     (endpoint già pubblici); opzionale API_BASE_URL per
+ *                     puntare a un'istanza diversa da quella locale.
  *  - typecheck_repo, lint_repo, search_code, git_log — analisi statica REALE
  *                     del codice (non solo lettura file), delegata a un
  *                     servizio dedicato che gira su TC (mai su Replit o sul
@@ -165,6 +175,46 @@ const BASE_HORUS_TOOLS: HorusToolSpec[] = [
           note: { type: "string", description: "Il testo della nota da ricordare, conciso e chiaro" },
         },
         required: ["note"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_blog",
+      description:
+        "Legge i contenuti GIA' PUBBLICATI di BikerBlog (questo stesso sito), non il codice sorgente. Usalo per studiare stile, argomenti e categorie già trattate prima di proporre a parole una bozza di nuovo post, o per rispondere a domande sui contenuti del blog. Sola lettura: non puoi creare, modificare o pubblicare nulla con questo tool.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            description:
+              '"list" per elencare i post pubblicati (con filtri opzionali), "get" per leggere il dettaglio di un post per slug, "featured" per il post in evidenza in home, "popular" per i post più apprezzati.',
+            enum: ["list", "get", "featured", "popular"],
+          },
+          slug: {
+            type: "string",
+            description: 'Slug del post da leggere. Richiesto solo per action="get".',
+          },
+          tag: {
+            type: "string",
+            description: 'Filtra per tag esatto. Usabile solo con action="list".',
+          },
+          category: {
+            type: "string",
+            description: 'Filtra per categoria esatta. Usabile solo con action="list".',
+          },
+          search: {
+            type: "string",
+            description: 'Cerca un testo in titolo/estratto/corpo. Usabile solo con action="list".',
+          },
+          limit: {
+            type: "number",
+            description: 'Numero massimo di post da restituire (default 5, max 20). Usabile solo con action="popular".',
+          },
+        },
+        required: ["action"],
       },
     },
   },
@@ -579,6 +629,160 @@ function rememberNote(note: string, agentName: string): string {
   return `Nota salvata in memoria permanente: "${note}"`;
 }
 
+/** Base URL dell'api-server BikerBlog. Nessun nuovo secret richiesto: gli
+ * endpoint letti sono già pubblici. Configurabile con API_BASE_URL se serve
+ * puntare a un'istanza diversa da quella locale (default già usato altrove
+ * nel progetto, vedi scripts/src/podcast-generate.ts). */
+const BLOG_API_BASE = process.env["API_BASE_URL"] ?? "http://localhost:8080";
+
+interface BlogPostSummary {
+  slug?: string;
+  title?: string;
+  excerpt?: string;
+  content?: string;
+  category?: string;
+  tags?: string[];
+  author?: { name?: string };
+  publishedAt?: string;
+  likeCount?: number;
+  commentCount?: number;
+}
+
+const READ_BLOG_BODY_TRUNCATE_LEN = 4000;
+
+function truncateBody(content: string | undefined): string {
+  if (!content) return "";
+  return content.length > READ_BLOG_BODY_TRUNCATE_LEN
+    ? `${content.slice(0, READ_BLOG_BODY_TRUNCATE_LEN)}\n\n[... corpo troncato, ${content.length} caratteri totali]`
+    : content;
+}
+
+function formatBlogPostSummary(p: BlogPostSummary): string {
+  return `- "${p.title ?? "(senza titolo)"}" (slug: ${p.slug ?? "?"}, categoria: ${p.category ?? "?"}, autore: ${
+    p.author?.name ?? "?"
+  }, pubblicato: ${p.publishedAt ?? "?"}, tag: ${(p.tags ?? []).join(", ") || "nessuno"})\n  Estratto: ${
+    p.excerpt ?? ""
+  }`;
+}
+
+function formatBlogPostDetail(p: BlogPostSummary): string {
+  return (
+    `Titolo: ${p.title ?? "(senza titolo)"}\n` +
+    `Slug: ${p.slug ?? "?"}\n` +
+    `Categoria: ${p.category ?? "?"}\n` +
+    `Tag: ${(p.tags ?? []).join(", ") || "nessuno"}\n` +
+    `Autore: ${p.author?.name ?? "?"}\n` +
+    `Pubblicato: ${p.publishedAt ?? "?"}\n` +
+    `Like: ${p.likeCount ?? 0} — Commenti: ${p.commentCount ?? 0}\n` +
+    `Estratto: ${p.excerpt ?? ""}\n\n` +
+    `Corpo:\n${truncateBody(p.content)}`
+  );
+}
+
+async function fetchBlogApi(path: string): Promise<
+  { ok: true; data: unknown } | { ok: false; message: string }
+> {
+  let res: Response;
+  try {
+    res = await fetch(`${BLOG_API_BASE}/api${path}`, {
+      headers: { Accept: "application/json" },
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Impossibile contattare l'API di BikerBlog (${BLOG_API_BASE}): ${
+        err instanceof Error ? err.message : String(err)
+      }.`,
+    };
+  }
+
+  if (res.status === 404) {
+    return { ok: false, message: "not_found" };
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      message: `L'API di BikerBlog ha risposto con errore (HTTP ${res.status}) per "${path}".`,
+    };
+  }
+
+  try {
+    return { ok: true, data: await res.json() };
+  } catch {
+    return {
+      ok: false,
+      message: `Risposta non valida (non JSON) dall'API di BikerBlog per "${path}".`,
+    };
+  }
+}
+
+async function readBlog(args: Record<string, unknown>): Promise<string> {
+  const action = String(args.action ?? "").trim().toLowerCase();
+
+  if (action === "list") {
+    const params = new URLSearchParams();
+    if (typeof args.tag === "string" && args.tag.trim()) params.set("tag", args.tag.trim());
+    if (typeof args.category === "string" && args.category.trim())
+      params.set("category", args.category.trim());
+    if (typeof args.search === "string" && args.search.trim())
+      params.set("search", args.search.trim());
+    const qs = params.toString();
+    const result = await fetchBlogApi(`/posts${qs ? `?${qs}` : ""}`);
+    if (!result.ok) {
+      return result.message === "not_found"
+        ? "Nessun post trovato con questi filtri."
+        : result.message;
+    }
+    const posts = result.data as BlogPostSummary[];
+    if (!Array.isArray(posts) || posts.length === 0) {
+      return "Nessun post pubblicato trovato con questi filtri.";
+    }
+    return `${posts.length} post trovati:\n\n${posts.map(formatBlogPostSummary).join("\n\n")}`;
+  }
+
+  if (action === "get") {
+    const slug = String(args.slug ?? "").trim();
+    if (!slug) {
+      return 'action="get" richiede uno slug (es. slug: "il-mio-post").';
+    }
+    const result = await fetchBlogApi(`/posts/${encodeURIComponent(slug)}`);
+    if (!result.ok) {
+      return result.message === "not_found"
+        ? `Nessun post pubblicato trovato con slug "${slug}".`
+        : result.message;
+    }
+    return formatBlogPostDetail(result.data as BlogPostSummary);
+  }
+
+  if (action === "featured") {
+    const result = await fetchBlogApi("/posts/featured");
+    if (!result.ok) {
+      return result.message === "not_found"
+        ? "Non c'è ancora nessun post in evidenza (nessun post pubblicato)."
+        : result.message;
+    }
+    return `Post in evidenza (home):\n\n${formatBlogPostDetail(result.data as BlogPostSummary)}`;
+  }
+
+  if (action === "popular") {
+    const limit = typeof args.limit === "number" ? args.limit : undefined;
+    const qs = limit ? `?limit=${encodeURIComponent(String(limit))}` : "";
+    const result = await fetchBlogApi(`/posts/popular${qs}`);
+    if (!result.ok) {
+      return result.message === "not_found"
+        ? "Nessun post popolare trovato."
+        : result.message;
+    }
+    const posts = result.data as BlogPostSummary[];
+    if (!Array.isArray(posts) || posts.length === 0) {
+      return "Nessun post popolare trovato.";
+    }
+    return `${posts.length} post più apprezzati:\n\n${posts.map(formatBlogPostSummary).join("\n\n")}`;
+  }
+
+  return `Azione "${action}" sconosciuta per read_blog. Valori validi: "list", "get", "featured", "popular".`;
+}
+
 interface AnalysisServiceResponse {
   result?: string;
   error?: string;
@@ -727,6 +931,8 @@ export async function executeHorusTool(
         return await githubRead(String(args.repo ?? ""), String(args.path ?? ""));
       case "remember_note":
         return rememberNote(String(args.note ?? ""), agentName);
+      case "read_blog":
+        return await readBlog(args);
       case "typecheck_repo":
         return await typecheckRepoTool(String(args.repo ?? ""), signal);
       case "lint_repo":
