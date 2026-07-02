@@ -45,6 +45,17 @@ const ARCHITECT_MODES = {
   evaluate: "Valutazione: analizza lo stato o l'implementazione esistente descritta, evidenziando qualità, rischi, gap e possibili miglioramenti.",
 };
 
+// --- Config del tool "sonar_scan" (analisi SonarQube reale, non tsc/eslint) ---
+// SonarQube gira anch'esso su TC (Docker), fuori dalla portata di Replit.
+// Come per /architect, questo endpoint può richiedere molto più di 100s
+// (scanner + attesa del Compute Engine task), quindi usa lo stesso pattern
+// di heartbeat per non far scadere il tunnel Cloudflare.
+const SONARQUBE_URL = (process.env.SONARQUBE_URL || "http://localhost:9000").replace(/\/$/, "");
+const SONARQUBE_TOKEN = process.env.SONARQUBE_TOKEN;
+const SONAR_SCANNER_TIMEOUT_MS = Number(process.env.SONAR_SCANNER_TIMEOUT_MS) || 15 * 60 * 1000; // 15 minuti
+const SONAR_TASK_TIMEOUT_MS = Number(process.env.SONAR_TASK_TIMEOUT_MS) || 10 * 60 * 1000; // 10 minuti
+const SONAR_TASK_POLL_INTERVAL_MS = 3000;
+
 const REPOS = {
   bikerlink: {
     repo: "Andreamasteri/Bikerlink",
@@ -396,7 +407,7 @@ async function callArchitectModel(systemPrompt, userPrompt, timeoutMs) {
   return truncate(content.trim());
 }
 
-async function architect({ repoKey, mode, task, paths }) {
+async function architect({ repoKey, mode, task, paths, extraContext }) {
   const modeDesc = ARCHITECT_MODES[mode];
   const dir = await ensureRepo(repoKey);
   const fileContext = gatherArchitectContext(dir, paths);
@@ -410,18 +421,186 @@ async function architect({ repoKey, mode, task, paths }) {
   const systemPrompt =
     "Sei un architetto software senior che analizza codice reale per conto di un altro sviluppatore/agente. " +
     "Non scrivi né modifichi codice, non esegui comandi: produci solo un report scritto, chiaro e concreto. " +
-    "Basati sui fatti forniti (file, commit recenti, compito); se ti manca contesto essenziale, dillo esplicitamente " +
-    "invece di inventare dettagli sul codice che non hai visto.";
+    "Basati sui fatti forniti (file, commit recenti, compito, eventuali esiti di altre analisi come SonarQube); " +
+    "se ti manca contesto essenziale, dillo esplicitamente invece di inventare dettagli sul codice che non hai visto.";
+  const trimmedExtraContext = typeof extraContext === "string" ? extraContext.trim().slice(0, ARCHITECT_MAX_CONTEXT_CHARS) : "";
   const userPrompt =
     `Repo: ${repoKey}\n` +
     `Modalità richiesta: ${mode} — ${modeDesc}\n\n` +
     `Compito/domanda:\n${task}\n\n` +
     `Commit recenti:\n${recentLog}\n\n` +
     `File/cartelle di contesto forniti:\n${fileContext || "(nessuno fornito)"}\n\n` +
+    `Contesto aggiuntivo da altre analisi (es. sonar_scan/typecheck/lint), se fornito:\n${trimmedExtraContext || "(nessuno fornito)"}\n\n` +
     "Rispondi con un report strutturato (usa un breve elenco puntato o step numerati dove utile), " +
     "concreto e diretto, coerente con la modalità richiesta.";
 
   return callArchitectModel(systemPrompt, userPrompt, ARCHITECT_TIMEOUT_MS);
+}
+
+function isSonarConfigured() {
+  return Boolean(SONARQUBE_TOKEN);
+}
+
+function sonarAuthHeader() {
+  return `Basic ${Buffer.from(`${SONARQUBE_TOKEN}:`).toString("base64")}`;
+}
+
+async function sonarApiGet(pathAndQuery) {
+  const res = await fetch(`${SONARQUBE_URL}${pathAndQuery}`, {
+    headers: { Authorization: sonarAuthHeader() },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`SonarQube API ${pathAndQuery} ha risposto ${res.status}: ${body.slice(0, 300)}`);
+  }
+  return res.json();
+}
+
+function extractCeTaskId(scannerOutput) {
+  const match = scannerOutput.match(/api\/ce\/task\?id=([\w-]+)/);
+  return match ? match[1] : undefined;
+}
+
+async function waitForSonarTask(taskId, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const data = await sonarApiGet(`/api/ce/task?id=${encodeURIComponent(taskId)}`);
+    const status = data && data.task && data.task.status;
+    if (status === "SUCCESS") return data.task;
+    if (status === "FAILED" || status === "CANCELED") {
+      throw new Error(`Analisi SonarQube ${String(status).toLowerCase()} per il task ${taskId}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, SONAR_TASK_POLL_INTERVAL_MS));
+  }
+  throw new Error(
+    `Timeout in attesa del completamento dell'analisi SonarQube (task ${taskId}) dopo ${timeoutMs / 1000}s.`
+  );
+}
+
+const SONAR_MEASURE_LABELS = {
+  duplicated_lines_density: "Duplicazione codice",
+  duplicated_blocks: "Blocchi duplicati",
+  sqale_index: "Debito tecnico (minuti stimati)",
+  sqale_debt_ratio: "Debt ratio",
+  sqale_rating: "Rating manutenibilità",
+};
+
+function formatSonarMeasures(measuresData) {
+  const measures = (measuresData && measuresData.component && measuresData.component.measures) || [];
+  if (measures.length === 0) return "(nessuna misura disponibile)";
+  return measures
+    .map((m) => `- ${SONAR_MEASURE_LABELS[m.metric] || m.metric}: ${m.value}`)
+    .join("\n");
+}
+
+function formatSonarResult(repoKey, projectKey, issuesData, hotspotsData, measuresData) {
+  const issues = (issuesData && issuesData.issues) || [];
+  const hotspots = (hotspotsData && hotspotsData.hotspots) || [];
+  const measuresSummary = formatSonarMeasures(measuresData);
+
+  if (issues.length === 0 && hotspots.length === 0) {
+    return (
+      `SonarQube su ${repoKey}: nessun problema aperto trovato (progetto "${projectKey}").\n\n` +
+      `Duplicazioni e debito tecnico:\n${measuresSummary}`
+    );
+  }
+
+  const bySeverity = {};
+  for (const issue of issues) {
+    const key = `${issue.type} [${issue.severity}]`;
+    bySeverity[key] = (bySeverity[key] || 0) + 1;
+  }
+  const summaryLines = Object.entries(bySeverity)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => `- ${label}: ${count}`);
+
+  const topIssues = issues
+    .slice(0, 30)
+    .map(
+      (issue) =>
+        `[${issue.type}/${issue.severity}] ${String(issue.component || "").split(":").pop()}:${issue.line ?? "?"} — ${issue.message}`
+    );
+
+  const hotspotLines = hotspots
+    .slice(0, 20)
+    .map(
+      (h) =>
+        `[SECURITY HOTSPOT/${h.vulnerabilityProbability}] ${String(h.component || "").split(":").pop()}:${h.line ?? "?"} — ${h.message}`
+    );
+
+  const parts = [
+    `SonarQube su ${repoKey} (progetto "${projectKey}"): ${issues.length} problemi aperti, ${hotspots.length} security hotspot.`,
+    `Riepilogo per tipo/severità:\n${summaryLines.join("\n")}`,
+    `Duplicazioni e debito tecnico:\n${measuresSummary}`,
+    `Problemi principali (max 30):\n${topIssues.join("\n") || "(nessuno)"}`,
+  ];
+  if (hotspots.length > 0) {
+    parts.push(`Security hotspot (max 20):\n${hotspotLines.join("\n")}`);
+  }
+  return truncate(parts.join("\n\n"));
+}
+
+/**
+ * Lancia una vera scansione SonarQube (code smell, duplicazioni,
+ * vulnerabilità, security hotspot, debito tecnico) su uno dei repo — segnali
+ * più profondi di typecheckRepo/lintRepo, che si fermano a errori di tipo e
+ * regole di stile. L'analisi Sonar è asincrona (Compute Engine task): questa
+ * funzione lancia lo scanner, attende il completamento del task, poi legge
+ * gli issue trovati dalla Web API di SonarQube.
+ */
+async function sonarScan(repoKey) {
+  if (!isSonarConfigured()) {
+    return (
+      "SonarQube non configurato su questo servizio (manca SONARQUBE_TOKEN). " +
+      "Vedi README.md per il setup del server SonarQube su TC e la generazione del token."
+    );
+  }
+  const dir = await ensureRepo(repoKey);
+  const projectKey = `horus-${repoKey}`;
+  const scanRes = await run(
+    "sonar-scanner",
+    [
+      `-Dsonar.projectKey=${projectKey}`,
+      `-Dsonar.projectBaseDir=${dir}`,
+      `-Dsonar.host.url=${SONARQUBE_URL}`,
+      `-Dsonar.token=${SONARQUBE_TOKEN}`,
+      "-Dsonar.sources=.",
+    ],
+    dir,
+    SONAR_SCANNER_TIMEOUT_MS
+  );
+
+  const combinedOutput = `${scanRes.stdout}\n${scanRes.stderr}`;
+  if (scanRes.code === 127 || /command not found|not recognized as an internal/i.test(scanRes.stderr)) {
+    return (
+      "sonar-scanner non trovato su questa macchina (TC). Installa SonarScanner CLI e assicurati " +
+      "che sia disponibile nel PATH del processo che esegue questo servizio — vedi README.md."
+    );
+  }
+
+  const taskId = extractCeTaskId(combinedOutput);
+  if (scanRes.code !== 0 || !taskId) {
+    return `Scansione SonarQube fallita per ${repoKey} (exit code ${scanRes.code}):\n${truncate(combinedOutput.trim())}`;
+  }
+
+  await waitForSonarTask(taskId, SONAR_TASK_TIMEOUT_MS);
+
+  const SONAR_MEASURE_METRICS = [
+    "duplicated_lines_density",
+    "duplicated_blocks",
+    "sqale_index",
+    "sqale_debt_ratio",
+    "sqale_rating",
+  ];
+  const [issuesData, hotspotsData, measuresData] = await Promise.all([
+    sonarApiGet(`/api/issues/search?componentKeys=${encodeURIComponent(projectKey)}&resolved=false&ps=100`),
+    sonarApiGet(`/api/hotspots/search?projectKey=${encodeURIComponent(projectKey)}&ps=100`).catch(() => null),
+    sonarApiGet(
+      `/api/measures/component?component=${encodeURIComponent(projectKey)}&metricKeys=${SONAR_MEASURE_METRICS.join(",")}`
+    ).catch(() => null),
+  ]);
+
+  return formatSonarResult(repoKey, projectKey, issuesData, hotspotsData, measuresData);
 }
 
 const app = express();
@@ -493,7 +672,7 @@ app.post("/git-log", async (req, res) => {
 // (spazi bianchi, innocui per JSON.parse che ignora whitespace iniziale/
 // finale) mentre aspettiamo il risultato, poi chiudiamo con il JSON vero.
 app.post("/architect", (req, res) => {
-  const { repo, mode, task, paths } = req.body || {};
+  const { repo, mode, task, paths, extraContext } = req.body || {};
   if (!isValidRepoKey(repo)) return res.status(400).json({ error: "repo non valido" });
   if (!Object.prototype.hasOwnProperty.call(ARCHITECT_MODES, mode)) {
     return res.status(400).json({ error: 'mode non valido, usa "plan", "debug" o "evaluate"' });
@@ -509,6 +688,9 @@ app.post("/architect", (req, res) => {
   if (paths !== undefined && !Array.isArray(paths)) {
     return res.status(400).json({ error: "paths deve essere un array di stringhe" });
   }
+  if (extraContext !== undefined && typeof extraContext !== "string") {
+    return res.status(400).json({ error: "extraContext deve essere una stringa" });
+  }
 
   res.setHeader("Content-Type", "application/json");
   let finished = false;
@@ -516,7 +698,7 @@ app.post("/architect", (req, res) => {
     if (!finished) res.write(" ");
   }, 15_000);
 
-  withRepoLock(repo, () => architect({ repoKey: repo, mode, task, paths }))
+  withRepoLock(repo, () => architect({ repoKey: repo, mode, task, paths, extraContext }))
     .then((result) => {
       finished = true;
       clearInterval(heartbeat);
@@ -538,6 +720,42 @@ app.post("/architect", (req, res) => {
       res.statusCode = statusByKind[kind] || 500;
       res.end(JSON.stringify({ error: message, kind: kind || "unknown" }));
     });
+});
+
+// La scansione SonarQube (scanner + attesa del Compute Engine task) può
+// richiedere più di 100s, come /architect: stesso pattern di heartbeat per
+// non far scadere il tunnel Cloudflare durante l'attesa.
+app.post("/sonar", (req, res) => {
+  const { repo } = req.body || {};
+  if (!isValidRepoKey(repo)) return res.status(400).json({ error: "repo non valido" });
+
+  res.setHeader("Content-Type", "application/json");
+  let finished = false;
+  const heartbeat = setInterval(() => {
+    if (!finished) res.write(" ");
+  }, 15_000);
+
+  withRepoLock(repo, () => sonarScan(repo))
+    .then((result) => {
+      finished = true;
+      clearInterval(heartbeat);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ result }));
+    })
+    .catch((err) => {
+      finished = true;
+      clearInterval(heartbeat);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    });
+});
+
+// Permette al client (lib/horus/src/tools.ts) di sapere, senza avere accesso
+// diretto alle env var di TC, se SonarQube è configurato su questo servizio —
+// usato per nascondere il tool sonar_scan quando non è disponibile, invece
+// di esporlo sempre e fallire solo all'invocazione.
+app.get("/capabilities", (_req, res) => {
+  res.json({ sonarAvailable: isSonarConfigured() });
 });
 
 app.get("/health", (_req, res) => res.json({ ok: true }));

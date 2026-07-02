@@ -122,8 +122,12 @@ aggiornato con `git fetch` + `reset --hard`.
 - `POST /lint` `{ "repo": ... }`
 - `POST /search` `{ "repo": ..., "query": "testo o pattern" }` (usa `git grep`)
 - `POST /git-log` `{ "repo": ..., "limit": 10 }`
-- `POST /architect` `{ "repo": ..., "mode": "plan"|"debug"|"evaluate", "task": "...", "paths": ["src/foo.ts", "src/bar/"] }`
-  — vedi sezione dedicata sotto.
+- `POST /architect` `{ "repo": ..., "mode": "plan"|"debug"|"evaluate", "task": "...", "paths": ["src/foo.ts", "src/bar/"], "extraContext": "..." }`
+  — vedi sezione dedicata sotto. `extraContext` (opzionale) è pensato per
+  passare all'architetto l'output già ottenuto da un altro tool (tipicamente
+  `sonar_scan`) senza rieseguire quell'analisi.
+- `POST /sonar` `{ "repo": ... }` — vedi sezione dedicata sotto.
+- `GET /capabilities` — risponde `{ "sonarAvailable": true|false }`, usato da `lib/horus/src/tools.ts` per decidere se esporre `sonar_scan` al modello senza dover leggere le env var di TC (invisibili a Replit).
 - `GET /health`
 
 Tutti (tranne `/health`) richiedono l'header `X-Analysis-Gate-Token`.
@@ -207,3 +211,123 @@ generico errore di rete:
 Ogni risposta di errore di `/architect` include sia `error` (messaggio
 leggibile) sia `kind` (uno dei valori sopra), così script e log possono
 distinguere i casi senza fare pattern-matching sul testo.
+
+## `/sonar` — analisi SonarQube (code smell, duplicazioni, sicurezza, debito tecnico)
+
+A differenza di `/typecheck` e `/lint` (errori di tipo e regole di stile),
+`/sonar` lancia una vera scansione [SonarQube](https://www.sonarsource.com/products/sonarqube/)
+sul clone locale del repo richiesto e restituisce problemi che tsc/eslint non
+vedono: code smell, duplicazioni di codice, vulnerabilità, security hotspot e
+stima del debito tecnico.
+
+**SonarQube gira su TC, non su Replit** (Docker), come Ollama/SearXNG. Questo
+servizio (`horus-analysis`) si limita a lanciare lo scanner CLI contro il
+clone del repo e a leggere i risultati dalla Web API locale di SonarQube.
+
+### Versione consigliata
+
+**SonarQube Server 2026.1 LTA** (ultima Long Term Active al momento della
+stesura di questa guida — verifica se è uscita una patch più recente della
+stessa linea 2026.1.x prima di installare), immagine Docker Community Edition
+(gratuita): `sonarqube:2026-lta-community`.
+
+Requisiti:
+- JDK completo (non solo JRE) — l'immagine Docker ufficiale lo include già.
+- Java 21 o 25 supportati dalla 2026.1 LTA.
+- Almeno 2 GB di RAM liberi dedicati al container (SonarQube è pesante su
+  hardware CPU condiviso con Ollama; valuta di non far girare scansioni e
+  generazioni Ollama pesanti in contemporanea se TC ha risorse limitate).
+- `sonar-scanner` (SonarScanner CLI) installato **sulla stessa macchina/rete
+  raggiungibile da dove gira `horus-analysis`** e presente nel `PATH` del
+  processo che avvia `server.js` (es. via pm2). Scaricabile da
+  [docs.sonarsource.com](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/scanners/sonarscanner/).
+
+### Avvio del server SonarQube (Docker)
+
+```bash
+docker run -d --name sonarqube \
+  -p 9000:9000 \
+  -v sonarqube_data:/opt/sonarqube/data \
+  -v sonarqube_extensions:/opt/sonarqube/extensions \
+  -v sonarqube_logs:/opt/sonarqube/logs \
+  sonarqube:2026-lta-community
+```
+
+La prima volta impiega qualche minuto ad avviarsi. Verifica con
+`curl http://localhost:9000/api/system/status` (deve rispondere
+`{"status":"UP"}`).
+
+### Generare il token di analisi
+
+1. Apri `http://localhost:9000` (o l'hostname/porta che hai esposto), login
+   iniziale `admin`/`admin` (richiede cambio password al primo accesso).
+2. Vai su **My Account → Security → Generate Tokens**, tipo "Global Analysis
+   Token" (o un token di progetto se preferisci limitarlo per repo).
+3. Copia il token: ti servirà solo come variabile d'ambiente del servizio
+   `horus-analysis`, non va mai messo nel codice.
+
+### Variabili d'ambiente aggiuntive per `horus-analysis`
+
+Da aggiungere allo stesso `.env` del punto 3 sopra:
+
+```bash
+SONARQUBE_URL=http://localhost:9000   # default se non impostata
+SONARQUBE_TOKEN=<il-token-generato-sopra>
+```
+
+Se `SONARQUBE_TOKEN` non è impostato, `sonar_scan` **non compare nemmeno
+nella lista dei tool** che Horus/Bowie vedono: `lib/horus/src/tools.ts`
+interroga `GET /capabilities` (cache 60s, timeout 3s) e toglie il tool se
+`sonarAvailable` è `false` o il servizio non risponde in tempo. Se qualcuno
+invoca comunque `/sonar` durante una finestra di configurazione parziale
+(cache scaduta, richiesta diretta, ecc.), l'endpoint risponde con un
+messaggio chiaro ("SonarQube non configurato") invece di un errore generico.
+
+Timeout opzionali (default già ragionevoli):
+
+```bash
+SONAR_SCANNER_TIMEOUT_MS=900000   # 15 minuti, esecuzione dello scanner CLI
+SONAR_TASK_TIMEOUT_MS=600000      # 10 minuti, attesa del completamento lato server (Compute Engine task)
+```
+
+### Come funziona `/sonar`
+
+L'analisi SonarQube è **asincrona**: `sonar-scanner` carica i risultati grezzi
+e il server li elabora in background (un "Compute Engine task"). L'endpoint:
+
+1. Lancia `sonar-scanner` contro il clone persistente del repo richiesto
+   (`-Dsonar.projectKey=horus-<repo>`, `-Dsonar.host.url`, `-Dsonar.token`).
+2. Estrae l'URL del Compute Engine task dall'output dello scanner e fa
+   polling di `GET /api/ce/task?id=...` finché non risulta `SUCCESS` (o
+   fallisce con un errore esplicito su `FAILED`/timeout).
+3. Una volta completata, interroga in parallelo `GET /api/issues/search`,
+   `GET /api/hotspots/search` e `GET /api/measures/component`
+   (`duplicated_lines_density`, `duplicated_blocks`, `sqale_index`,
+   `sqale_debt_ratio`, `sqale_rating`) per il progetto e restituisce un
+   riassunto testuale (conteggio per tipo/severità, duplicazioni e debito
+   tecnico, i problemi/hotspot principali), simile a come `/typecheck` e
+   `/lint` formattano oggi i loro risultati.
+
+Come `/architect`, la richiesta HTTP verso questo endpoint passa dal tunnel
+Cloudflare: l'handler scrive heartbeat (spazi bianchi) mentre attende scanner
+e task, per non far scadere la connessione durante un'analisi lunga.
+
+Esempio:
+
+```bash
+curl -X POST https://analysis.tuodominio.com/sonar \
+  -H "Content-Type: application/json" \
+  -H "X-Analysis-Gate-Token: <token>" \
+  -d '{"repo": "bikerblog"}'
+```
+
+### Collaborazione con `/architect`
+
+`sonar_scan` e `architect` sono pensati per essere incatenati da Horus/Bowie:
+prima si lancia `sonar_scan` su un repo, poi — se l'utente chiede un piano di
+fix — gli esiti rilevanti vengono passati ad `architect` nel campo
+`extraContext` invece di rieseguire l'analisi da zero. Questo è responsabilità
+del modello/prompt lato `lib/horus/src/tools.ts`, non di questo servizio:
+`/sonar` e `/architect` restano endpoint indipendenti, `extraContext` è solo
+un campo di testo libero che l'endpoint `/architect` inserisce nel prompt del
+modello.

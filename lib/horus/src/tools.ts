@@ -320,7 +320,10 @@ const ANALYSIS_TOOL_SPECS: HorusToolSpec[] = [
         "A differenza di typecheck_repo/lint_repo/search_code/git_log (segnali grezzi), questo tool ragiona sul contesto che gli fornisci " +
         "(file/cartelle rilevanti + commit recenti) e restituisce un report scritto strutturato. Usalo per richieste tipo \"come lo implementeresti\", " +
         "\"qual è la causa di questo bug\", \"valuta questa implementazione\" — non per typo o errori sintattici semplici, per quelli usa gli altri tool. " +
-        "Solo analisi: non scrive, non modifica, non esegue codice. Può richiedere alcuni minuti su hardware CPU.",
+        "Solo analisi: non scrive, non modifica, non esegue codice. Può richiedere alcuni minuti su hardware CPU. " +
+        "Collabora con sonar_scan: se hai già girato sonar_scan sullo stesso repo in questa conversazione e l'utente chiede di pianificare o " +
+        "debuggare un problema di qualità del codice (debito tecnico, duplicazioni, code smell, hotspot di sicurezza), incolla gli esiti " +
+        "rilevanti di sonar_scan nel campo extraContext invece di rilanciare l'analisi da zero.",
       parameters: {
         type: "object",
         properties: {
@@ -345,8 +348,37 @@ const ANALYSIS_TOOL_SPECS: HorusToolSpec[] = [
               "Percorsi di file o cartelle nel repo rilevanti per l'analisi (fino a 8), usati come contesto grezzo. Opzionale ma consigliato.",
             items: { type: "string" },
           },
+          extraContext: {
+            type: "string",
+            description:
+              "Contesto aggiuntivo già raccolto da altri tool nella stessa conversazione (es. l'output di sonar_scan, typecheck_repo o lint_repo) " +
+              "da passare all'architetto come input, invece di rieseguire quell'analisi. Opzionale.",
+          },
         },
         required: ["repo", "mode", "task"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "sonar_scan",
+      description:
+        "Lancia una vera scansione SonarQube su uno dei repo del progetto e restituisce bug, code smell, vulnerabilità, security hotspot e " +
+        "duplicazioni trovati — segnali di qualità/debito tecnico più profondi di quelli di typecheck_repo/lint_repo (che coprono solo errori " +
+        "di tipo e regole di stile). Usalo quando l'utente chiede un'analisi di qualità del codice più approfondita, duplicazioni, problemi " +
+        "di sicurezza o debito tecnico. Può richiedere alcuni minuti (scanner + attesa dell'analisi lato server). Dopo una scansione, se " +
+        "l'utente chiede un piano di fix, passa gli esiti rilevanti al tool architect (campo extraContext) invece di ripetere l'analisi.",
+      parameters: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: 'Quale repo analizzare: "bikerlink", "bikerblog" o "bikerweb".',
+            enum: ["bikerlink", "bikerblog", "bikerweb"],
+          },
+        },
+        required: ["repo"],
       },
     },
   },
@@ -356,10 +388,51 @@ function isAnalysisServiceConfigured(): boolean {
   return Boolean(process.env["HORUS_ANALYSIS_URL"] && process.env["ANALYSIS_GATE_TOKEN"]);
 }
 
-export function getHorusTools(): HorusToolSpec[] {
-  return isAnalysisServiceConfigured()
-    ? [...BASE_HORUS_TOOLS, ...ANALYSIS_TOOL_SPECS]
-    : BASE_HORUS_TOOLS;
+// SONARQUBE_TOKEN vive solo lato servizio su TC — invisibile a Replit — quindi
+// non possiamo decidere localmente se sonar_scan va mostrato. Interroghiamo
+// /capabilities per saperlo, con una cache breve (60s) per non aggiungere una
+// richiesta di rete a ogni turno di chat, e un timeout stretto: se il
+// servizio non risponde in tempo, il tool resta nascosto per quel turno
+// invece di rallentare la chat.
+const SONAR_CAPABILITY_CACHE_MS = 60_000;
+const SONAR_CAPABILITY_TIMEOUT_MS = 3_000;
+let sonarCapabilityCache: { value: boolean; expiresAt: number } | undefined;
+
+async function isSonarAvailable(): Promise<boolean> {
+  const now = Date.now();
+  if (sonarCapabilityCache && sonarCapabilityCache.expiresAt > now) {
+    return sonarCapabilityCache.value;
+  }
+  const baseUrl = process.env["HORUS_ANALYSIS_URL"];
+  const gateToken = process.env["ANALYSIS_GATE_TOKEN"];
+  if (!baseUrl || !gateToken) return false;
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/capabilities`, {
+      headers: { "X-Analysis-Gate-Token": gateToken },
+      signal: AbortSignal.timeout(SONAR_CAPABILITY_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`capabilities check fallito (HTTP ${res.status})`);
+    const data = (await res.json()) as { sonarAvailable?: boolean };
+    const value = Boolean(data.sonarAvailable);
+    sonarCapabilityCache = { value, expiresAt: now + SONAR_CAPABILITY_CACHE_MS };
+    return value;
+  } catch {
+    // Servizio irraggiungibile o capabilities non implementato: non mostrare
+    // il tool piuttosto che rischiare un'invocazione destinata a fallire.
+    sonarCapabilityCache = { value: false, expiresAt: now + SONAR_CAPABILITY_CACHE_MS };
+    return false;
+  }
+}
+
+const SONAR_SCAN_TOOL_NAME = "sonar_scan";
+
+export async function getHorusTools(): Promise<HorusToolSpec[]> {
+  if (!isAnalysisServiceConfigured()) return BASE_HORUS_TOOLS;
+  const sonarAvailable = await isSonarAvailable();
+  const analysisTools = sonarAvailable
+    ? ANALYSIS_TOOL_SPECS
+    : ANALYSIS_TOOL_SPECS.filter((spec) => spec.function.name !== SONAR_SCAN_TOOL_NAME);
+  return [...BASE_HORUS_TOOLS, ...analysisTools];
 }
 
 /** @deprecated usa `getHorusTools()` — mantenuto per compatibilità, non include i tool di analisi condizionali. */
@@ -1032,7 +1105,8 @@ async function architectTool(
   modeArg: string,
   task: string,
   paths: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  extraContext?: string
 ): Promise<string> {
   const repoKey = repoArg.trim().toLowerCase();
   if (!isHorusGithubRepoKey(repoKey)) {
@@ -1048,7 +1122,25 @@ async function architectTool(
   const pathList = Array.isArray(paths)
     ? paths.filter((p): p is string => typeof p === "string").slice(0, 8)
     : undefined;
-  return callAnalysisService("/architect", { repo: repoKey, mode, task, paths: pathList }, signal);
+  // extraContext permette di incatenare i tool (es. "scansiona con sonar_scan
+  // poi passa gli esiti all'architetto per un piano di fix") senza dover
+  // rieseguire l'analisi grezza: viene semplicemente aggiunto al prompt del
+  // modello lato servizio, non cambia il contratto degli altri campi.
+  const trimmedExtraContext =
+    typeof extraContext === "string" && extraContext.trim() ? extraContext.trim().slice(0, 8000) : undefined;
+  return callAnalysisService(
+    "/architect",
+    { repo: repoKey, mode, task, paths: pathList, extraContext: trimmedExtraContext },
+    signal
+  );
+}
+
+async function sonarScanTool(repoArg: string, signal?: AbortSignal): Promise<string> {
+  const repoKey = repoArg.trim().toLowerCase();
+  if (!isHorusGithubRepoKey(repoKey)) {
+    return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
+  }
+  return callAnalysisService("/sonar", { repo: repoKey }, signal);
 }
 
 /**
@@ -1093,8 +1185,11 @@ export async function executeHorusTool(
           String(args.mode ?? ""),
           String(args.task ?? ""),
           args.paths,
-          signal
+          signal,
+          typeof args.extraContext === "string" ? args.extraContext : undefined
         );
+      case "sonar_scan":
+        return await sonarScanTool(String(args.repo ?? ""), signal);
       default:
         return `Tool sconosciuto: "${name}".`;
     }

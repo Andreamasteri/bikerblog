@@ -169,7 +169,7 @@ async function main(): Promise<void> {
       ) {
         let replied = "";
         const { content, toolCalls } = await horusChatRaw(history, {
-          tools: getHorusTools(),
+          tools: await getHorusTools(),
           signal: requestController.signal,
           onToken: (token) => {
             stdout.write(token);

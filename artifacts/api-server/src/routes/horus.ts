@@ -162,7 +162,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted; iteration++) {
         const { content, toolCalls } = await config.chatRaw(conversation, {
-          tools: getHorusTools(),
+          tools: await getHorusTools(),
           signal: abortController.signal,
           onToken: (token) => {
             sendEvent(res, "token", { token });
