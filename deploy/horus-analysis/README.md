@@ -65,10 +65,20 @@ usa `pm2` (stesso approccio consigliato per Ollama/SearXNG):
 
 ```bash
 npm install -g pm2
-pm2 start server.js --name horus-analysis
+pm2 start server.js --name horus-analysis --node-args="--env-file=.env"
 pm2 save
 pm2 startup   # segui le istruzioni stampate per l'avvio automatico al boot
 ```
+
+**Importante**: `server.js` legge le variabili da `process.env`, ma non
+carica automaticamente il file `.env` (nessuna dipendenza `dotenv`). Un
+semplice `pm2 start server.js` (senza `--node-args="--env-file=.env"`)
+avvia il servizio ma con `ANALYSIS_GATE_TOKEN` vuoto, e ogni richiesta
+(compreso `/health`) risponde `401 unauthorized` in modo silenzioso, senza
+un errore esplicito che lo segnali. Il flag `--env-file` è nativo di Node
+≥20.6 e carica `.env` automaticamente — verifica la versione con
+`node --version` se il servizio risulta "online" in `pm2` ma risponde 401
+anche col token corretto.
 
 ## 5. Esporlo con un hostname raggiungibile da Replit
 
