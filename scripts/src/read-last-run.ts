@@ -11,7 +11,7 @@
  * Usage:
  *   pnpm --filter @workspace/scripts run pipeline:status
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -19,6 +19,21 @@ import { dirname } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..", "..");
 const reportPath = resolve(projectRoot, "inbox", "pipeline-last-run.json");
+const historyDir = resolve(projectRoot, "inbox", "pipeline-history");
+
+/**
+ * Finds the most recent report in inbox/pipeline-history/ (files are named
+ * YYYY-MM-DD.json, so lexicographic sort = chronological sort).
+ * Returns null if the directory is missing or empty.
+ */
+function findMostRecentHistoryReport(): string | null {
+  if (!existsSync(historyDir)) return null;
+  const files = readdirSync(historyDir)
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .reverse();
+  return files.length > 0 ? resolve(historyDir, files[0]!) : null;
+}
 
 interface StepReport {
   step: number;
@@ -47,19 +62,34 @@ interface PipelineReport {
   };
 }
 
+let resolvedPath = reportPath;
+let usedFallback = false;
+
 if (!existsSync(reportPath)) {
-  console.log("No pipeline report found at inbox/pipeline-last-run.json");
-  console.log("The pipeline has not run yet, or the report file was not written.");
-  process.exit(1);
+  const fallbackPath = findMostRecentHistoryReport();
+  if (!fallbackPath) {
+    console.log("No pipeline report found at inbox/pipeline-last-run.json");
+    console.log("No archived reports found in inbox/pipeline-history/ either.");
+    console.log("The pipeline has not run yet, or the report file was not written.");
+    process.exit(1);
+  }
+  resolvedPath = fallbackPath;
+  usedFallback = true;
 }
 
-const raw = readFileSync(reportPath, "utf-8");
+const raw = readFileSync(resolvedPath, "utf-8");
 let report: PipelineReport;
 try {
   report = JSON.parse(raw) as PipelineReport;
 } catch {
-  console.error("Failed to parse pipeline-last-run.json — file may be corrupt.");
+  console.error(`Failed to parse ${resolvedPath} — file may be corrupt.`);
   process.exit(1);
+}
+
+if (usedFallback) {
+  console.log(
+    `⚠ inbox/pipeline-last-run.json non trovato — mostro l'archivio più recente: ${resolvedPath.split("/").pop()}`
+  );
 }
 
 const statusIcon: Record<string, string> = {
