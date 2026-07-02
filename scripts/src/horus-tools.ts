@@ -10,13 +10,16 @@
  * Tool disponibili:
  *  - web_search    — ricerca sul web, con backend a cascata (dal più al meno
  *                     preferito): (1) HORUS_SEARXNG_URL — istanza self-hosted
- *                     di SearXNG (motore di meta-ricerca open source e
- *                     gratuito, aggrega Google/Bing/DDG), se in futuro viene
- *                     installata su TC; (2) SERPER_API_KEY — risultati reali
- *                     di Google via serper.dev (attivo oggi); (3) fallback
- *                     keyless sulla DuckDuckGo Instant Answer API (limitata
- *                     a contenuti enciclopedici) se nessuna delle due sopra
- *                     è configurata.
+ *                     di SearXNG su TC (motore di meta-ricerca open source e
+ *                     gratuito, aggrega Google/Bing/DDG), la stessa già usata
+ *                     dall'ecosistema AI di BikerLink; protetta da un gate
+ *                     nginx via header `X-Searxng-Key` + SEARXNG_GATE_TOKEN
+ *                     (non Cloudflare Access); (2) SERPER_API_KEY — risultati
+ *                     reali di Google via serper.dev, usato se SearXNG non è
+ *                     configurato o fallisce la singola richiesta; (3)
+ *                     fallback keyless sulla DuckDuckGo Instant Answer API
+ *                     (limitata a contenuti enciclopedici) se nessuna delle
+ *                     due sopra è disponibile.
  *  - github_read   — lettura file/cartelle da uno dei repo del progetto
  *                     (Andreamasteri/Bikerlink, Andreamasteri/bikerblog,
  *                     Andreamasteri/bikerweb). SOLO lettura: il token usato è
@@ -184,20 +187,21 @@ interface SearxngResponse {
 
 /**
  * Ricerca via istanza self-hosted di SearXNG (gratuita, aggrega Google/Bing/
- * DuckDuckGo/altri). Richiede HORUS_SEARXNG_URL e opzionalmente le stesse
- * credenziali Cloudflare Access già usate per Ollama, se l'hostname è
- * protetto dalla stessa Access Application/Service Token.
+ * DuckDuckGo/altri), la stessa già usata dall'ecosistema AI di BikerLink
+ * (Horus/Ares/Bowie, vedi server/ai/assistant/web-search.ts nel repo
+ * bikerlink). Richiede HORUS_SEARXNG_URL; l'istanza è protetta da un gate
+ * nginx che richiede l'header `X-Searxng-Key` con SEARXNG_GATE_TOKEN (non
+ * Cloudflare Access — le credenziali CF_ACCESS_CLIENT_ID/SECRET sono per
+ * Ollama, non per questo hostname).
  */
 async function searxngSearch(query: string, searxngUrl: string): Promise<string> {
-  const cfClientId = process.env["CF_ACCESS_CLIENT_ID"];
-  const cfClientSecret = process.env["CF_ACCESS_CLIENT_SECRET"];
+  const gateToken = process.env["SEARXNG_GATE_TOKEN"];
   const url = `${searxngUrl.replace(/\/$/, "")}/search?q=${encodeURIComponent(query)}&format=json`;
   const res = await fetch(url, {
     headers: {
+      Accept: "application/json",
       "User-Agent": "Mozilla/5.0 (compatible; HorusBot/1.0)",
-      ...(cfClientId && cfClientSecret
-        ? { "CF-Access-Client-Id": cfClientId, "CF-Access-Client-Secret": cfClientSecret }
-        : {}),
+      ...(gateToken ? { "X-Searxng-Key": gateToken } : {}),
     },
   });
   if (!res.ok) {
