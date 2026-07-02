@@ -317,11 +317,25 @@ function gatherArchitectContext(dir, paths) {
  * Replit) per produrre il report di analisi/pianificazione/debug. stream:false
  * va bene qui perché non c'è tunnel nel mezzo di questa chiamata specifica.
  */
+/**
+ * Errore con un `kind` esplicito così l'handler HTTP può distinguere
+ * "Ollama irraggiungibile" da "modello mancante" da "timeout" invece di
+ * far trapelare un errore fetch generico fino alla chat di Horus.
+ */
+class ArchitectError extends Error {
+  constructor(kind, message) {
+    super(message);
+    this.name = "ArchitectError";
+    this.kind = kind;
+  }
+}
+
 async function callArchitectModel(systemPrompt, userPrompt, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
   try {
-    const res = await fetch(`${ARCHITECT_OLLAMA_URL.replace(/\/$/, "")}/api/chat`, {
+    res = await fetch(`${ARCHITECT_OLLAMA_URL.replace(/\/$/, "")}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -335,17 +349,51 @@ async function callArchitectModel(systemPrompt, userPrompt, timeoutMs) {
       }),
       signal: controller.signal,
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Ollama locale ha risposto ${res.status}: ${body.slice(0, 300)}`);
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ArchitectError(
+        "timeout",
+        `architetto: timeout dopo ${timeoutMs / 1000}s durante la generazione (modello lento o bloccato su TC).`
+      );
     }
-    const data = await res.json();
-    const content = data && data.message && data.message.content;
-    if (!content) throw new Error("Ollama locale ha restituito una risposta vuota.");
-    return truncate(content.trim());
+    const cause = err && err.cause ? err.cause : err;
+    const code = cause && cause.code;
+    throw new ArchitectError(
+      "unreachable",
+      `Ollama locale non raggiungibile su ${ARCHITECT_OLLAMA_URL} (${code || (err instanceof Error ? err.message : String(err))}). ` +
+        "Verifica che Ollama sia installato e in esecuzione su TC (`ollama serve` o il servizio corrispondente), " +
+        "e che ARCHITECT_OLLAMA_URL punti alla porta giusta (default http://localhost:11434)."
+    );
   } finally {
     clearTimeout(timer);
   }
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const notFound =
+      res.status === 404 ||
+      /model .* not found/i.test(body) ||
+      /no such model/i.test(body);
+    if (notFound) {
+      throw new ArchitectError(
+        "model_not_found",
+        `Modello "${ARCHITECT_MODEL}" non trovato su Ollama locale (TC). ` +
+          `Esegui \`ollama pull ${ARCHITECT_MODEL}\` su TC oppure imposta ARCHITECT_OLLAMA_MODEL su un modello già installato ` +
+          "(controlla con `ollama list`)."
+      );
+    }
+    throw new ArchitectError(
+      "http_error",
+      `Ollama locale ha risposto ${res.status}: ${body.slice(0, 300)}`
+    );
+  }
+
+  const data = await res.json();
+  const content = data && data.message && data.message.content;
+  if (!content) {
+    throw new ArchitectError("empty_response", "Ollama locale ha restituito una risposta vuota.");
+  }
+  return truncate(content.trim());
 }
 
 async function architect({ repoKey, mode, task, paths }) {
@@ -479,15 +527,16 @@ app.post("/architect", (req, res) => {
       finished = true;
       clearInterval(heartbeat);
       const message = err instanceof Error ? err.message : String(err);
-      const isTimeout = err instanceof Error && err.name === "AbortError";
-      res.statusCode = isTimeout ? 504 : 500;
-      res.end(
-        JSON.stringify({
-          error: isTimeout
-            ? `architetto: timeout dopo ${ARCHITECT_TIMEOUT_MS / 1000}s durante la generazione.`
-            : message,
-        })
-      );
+      const kind = err instanceof ArchitectError ? err.kind : undefined;
+      const statusByKind = {
+        timeout: 504,
+        unreachable: 502,
+        model_not_found: 502,
+        http_error: 502,
+        empty_response: 502,
+      };
+      res.statusCode = statusByKind[kind] || 500;
+      res.end(JSON.stringify({ error: message, kind: kind || "unknown" }));
     });
 });
 

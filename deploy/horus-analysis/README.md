@@ -174,3 +174,36 @@ curl -X POST https://analysis.tuodominio.com/architect \
     "paths": ["artifacts/bikerblog/src/pages", "artifacts/api-server/src/routes/podcast.ts"]
   }'
 ```
+
+### Risoluzione problemi: `/architect` fallisce
+
+`/architect` dipende da un'installazione di Ollama **in locale su TC**
+(`ARCHITECT_OLLAMA_URL`, default `http://localhost:11434`), separata dal
+tunnel Cloudflare usato per `HORUS_OLLAMA_URL` (quello per la chat). Se questa
+istanza locale non è installata, non è in esecuzione, o il modello indicato
+non è stato scaricato, la risposta di errore (propagata fino alla chat di
+Horus) distingue ora esplicitamente il tipo di problema invece di mostrare un
+generico errore di rete:
+
+- **"Ollama locale non raggiungibile su ..."** (`kind: "unreachable"`, HTTP
+  502) — Ollama non è in esecuzione su TC, o `ARCHITECT_OLLAMA_URL` punta alla
+  porta sbagliata. Verifica con `curl http://localhost:11434/api/tags` su TC
+  stessa, oppure avvia Ollama (`ollama serve` o il servizio/pm2 corrispondente).
+- **"Modello ... non trovato su Ollama locale"** (`kind: "model_not_found"`,
+  HTTP 502) — `ARCHITECT_OLLAMA_MODEL` non corrisponde a un modello
+  effettivamente scaricato su TC. Controlla con `ollama list` e, se manca,
+  scaricalo con `ollama pull <modello>`, oppure allinea la variabile
+  d'ambiente a un modello già presente.
+- **"architetto: timeout dopo ...s"** (`kind: "timeout"`, HTTP 504) — Ollama è
+  raggiungibile ma la generazione non ha finito entro `ARCHITECT_TIMEOUT_MS`
+  (default 8 minuti). Tipico su hardware CPU con modelli grandi o richieste
+  con molto contesto (`paths` numerosi/grandi); riprova con un `task`/`paths`
+  più mirati o aumenta `ARCHITECT_TIMEOUT_MS`.
+- **"Ollama locale ha risposto ..."** (`kind: "http_error"`, HTTP 502) — Ollama
+  locale ha risposto ma con un errore diverso dai due casi sopra (es.
+  richiesta malformata o servizio in stato inatteso); il corpo della risposta
+  originale è incluso nel messaggio per il debug.
+
+Ogni risposta di errore di `/architect` include sia `error` (messaggio
+leggibile) sia `kind` (uno dei valori sopra), così script e log possono
+distinguere i casi senza fare pattern-matching sul testo.

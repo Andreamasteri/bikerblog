@@ -573,6 +573,7 @@ function rememberNote(note: string): string {
 interface AnalysisServiceResponse {
   result?: string;
   error?: string;
+  kind?: string;
 }
 
 /**
