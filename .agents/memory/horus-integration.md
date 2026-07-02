@@ -35,7 +35,7 @@ DuckDuckGo's `/html/` scrape endpoint returns an anti-bot challenge page (HTTP 2
 
 **Why it matters:** Replit's own external-API search connectors (Brave/Exa/Firecrawl passthrough billing) are only callable from the agent's `code_execution` sandbox — they are not reachable from a standalone Node script that runs independently of the agent (e.g. a CLI the user runs directly).
 
-**How to apply:** for real general-purpose web search from a standalone script/service (not the agent itself), either accept the Instant-Answer API's narrower coverage or get the user to provision a dedicated search API key (Brave Search API, Tavily, etc.) as a secret.
+**How to apply:** for real general-purpose web search from a standalone script/service (not the agent itself), use a cascading backend: prefer a free self-hosted meta-search engine (e.g. SearXNG behind the same tunnel/Access setup already used for the LLM) when the user is willing to host one, fall back to a paid-but-cheap real-SERP API (e.g. Serper.dev — a single `X-API-KEY` header, real Google organic/answerBox/knowledgeGraph results) when available, and only fall back to the Instant-Answer API as a last resort with an honest "couldn't verify" message.
 
 ## Bash tool kills interactive CLIs waiting on a slow response, misreading it as "waiting on user input"
 
