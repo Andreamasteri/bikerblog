@@ -46,3 +46,11 @@ Piping input non-interactively into a `readline`-based interactive CLI (e.g. `pr
 **Why:** the heuristic can't distinguish "idle process blocked on stdin" from "readline interface open, but currently awaiting an async response" — both look like a hung foreground process.
 
 **How to apply:** don't try to smoke-test slow interactive CLIs (chat REPLs, etc.) via piped bash input. Trust code review + typecheck + the already-validated underlying client function (e.g. `horusChat()` proven via the real pipeline run) instead, or ask the user to try the interactive command themselves in their own terminal.
+
+## Fine-grained GitHub PAT secrets pasted into Replit Secrets can lose the `github_pat_` prefix
+
+A user-provided fine-grained PAT (93 chars total: `github_pat_` + 82-char suffix) was stored as a secret missing the `github_pat_` prefix — likely truncated during copy/paste. The result was silent `401 Unauthorized` on every GitHub API call, with no obvious cause from the code.
+
+**Why:** the raw secret value can't be inspected directly (secrets are opaque), so a truncated/malformed token looks identical to a wrong or expired one until you check its length/prefix via a bash echo of the env var.
+
+**How to apply:** when a GitHub PAT integration returns 401 unexpectedly, check `echo "len=${#TOKEN_VAR}"` and the first few characters in bash — a fine-grained PAT is always ~93 chars and starts with `github_pat_`; a classic PAT starts with `ghp_`. If the stored value is missing the expected prefix, normalize it in code (prepend `github_pat_` if neither known prefix is present) rather than asking the user to regenerate the token.

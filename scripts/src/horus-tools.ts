@@ -17,9 +17,20 @@
  *                     keyless sulla DuckDuckGo Instant Answer API (limitata
  *                     a contenuti enciclopedici) se nessuna delle due sopra
  *                     è configurata.
- *  - github_read   — lettura file/cartelle dal repo pubblico Andreamasteri/Bikerlink
- *                     (SOLO lettura: nessun token con permessi push viene usato qui,
- *                     anche se l'integrazione GitHub connessa ne avrebbe la possibilità)
+ *  - github_read   — lettura file/cartelle da uno dei repo del progetto
+ *                     (Andreamasteri/Bikerlink, Andreamasteri/bikerblog,
+ *                     Andreamasteri/bikerweb). SOLO lettura: il token usato è
+ *                     un fine-grained PAT dedicato a Horus, con permessi
+ *                     Contents/Metadata read-only — mai il token
+ *                     dell'integrazione GitHub di Replit (che ha permessi
+ *                     push/admin su questo progetto). Ogni repo dichiara una
+ *                     lista ordinata di env var candidate: se in futuro viene
+ *                     aggiunto un token più specifico (es.
+ *                     GITHUB_TOKEN_BIKERLINK), basta impostarlo — ha priorità
+ *                     automaticamente, senza altre modifiche al codice. Se
+ *                     nessun token è configurato per un repo, si ricade in
+ *                     lettura anonima (rate limit pubblico più basso, stesso
+ *                     comportamento funzionale).
  *  - remember_note — salva una nota permanente in inbox/horus-memory.md, decisa
  *                     autonomamente dal modello quando ritiene qualcosa degno di
  *                     essere ricordato tra una sessione e l'altra
@@ -28,8 +39,60 @@
 import type { HorusToolSpec } from "./horus-client.js";
 import { appendHorusMemory } from "./horus-client.js";
 
-const GITHUB_REPO = "Andreamasteri/Bikerlink";
 const GITHUB_API = "https://api.github.com";
+
+type HorusGithubRepoKey = "bikerlink" | "bikerblog" | "bikerweb";
+
+interface GithubRepoConfig {
+  repo: string;
+  /**
+   * Env var candidate per il token, in ordine di priorità. La prima
+   * impostata e non vuota viene usata. `GITHUB_TOKEN_BIKERBLOG` è un
+   * fine-grained PAT dedicato a Horus che oggi copre già i tre repo
+   * bikerlink/bikerblog/bikerweb; se in futuro arriva un token più
+   * specifico per un singolo repo, aggiungerlo qui gli dà precedenza.
+   */
+  tokenEnvVars: string[];
+}
+
+const GITHUB_REPOS: Record<HorusGithubRepoKey, GithubRepoConfig> = {
+  bikerlink: {
+    repo: "Andreamasteri/Bikerlink",
+    tokenEnvVars: ["GITHUB_TOKEN_BIKERLINK", "GITHUB_TOKEN_BIKERBLOG"],
+  },
+  bikerblog: {
+    repo: "Andreamasteri/bikerblog",
+    tokenEnvVars: ["GITHUB_TOKEN_BIKERBLOG"],
+  },
+  bikerweb: {
+    repo: "Andreamasteri/bikerweb",
+    tokenEnvVars: ["GITHUB_TOKEN_BIKERWEB", "GITHUB_TOKEN_BIKERBLOG"],
+  },
+};
+
+/**
+ * Alcuni fine-grained PAT GitHub finiscono salvati come secret senza il
+ * prefisso "github_pat_" (es. se solo la parte finale viene incollata).
+ * Normalizziamo qui per tollerare entrambi i casi senza richiedere
+ * all'utente di rigenerare il token.
+ */
+function normalizeGithubToken(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("github_pat_") || trimmed.startsWith("ghp_")) {
+    return trimmed;
+  }
+  return `github_pat_${trimmed}`;
+}
+
+function resolveGithubToken(repoKey: HorusGithubRepoKey): string | undefined {
+  for (const envVar of GITHUB_REPOS[repoKey].tokenEnvVars) {
+    const value = process.env[envVar];
+    if (value && value.trim()) {
+      return normalizeGithubToken(value);
+    }
+  }
+  return undefined;
+}
 
 export const HORUS_TOOLS: HorusToolSpec[] = [
   {
@@ -52,17 +115,26 @@ export const HORUS_TOOLS: HorusToolSpec[] = [
     function: {
       name: "github_read",
       description:
-        `Legge un file o elenca il contenuto di una cartella dal repository pubblico GitHub ${GITHUB_REPO} (progetto BikerLink). Solo lettura.`,
+        "Legge un file o elenca il contenuto di una cartella da uno dei repository GitHub del progetto: " +
+        `"bikerlink" (${GITHUB_REPOS.bikerlink.repo}), "bikerblog" (${GITHUB_REPOS.bikerblog.repo}, questa stessa app) ` +
+        `o "bikerweb" (${GITHUB_REPOS.bikerweb.repo}). Usalo per studiare il codice reale e spiegare all'utente come funziona ` +
+        "l'app, o per proporre idee di nuovi task o contenuti basate su cosa esiste già. Solo lettura: non puoi scrivere, " +
+        "committare o modificare nulla. Qualsiasi idea o proposta va detta a parole in chat, non eseguita autonomamente.",
       parameters: {
         type: "object",
         properties: {
+          repo: {
+            type: "string",
+            description: 'Quale repo leggere: "bikerlink", "bikerblog" o "bikerweb".',
+            enum: ["bikerlink", "bikerblog", "bikerweb"],
+          },
           path: {
             type: "string",
             description:
               'Percorso nel repo (es. "package.json" o "src/"). Usa "" o "." per la root.',
           },
         },
-        required: ["path"],
+        required: ["repo", "path"],
       },
     },
   },
@@ -280,24 +352,39 @@ async function webSearch(query: string): Promise<string> {
   return duckDuckGoFallbackSearch(query);
 }
 
-async function githubRead(path: string): Promise<string> {
+function isHorusGithubRepoKey(value: string): value is HorusGithubRepoKey {
+  return value === "bikerlink" || value === "bikerblog" || value === "bikerweb";
+}
+
+async function githubRead(repoArg: string, path: string): Promise<string> {
+  const repoKey = repoArg.trim().toLowerCase();
+  if (!isHorusGithubRepoKey(repoKey)) {
+    return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
+  }
+
+  const { repo } = GITHUB_REPOS[repoKey];
+  const token = resolveGithubToken(repoKey);
   const cleanPath = path.trim().replace(/^\/+/, "");
   const apiPath = cleanPath && cleanPath !== "." ? `/${cleanPath}` : "";
   const res = await fetch(
-    `${GITHUB_API}/repos/${GITHUB_REPO}/contents${apiPath}`,
+    `${GITHUB_API}/repos/${repo}/contents${apiPath}`,
     {
       headers: {
         Accept: "application/vnd.github+json",
         "User-Agent": "HorusBot",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     }
   );
 
   if (res.status === 404) {
-    return `Percorso "${cleanPath || "/"}" non trovato nel repo ${GITHUB_REPO}.`;
+    return `Percorso "${cleanPath || "/"}" non trovato nel repo ${repo}.`;
+  }
+  if (res.status === 401 || res.status === 403) {
+    return `Accesso negato al repo ${repo} (HTTP ${res.status}). Il token dedicato potrebbe non coprire questo repo o essere scaduto.`;
   }
   if (!res.ok) {
-    return `Lettura GitHub fallita (HTTP ${res.status}) per "${cleanPath || "/"}".`;
+    return `Lettura GitHub fallita (HTTP ${res.status}) per "${cleanPath || "/"}" in ${repo}.`;
   }
 
   const data = (await res.json()) as
@@ -308,19 +395,19 @@ async function githubRead(path: string): Promise<string> {
     const entries = data
       .map((e) => `${e.type === "dir" ? "📁" : "📄"} ${e.name}`)
       .join("\n");
-    return `Contenuto della cartella "${cleanPath || "/"}" in ${GITHUB_REPO}:\n${entries}`;
+    return `Contenuto della cartella "${cleanPath || "/"}" in ${repo}:\n${entries}`;
   }
 
   if (data.type === "file") {
     if (data.encoding === "base64" && data.content) {
       const content = Buffer.from(data.content, "base64").toString("utf-8");
       const truncated = content.length > 8000;
-      return `File "${cleanPath}" (${data.size} bytes)${truncated ? " — troncato ai primi 8000 caratteri" : ""}:\n\n${content.slice(0, 8000)}`;
+      return `File "${cleanPath}" in ${repo} (${data.size} bytes)${truncated ? " — troncato ai primi 8000 caratteri" : ""}:\n\n${content.slice(0, 8000)}`;
     }
-    return `File "${cleanPath}" trovato ma non decodificabile (encoding: ${data.encoding}).`;
+    return `File "${cleanPath}" in ${repo} trovato ma non decodificabile (encoding: ${data.encoding}).`;
   }
 
-  return `Percorso "${cleanPath || "/"}" non riconosciuto (tipo inatteso).`;
+  return `Percorso "${cleanPath || "/"}" in ${repo} non riconosciuto (tipo inatteso).`;
 }
 
 function rememberNote(note: string): string {
@@ -341,7 +428,7 @@ export async function executeHorusTool(
       case "web_search":
         return await webSearch(String(args.query ?? ""));
       case "github_read":
-        return await githubRead(String(args.path ?? ""));
+        return await githubRead(String(args.repo ?? ""), String(args.path ?? ""));
       case "remember_note":
         return rememberNote(String(args.note ?? ""));
       default:
