@@ -11,11 +11,17 @@ const SESSION_KEY = "horus-chat-password";
 
 type Role = "user" | "assistant";
 
+interface ToolCallStatus {
+  name: string;
+  elapsedMs: number;
+  done: boolean;
+}
+
 interface ChatMessage {
   id: string;
   role: Role;
   content: string;
-  toolCalls?: string[];
+  toolCalls?: ToolCallStatus[];
 }
 
 type ConvoAgent = "horus" | "bowie";
@@ -224,7 +230,7 @@ export function HorusChat() {
       const decoder = new TextDecoder();
       let buffer = "";
       let content = "";
-      const activeTools: string[] = [];
+      const activeTools: ToolCallStatus[] = [];
 
       for (;;) {
         const { done, value } = await reader.read();
@@ -258,12 +264,40 @@ export function HorusChat() {
               prev.map((m) => (m.id === assistantId ? { ...m, content } : m))
             );
           } else if (eventName === "tool_call" && typeof payload.name === "string") {
-            activeTools.push(payload.name);
+            activeTools.push({ name: payload.name, elapsedMs: 0, done: false });
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId ? { ...m, toolCalls: [...activeTools] } : m
               )
             );
+          } else if (
+            eventName === "tool_progress" &&
+            typeof payload.name === "string" &&
+            typeof payload.elapsedMs === "number"
+          ) {
+            const status = [...activeTools].reverse().find((t) => t.name === payload.name && !t.done);
+            if (status) {
+              status.elapsedMs = payload.elapsedMs;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, toolCalls: [...activeTools] } : m
+                )
+              );
+            }
+          } else if (
+            eventName === "tool_result" &&
+            typeof payload.name === "string"
+          ) {
+            const status = [...activeTools].reverse().find((t) => t.name === payload.name && !t.done);
+            if (status) {
+              status.done = true;
+              if (typeof payload.elapsedMs === "number") status.elapsedMs = payload.elapsedMs;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, toolCalls: [...activeTools] } : m
+                )
+              );
+            }
           } else if (eventName === "done" && typeof payload.content === "string") {
             content = payload.content;
             setMessages((prev) =>
@@ -544,9 +578,24 @@ export function HorusChat() {
                     {m.toolCalls && m.toolCalls.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {m.toolCalls.map((tool, i) => (
-                          <Badge key={`${tool}-${i}`} variant="outline" className="gap-1 text-xs font-normal">
-                            <Wrench className="w-3 h-3" />
-                            {tool}
+                          <Badge
+                            key={`${tool.name}-${i}`}
+                            variant="outline"
+                            className="gap-1.5 text-xs font-normal"
+                          >
+                            {tool.done ? (
+                              <Wrench className="w-3 h-3" />
+                            ) : (
+                              <Spinner className="w-3 h-3" />
+                            )}
+                            {tool.name}
+                            {!tool.done && (
+                              <span className="text-muted-foreground">
+                                {tool.elapsedMs >= 4_000
+                                  ? `· ancora al lavoro… ${Math.round(tool.elapsedMs / 1000)}s`
+                                  : "· in corso…"}
+                              </span>
+                            )}
                           </Badge>
                         ))}
                       </div>

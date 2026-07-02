@@ -154,7 +154,24 @@ async function main(): Promise<void> {
         for (const call of toolCalls) {
           const toolName = call.function.name;
           stdout.write(`\n  ↳ [tool: ${toolName}(${JSON.stringify(call.function.arguments)})...] `);
-          const result = await executeHorusTool(toolName, call.function.arguments);
+
+          // Tool come architect possono girare per diversi minuti su
+          // hardware CPU: senza un segnale periodico il terminale sembra
+          // bloccato. Stampiamo un promemoria con il tempo trascorso finché
+          // il tool non ha terminato.
+          const toolStartedAt = Date.now();
+          const progressTimer = setInterval(() => {
+            const elapsedSec = Math.round((Date.now() - toolStartedAt) / 1000);
+            stdout.write(`(ancora al lavoro… ${elapsedSec}s) `);
+          }, 10_000);
+
+          let result: string;
+          try {
+            result = await executeHorusTool(toolName, call.function.arguments);
+          } finally {
+            clearInterval(progressTimer);
+          }
+
           stdout.write("fatto\n");
           history.push({ role: "tool", name: toolName, content: result });
         }

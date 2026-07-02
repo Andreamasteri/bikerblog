@@ -131,8 +131,25 @@ router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Pro
       for (const call of toolCalls) {
         const toolName = call.function.name;
         sendEvent(res, "tool_call", { name: toolName, arguments: call.function.arguments });
-        const result = await executeHorusTool(toolName, call.function.arguments);
-        sendEvent(res, "tool_result", { name: toolName });
+
+        // Alcuni tool (es. architect) girano su hardware CPU e possono
+        // richiedere diversi minuti. Senza un segnale periodico la chat
+        // sembrerebbe bloccata: emettiamo un evento di progresso ogni pochi
+        // secondi finché il tool non ha terminato, così il client può
+        // mostrare "ancora al lavoro..." invece di restare in silenzio.
+        const toolStartedAt = Date.now();
+        const progressInterval = setInterval(() => {
+          sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+        }, 5_000);
+
+        let result: string;
+        try {
+          result = await executeHorusTool(toolName, call.function.arguments);
+        } finally {
+          clearInterval(progressInterval);
+        }
+
+        sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
         conversation.push({ role: "tool", name: toolName, content: result });
       }
     }
