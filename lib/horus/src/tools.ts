@@ -583,7 +583,8 @@ interface AnalysisServiceResponse {
  */
 async function callAnalysisService(
   path: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  signal?: AbortSignal
 ): Promise<string> {
   const baseUrl = process.env["HORUS_ANALYSIS_URL"];
   const gateToken = process.env["ANALYSIS_GATE_TOKEN"];
@@ -591,15 +592,30 @@ async function callAnalysisService(
     return "Servizio di analisi codice non configurato (HORUS_ANALYSIS_URL/ANALYSIS_GATE_TOKEN mancanti).";
   }
 
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Analysis-Gate-Token": gateToken,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10 * 60 * 1000),
-  });
+  // Combiniamo il timeout interno (10 minuti, per analisi lunghe come
+  // l'architect) con un eventuale segnale di abort esterno (l'utente che
+  // annulla l'analisi da chat/CLI): AbortSignal.any si attiva su quale dei
+  // due scatta per primo.
+  const timeoutSignal = AbortSignal.timeout(10 * 60 * 1000);
+  const combinedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal;
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Analysis-Gate-Token": gateToken,
+      },
+      body: JSON.stringify(body),
+      signal: combinedSignal,
+    });
+  } catch (err) {
+    if (signal?.aborted) {
+      return "Analisi interrotta dall'utente.";
+    }
+    throw err;
+  }
 
   const data = (await res.json().catch(() => ({}))) as AnalysisServiceResponse;
 
@@ -610,23 +626,23 @@ async function callAnalysisService(
   return data.result ?? "Il servizio di analisi non ha restituito alcun risultato.";
 }
 
-async function typecheckRepoTool(repoArg: string): Promise<string> {
+async function typecheckRepoTool(repoArg: string, signal?: AbortSignal): Promise<string> {
   const repoKey = repoArg.trim().toLowerCase();
   if (!isHorusGithubRepoKey(repoKey)) {
     return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
   }
-  return callAnalysisService("/typecheck", { repo: repoKey });
+  return callAnalysisService("/typecheck", { repo: repoKey }, signal);
 }
 
-async function lintRepoTool(repoArg: string): Promise<string> {
+async function lintRepoTool(repoArg: string, signal?: AbortSignal): Promise<string> {
   const repoKey = repoArg.trim().toLowerCase();
   if (!isHorusGithubRepoKey(repoKey)) {
     return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
   }
-  return callAnalysisService("/lint", { repo: repoKey });
+  return callAnalysisService("/lint", { repo: repoKey }, signal);
 }
 
-async function searchCodeTool(repoArg: string, query: string): Promise<string> {
+async function searchCodeTool(repoArg: string, query: string, signal?: AbortSignal): Promise<string> {
   const repoKey = repoArg.trim().toLowerCase();
   if (!isHorusGithubRepoKey(repoKey)) {
     return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
@@ -634,15 +650,19 @@ async function searchCodeTool(repoArg: string, query: string): Promise<string> {
   if (!query.trim()) {
     return "Query di ricerca mancante.";
   }
-  return callAnalysisService("/search", { repo: repoKey, query });
+  return callAnalysisService("/search", { repo: repoKey, query }, signal);
 }
 
-async function gitLogTool(repoArg: string, limit: number | undefined): Promise<string> {
+async function gitLogTool(
+  repoArg: string,
+  limit: number | undefined,
+  signal?: AbortSignal
+): Promise<string> {
   const repoKey = repoArg.trim().toLowerCase();
   if (!isHorusGithubRepoKey(repoKey)) {
     return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
   }
-  return callAnalysisService("/git-log", { repo: repoKey, limit });
+  return callAnalysisService("/git-log", { repo: repoKey, limit }, signal);
 }
 
 const ARCHITECT_MODES = ["plan", "debug", "evaluate"] as const;
@@ -656,7 +676,8 @@ async function architectTool(
   repoArg: string,
   modeArg: string,
   task: string,
-  paths: unknown
+  paths: unknown,
+  signal?: AbortSignal
 ): Promise<string> {
   const repoKey = repoArg.trim().toLowerCase();
   if (!isHorusGithubRepoKey(repoKey)) {
@@ -672,16 +693,19 @@ async function architectTool(
   const pathList = Array.isArray(paths)
     ? paths.filter((p): p is string => typeof p === "string").slice(0, 8)
     : undefined;
-  return callAnalysisService("/architect", { repo: repoKey, mode, task, paths: pathList });
+  return callAnalysisService("/architect", { repo: repoKey, mode, task, paths: pathList }, signal);
 }
 
 /**
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
- * da rimandare come messaggio role:"tool".
+ * da rimandare come messaggio role:"tool". `signal` è opzionale e permette al
+ * chiamante (chat web o CLI) di annullare tool lenti come `architect` a metà
+ * esecuzione (l'utente che clicca "Stop" o preme Ctrl+C).
  */
 export async function executeHorusTool(
   name: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  signal?: AbortSignal
 ): Promise<string> {
   try {
     switch (name) {
@@ -692,27 +716,32 @@ export async function executeHorusTool(
       case "remember_note":
         return rememberNote(String(args.note ?? ""));
       case "typecheck_repo":
-        return await typecheckRepoTool(String(args.repo ?? ""));
+        return await typecheckRepoTool(String(args.repo ?? ""), signal);
       case "lint_repo":
-        return await lintRepoTool(String(args.repo ?? ""));
+        return await lintRepoTool(String(args.repo ?? ""), signal);
       case "search_code":
-        return await searchCodeTool(String(args.repo ?? ""), String(args.query ?? ""));
+        return await searchCodeTool(String(args.repo ?? ""), String(args.query ?? ""), signal);
       case "git_log":
         return await gitLogTool(
           String(args.repo ?? ""),
-          typeof args.limit === "number" ? args.limit : undefined
+          typeof args.limit === "number" ? args.limit : undefined,
+          signal
         );
       case "architect":
         return await architectTool(
           String(args.repo ?? ""),
           String(args.mode ?? ""),
           String(args.task ?? ""),
-          args.paths
+          args.paths,
+          signal
         );
       default:
         return `Tool sconosciuto: "${name}".`;
     }
   } catch (err) {
+    if (signal?.aborted) {
+      return `Tool "${name}" interrotto dall'utente.`;
+    }
     return `Errore nell'esecuzione del tool "${name}": ${err instanceof Error ? err.message : String(err)}`;
   }
 }

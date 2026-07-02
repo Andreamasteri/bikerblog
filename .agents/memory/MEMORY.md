@@ -5,3 +5,4 @@
 - [Bowie second agent](bowie-second-agent.md) — Bowie is a second Ollama agent on the same TC tunnel; generalized client config + fallback env vars pattern for adding more agents later.
 - [Bounded history tables](bounded-history-tables.md) — pattern for "save history without bloating the DB": jsonb transcript column + delete-oldest-beyond-N after each insert, sized column via jsonb_array_length instead of fetching full rows for list views.
 - [Pipeline failure alerts](pipeline-failure-alerts.md) — notify module fans out to all configured channels, never throws; every hard-failure path must reach it.
+- [Horus abort/cancel pattern](horus-abort-cancel.md) — how mid-run cancellation is wired across web SSE, CLI Ctrl+C, and the shared tool executor; reuse this shape for any new Horus surface that adds tool calls.

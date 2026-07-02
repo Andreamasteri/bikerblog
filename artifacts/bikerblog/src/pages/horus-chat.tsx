@@ -184,6 +184,10 @@ export function HorusChat() {
     setIsStreaming(false);
   }
 
+  function stopMessage() {
+    abortRef.current?.abort();
+  }
+
   async function sendMessage(e?: FormEvent) {
     e?.preventDefault();
     const text = input.trim();
@@ -630,9 +634,22 @@ export function HorusChat() {
               className="min-h-[3rem] max-h-40 resize-none"
               disabled={isStreaming}
             />
-            <Button type="submit" size="icon" disabled={isStreaming || !input.trim()} className="shrink-0">
-              {isStreaming ? <Spinner className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-            </Button>
+            {isStreaming ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                onClick={stopMessage}
+                className="shrink-0"
+                title="Interrompi la risposta in corso"
+              >
+                <Square className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button type="submit" size="icon" disabled={!input.trim()} className="shrink-0">
+                <Send className="w-4 h-4" />
+              </Button>
+            )}
           </form>
         </>
       ) : mode === "conversation" ? (

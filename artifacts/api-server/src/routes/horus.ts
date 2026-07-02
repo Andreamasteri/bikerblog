@@ -110,16 +110,28 @@ router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Pro
     res.write(": ping\n\n");
   }, 15_000);
 
+  // Segnale di abort collegato sia alla chiusura della connessione (l'utente
+  // chiude la tab o naviga altrove) sia al pulsante "Stop" lato client, che
+  // interrompe lo stream chiudendo la request — in entrambi i casi Express
+  // emette "close" sulla request. Il segnale viene propagato sia alla
+  // chiamata a Ollama sia all'esecuzione del tool in corso (es. architect),
+  // per non lasciar girare inutilmente un'analisi che nessuno leggerà più.
+  const abortController = new AbortController();
+  req.on("close", () => abortController.abort());
+
   try {
     let finalReply = "";
 
-    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted; iteration++) {
       const { content, toolCalls } = await horusChatRaw(conversation, {
         tools: getHorusTools(),
+        signal: abortController.signal,
         onToken: (token) => {
           sendEvent(res, "token", { token });
         },
       });
+
+      if (abortController.signal.aborted) break;
 
       if (toolCalls.length === 0) {
         finalReply = content;
@@ -129,6 +141,8 @@ router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Pro
       conversation.push({ role: "assistant", content, tool_calls: toolCalls });
 
       for (const call of toolCalls) {
+        if (abortController.signal.aborted) break;
+
         const toolName = call.function.name;
         sendEvent(res, "tool_call", { name: toolName, arguments: call.function.arguments });
 
@@ -144,17 +158,22 @@ router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Pro
 
         let result: string;
         try {
-          result = await executeHorusTool(toolName, call.function.arguments);
+          result = await executeHorusTool(toolName, call.function.arguments, abortController.signal);
         } finally {
           clearInterval(progressInterval);
         }
+
+        if (abortController.signal.aborted) break;
 
         sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
         conversation.push({ role: "tool", name: toolName, content: result });
       }
     }
 
-    if (!finalReply) {
+    if (abortController.signal.aborted) {
+      // Connessione già chiusa dal client: non ha senso scrivere altro sullo
+      // stream (fallirebbe comunque).
+    } else if (!finalReply) {
       sendEvent(res, "error", {
         message: "Troppe chiamate a strumenti senza una risposta finale. Riprova con un'altra domanda.",
       });
@@ -162,10 +181,12 @@ router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Pro
       sendEvent(res, "done", { content: finalReply });
     }
   } catch (err) {
-    req.log.error({ err }, "horus chat failed");
-    sendEvent(res, "error", {
-      message: err instanceof Error ? err.message : "Errore imprevisto contattando Horus.",
-    });
+    if (!abortController.signal.aborted) {
+      req.log.error({ err }, "horus chat failed");
+      sendEvent(res, "error", {
+        message: err instanceof Error ? err.message : "Errore imprevisto contattando Horus.",
+      });
+    }
   } finally {
     clearInterval(heartbeat);
     res.end();

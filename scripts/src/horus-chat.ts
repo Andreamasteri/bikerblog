@@ -7,7 +7,11 @@
  *
  * Comandi durante la chat:
  *   /reset   — svuota la cronologia della conversazione corrente
- *   /exit    — esce (anche Ctrl+C o Ctrl+D)
+ *   /exit    — esce (anche Ctrl+D quando non c'è una richiesta in corso)
+ *   Ctrl+C   — se Horus sta rispondendo o eseguendo un tool (es. architect,
+ *              che può richiedere alcuni minuti su hardware CPU), interrompe
+ *              solo la richiesta in corso e torna al prompt; se non c'è
+ *              nulla in corso, esce dalla chat come prima.
  *
  * Nota: usa la stessa memoria persistente (inbox/horus-memory.md) di tutte
  * le altre chiamate a Horus, quindi eredita le note/correzioni già salvate.
@@ -91,6 +95,11 @@ async function maybeAutoRemember(userInput: string, assistantReply: string): Pro
 
 const history: HorusMessage[] = [CHAT_SYSTEM_PROMPT];
 
+// Impostato solo mentre c'è una richiesta a Horus (o un tool) in corso, in
+// modo che l'handler di Ctrl+C sappia se deve annullare la richiesta o
+// uscire dal programma. `null` significa "nessuna richiesta attiva".
+let activeRequestController: AbortController | null = null;
+
 function checkEnv(): void {
   if (!process.env["HORUS_OLLAMA_URL"]) {
     console.error(
@@ -106,8 +115,22 @@ async function main(): Promise<void> {
 
   const rl = readline.createInterface({ input: stdin, output: stdout });
 
+  // Comportamento di default: se non c'è nessuna richiesta in corso, Ctrl+C
+  // esce dalla chat esattamente come prima (readline chiude e usciamo dal
+  // ciclo). Se invece c'è una richiesta/tool in corso, la interrompiamo e
+  // torniamo al prompt invece di far crashare/uscire il processo.
+  process.on("SIGINT", () => {
+    if (activeRequestController) {
+      activeRequestController.abort();
+      return;
+    }
+    rl.close();
+  });
+
   console.log("🔥 Horus — chat interattiva (bikerlink:latest)");
-  console.log('   Comandi: "/reset" per svuotare la cronologia, "/exit" per uscire.\n');
+  console.log(
+    '   Comandi: "/reset" per svuotare la cronologia, "/exit" per uscire, Ctrl+C per interrompere una risposta in corso.\n'
+  );
 
   for (;;) {
     let userInput: string;
@@ -130,18 +153,31 @@ async function main(): Promise<void> {
 
     history.push({ role: "user", content: userInput });
 
+    // Un nuovo AbortController per ogni turno: se l'utente preme Ctrl+C
+    // mentre questo turno è in corso, la richiesta a Horus (o il tool in
+    // esecuzione) viene interrotta senza chiudere la chat.
+    const requestController = new AbortController();
+    activeRequestController = requestController;
+
     stdout.write("horus> ");
     try {
       let finalReply = "";
-      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+      for (
+        let iteration = 0;
+        iteration < MAX_TOOL_ITERATIONS && !requestController.signal.aborted;
+        iteration++
+      ) {
         let replied = "";
         const { content, toolCalls } = await horusChatRaw(history, {
           tools: getHorusTools(),
+          signal: requestController.signal,
           onToken: (token) => {
             stdout.write(token);
             replied += token;
           },
         });
+
+        if (requestController.signal.aborted) break;
 
         if (toolCalls.length === 0) {
           finalReply = content;
@@ -152,6 +188,8 @@ async function main(): Promise<void> {
         history.push({ role: "assistant", content, tool_calls: toolCalls });
 
         for (const call of toolCalls) {
+          if (requestController.signal.aborted) break;
+
           const toolName = call.function.name;
           stdout.write(`\n  ↳ [tool: ${toolName}(${JSON.stringify(call.function.arguments)})...] `);
 
@@ -167,31 +205,49 @@ async function main(): Promise<void> {
 
           let result: string;
           try {
-            result = await executeHorusTool(toolName, call.function.arguments);
+            result = await executeHorusTool(toolName, call.function.arguments, requestController.signal);
           } finally {
             clearInterval(progressTimer);
+          }
+
+          if (requestController.signal.aborted) {
+            stdout.write("interrotto\n");
+            break;
           }
 
           stdout.write("fatto\n");
           history.push({ role: "tool", name: toolName, content: result });
         }
-        stdout.write("horus> ");
+        if (!requestController.signal.aborted) stdout.write("horus> ");
       }
 
-      stdout.write("\n\n");
-      if (finalReply) {
-        history.push({ role: "assistant", content: finalReply });
-        await maybeAutoRemember(userInput, finalReply);
+      if (requestController.signal.aborted) {
+        stdout.write("\n\n⚠ Interrotto dall'utente (Ctrl+C).\n\n");
+        // Rimuove il messaggio utente del turno interrotto per non sporcare
+        // la cronologia con una risposta parziale/mancante.
+        history.pop();
       } else {
-        // Troppe iterazioni di tool senza risposta finale: evita di sporcare la cronologia.
-        console.error("⚠ Troppe chiamate a tool senza risposta finale.\n");
+        stdout.write("\n\n");
+        if (finalReply) {
+          history.push({ role: "assistant", content: finalReply });
+          await maybeAutoRemember(userInput, finalReply);
+        } else {
+          // Troppe iterazioni di tool senza risposta finale: evita di sporcare la cronologia.
+          console.error("⚠ Troppe chiamate a tool senza risposta finale.\n");
+        }
       }
     } catch (err) {
-      console.error(
-        `\n⚠ Errore: ${err instanceof Error ? err.message : String(err)}\n`
-      );
+      if (requestController.signal.aborted) {
+        stdout.write("\n\n⚠ Interrotto dall'utente (Ctrl+C).\n\n");
+      } else {
+        console.error(
+          `\n⚠ Errore: ${err instanceof Error ? err.message : String(err)}\n`
+        );
+      }
       // Rimuove il messaggio utente fallito per non sporcare la cronologia.
       history.pop();
+    } finally {
+      activeRequestController = null;
     }
   }
 
