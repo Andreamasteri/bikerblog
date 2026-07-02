@@ -62,8 +62,33 @@ export function appendHorusMemory(note: string): void {
 }
 
 export interface HorusMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** Solo per messaggi role:"tool" — nome del tool a cui questo risultato risponde. */
+  name?: string;
+  /** Solo per messaggi role:"assistant" che hanno richiesto dei tool. */
+  tool_calls?: HorusToolCall[];
+}
+
+export interface HorusToolCall {
+  id?: string;
+  function: {
+    name: string;
+    arguments: Record<string, unknown>;
+  };
+}
+
+export interface HorusToolSpec {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: "object";
+      properties: Record<string, { type: string; description?: string }>;
+      required?: string[];
+    };
+  };
 }
 
 export interface HorusChatOptions {
@@ -71,6 +96,15 @@ export interface HorusChatOptions {
   timeoutMs?: number;
   /** Chiamato per ogni frammento di testo ricevuto in streaming (es. per stampa live in una CLI). */
   onToken?: (token: string) => void;
+  /** Tool disponibili (function calling nativo di Ollama). */
+  tools?: HorusToolSpec[];
+  /** Se true, non allega la memoria persistente come system message (usato quando il chiamante la gestisce da sé). */
+  skipMemory?: boolean;
+}
+
+export interface HorusRawResult {
+  content: string;
+  toolCalls: HorusToolCall[];
 }
 
 function assertConfigured(): void {
@@ -82,16 +116,18 @@ function assertConfigured(): void {
 }
 
 /**
- * Invia una conversazione a Horus e restituisce il testo della risposta.
- * Lancia un errore se la richiesta fallisce o la risposta è vuota.
+ * Invia una conversazione a Horus e restituisce sia il testo che eventuali
+ * tool_calls richiesti dal modello (function calling nativo di Ollama).
+ * Non lancia errore se il contenuto è vuoto (caso normale quando il modello
+ * chiede solo un tool_call, senza testo).
  */
-export async function horusChat(
+export async function horusChatRaw(
   messages: HorusMessage[],
   options: HorusChatOptions = {}
-): Promise<string> {
+): Promise<HorusRawResult> {
   assertConfigured();
 
-  const memory = loadHorusMemory();
+  const memory = options.skipMemory ? "" : loadHorusMemory();
   const finalMessages: HorusMessage[] = memory
     ? [
         {
@@ -110,7 +146,8 @@ export async function horusChat(
     // Streaming: senza questo, Cloudflare Tunnel chiude la connessione dopo
     // ~100s di silenzio (errore 524) mentre Ollama genera in CPU. Con lo
     // streaming i byte arrivano di continuo e la connessione resta viva anche
-    // per generazioni di diversi minuti.
+    // per generazioni di diversi minuti. Confermato che i tool_calls arrivano
+    // regolarmente anche con stream:true (in un chunk con done:false).
     const res = await fetch(`${OLLAMA_URL!.replace(/\/$/, "")}/api/chat`, {
       method: "POST",
       headers: {
@@ -126,6 +163,7 @@ export async function horusChat(
         model: HORUS_MODEL,
         messages: finalMessages,
         stream: true,
+        ...(options.tools ? { tools: options.tools } : {}),
         options: {
           num_predict: options.maxTokens ?? 4096,
         },
@@ -146,6 +184,7 @@ export async function horusChat(
 
     let full = "";
     let buffer = "";
+    const toolCalls: HorusToolCall[] = [];
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
 
@@ -160,7 +199,11 @@ export async function horusChat(
         buffer = buffer.slice(newlineIdx + 1);
         if (!line) continue;
 
-        let chunk: { message?: { content?: string }; done?: boolean; error?: string };
+        let chunk: {
+          message?: { content?: string; tool_calls?: HorusToolCall[] };
+          done?: boolean;
+          error?: string;
+        };
         try {
           chunk = JSON.parse(line);
         } catch {
@@ -173,14 +216,13 @@ export async function horusChat(
           full += chunk.message.content;
           options.onToken?.(chunk.message.content);
         }
+        if (chunk.message?.tool_calls?.length) {
+          toolCalls.push(...chunk.message.tool_calls);
+        }
       }
     }
 
-    const text = full.trim();
-    if (!text) {
-      throw new Error("Horus: risposta vuota");
-    }
-    return text;
+    return { content: full.trim(), toolCalls };
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(`Horus request timeout dopo ${Math.round(timeoutMs / 1000)}s`);
@@ -189,6 +231,22 @@ export async function horusChat(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Invia una conversazione a Horus e restituisce il testo della risposta.
+ * Lancia un errore se la richiesta fallisce o la risposta è vuota.
+ * Per conversazioni con tool calling usa `horusChatRaw`.
+ */
+export async function horusChat(
+  messages: HorusMessage[],
+  options: HorusChatOptions = {}
+): Promise<string> {
+  const { content } = await horusChatRaw(messages, options);
+  if (!content) {
+    throw new Error("Horus: risposta vuota");
+  }
+  return content;
 }
 
 /**
