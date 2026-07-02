@@ -1,0 +1,13 @@
+{
+  "name": "horus-analysis-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servizio standalone da eseguire su ThinkCentre (TC): mantiene cloni locali di bikerlink/bikerblog/bikerweb e offre a Horus typecheck, lint, ricerca full-text e git log reali sui repo. Non fa parte del monorepo pnpm: si installa ed esegue in autonomia su TC con npm.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

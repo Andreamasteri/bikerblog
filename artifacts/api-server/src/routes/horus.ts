@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import express from "express";
 import {
   horusChatRaw,
-  HORUS_TOOLS,
+  getHorusTools,
   executeHorusTool,
   type HorusMessage,
 } from "@workspace/horus";
@@ -21,7 +21,9 @@ const CHAT_SYSTEM_PROMPT: HorusMessage = {
     "come funziona una feature, o quando vuoi proporre idee di nuovi task o contenuti basate su cosa esiste già nel codice — è sempre sola lettura, non puoi scrivere né eseguire nulla, " +
     "e qualsiasi idea o proposta va detta a parole in chat, mai eseguita autonomamente; " +
     "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
-    "anche se non te lo chiede esplicitamente con un comando — non serve chiedere conferma, salvala e basta.",
+    "anche se non te lo chiede esplicitamente con un comando — non serve chiedere conferma, salvala e basta; " +
+    "se disponibili, hai anche typecheck_repo, lint_repo, search_code e git_log: usali quando ti chiedono di trovare errori, bug, typo o problemi nel codice, o di cercare un pattern in tutto il repo — " +
+    "sono analisi statica REALE (tsc/eslint/grep eseguiti davvero), non una tua stima. Se questi tool non compaiono nella lista disponibile, di' esplicitamente che l'analisi statica del codice non è configurata in questo momento, invece di rispondere con un generico disclaimer da 'modello linguistico'.",
 };
 
 const MAX_TOOL_ITERATIONS = 5;
@@ -97,7 +99,7 @@ router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Pro
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       const { content, toolCalls } = await horusChatRaw(conversation, {
-        tools: HORUS_TOOLS,
+        tools: getHorusTools(),
         onToken: (token) => {
           sendEvent(res, "token", { token });
         },

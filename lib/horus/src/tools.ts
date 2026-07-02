@@ -39,6 +39,16 @@
  *  - remember_note — salva una nota permanente in inbox/horus-memory.md, decisa
  *                     autonomamente dal modello quando ritiene qualcosa degno di
  *                     essere ricordato tra una sessione e l'altra
+ *  - typecheck_repo, lint_repo, search_code, git_log — analisi statica REALE
+ *                     del codice (non solo lettura file), delegata a un
+ *                     servizio dedicato che gira su TC (mai su Replit o sul
+ *                     server Ollama), vedi deploy/horus-analysis/. Il
+ *                     servizio mantiene cloni locali persistenti dei tre
+ *                     repo e li aggiorna via git fetch prima di ogni analisi.
+ *                     Richiede HORUS_ANALYSIS_URL + ANALYSIS_GATE_TOKEN; se
+ *                     non configurati, questi tool non vengono esposti al
+ *                     modello (nessun errore, semplicemente non compaiono
+ *                     nella lista strumenti).
  */
 
 import type { HorusToolSpec } from "./client.js";
@@ -99,7 +109,7 @@ function resolveGithubToken(repoKey: HorusGithubRepoKey): string | undefined {
   return undefined;
 }
 
-export const HORUS_TOOLS: HorusToolSpec[] = [
+const BASE_HORUS_TOOLS: HorusToolSpec[] = [
   {
     type: "function",
     function: {
@@ -159,6 +169,106 @@ export const HORUS_TOOLS: HorusToolSpec[] = [
     },
   },
 ];
+
+const ANALYSIS_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "typecheck_repo",
+      description:
+        "Esegue davvero il typecheck TypeScript (tsc/typecheck) su uno dei repo del progetto e restituisce gli errori reali trovati, non una stima. Usalo quando l'utente chiede di trovare bug, errori di tipo o problemi nel codice.",
+      parameters: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: 'Quale repo analizzare: "bikerlink", "bikerblog" o "bikerweb".',
+            enum: ["bikerlink", "bikerblog", "bikerweb"],
+          },
+        },
+        required: ["repo"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "lint_repo",
+      description:
+        "Esegue davvero il linter (ESLint) su uno dei repo del progetto e restituisce warning/errori reali di stile e qualità del codice.",
+      parameters: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: 'Quale repo analizzare: "bikerlink", "bikerblog" o "bikerweb".',
+            enum: ["bikerlink", "bikerblog", "bikerweb"],
+          },
+        },
+        required: ["repo"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_code",
+      description:
+        "Cerca un testo o pattern in TUTTO il codice sorgente di un repo (ricerca full-text tipo grep), utile per trovare typo, occorrenze di una funzione/variabile, o pattern ripetuti senza dover leggere i file uno per uno con github_read.",
+      parameters: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: 'Quale repo cercare: "bikerlink", "bikerblog" o "bikerweb".',
+            enum: ["bikerlink", "bikerblog", "bikerweb"],
+          },
+          query: {
+            type: "string",
+            description: "Testo o pattern da cercare nel codice sorgente.",
+          },
+        },
+        required: ["repo", "query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "git_log",
+      description:
+        "Mostra la cronologia dei commit recenti (con file modificati) di un repo, utile per capire cosa è cambiato di recente prima di rispondere a domande sul codice.",
+      parameters: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: 'Quale repo: "bikerlink", "bikerblog" o "bikerweb".',
+            enum: ["bikerlink", "bikerblog", "bikerweb"],
+          },
+          limit: {
+            type: "number",
+            description: "Numero di commit da mostrare (default 10, massimo 50).",
+          },
+        },
+        required: ["repo"],
+      },
+    },
+  },
+];
+
+function isAnalysisServiceConfigured(): boolean {
+  return Boolean(process.env["HORUS_ANALYSIS_URL"] && process.env["ANALYSIS_GATE_TOKEN"]);
+}
+
+export function getHorusTools(): HorusToolSpec[] {
+  return isAnalysisServiceConfigured()
+    ? [...BASE_HORUS_TOOLS, ...ANALYSIS_TOOL_SPECS]
+    : BASE_HORUS_TOOLS;
+}
+
+/** @deprecated usa `getHorusTools()` — mantenuto per compatibilità, non include i tool di analisi condizionali. */
+export const HORUS_TOOLS = BASE_HORUS_TOOLS;
 
 interface DdgRelatedTopic {
   Text?: string;
@@ -421,6 +531,80 @@ function rememberNote(note: string): string {
   return `Nota salvata in memoria permanente: "${note}"`;
 }
 
+interface AnalysisServiceResponse {
+  result?: string;
+  error?: string;
+}
+
+/**
+ * Chiama il servizio di analisi codice su TC (deploy/horus-analysis/). Non
+ * esegue nulla localmente: clone, npm install, tsc ed eslint girano tutti su
+ * TC, mai su Replit o sul server Ollama.
+ */
+async function callAnalysisService(
+  path: string,
+  body: Record<string, unknown>
+): Promise<string> {
+  const baseUrl = process.env["HORUS_ANALYSIS_URL"];
+  const gateToken = process.env["ANALYSIS_GATE_TOKEN"];
+  if (!baseUrl || !gateToken) {
+    return "Servizio di analisi codice non configurato (HORUS_ANALYSIS_URL/ANALYSIS_GATE_TOKEN mancanti).";
+  }
+
+  const res = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Analysis-Gate-Token": gateToken,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10 * 60 * 1000),
+  });
+
+  const data = (await res.json().catch(() => ({}))) as AnalysisServiceResponse;
+
+  if (!res.ok) {
+    return `Servizio di analisi codice ha risposto con errore (HTTP ${res.status}): ${data.error ?? "errore sconosciuto"}.`;
+  }
+
+  return data.result ?? "Il servizio di analisi non ha restituito alcun risultato.";
+}
+
+async function typecheckRepoTool(repoArg: string): Promise<string> {
+  const repoKey = repoArg.trim().toLowerCase();
+  if (!isHorusGithubRepoKey(repoKey)) {
+    return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
+  }
+  return callAnalysisService("/typecheck", { repo: repoKey });
+}
+
+async function lintRepoTool(repoArg: string): Promise<string> {
+  const repoKey = repoArg.trim().toLowerCase();
+  if (!isHorusGithubRepoKey(repoKey)) {
+    return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
+  }
+  return callAnalysisService("/lint", { repo: repoKey });
+}
+
+async function searchCodeTool(repoArg: string, query: string): Promise<string> {
+  const repoKey = repoArg.trim().toLowerCase();
+  if (!isHorusGithubRepoKey(repoKey)) {
+    return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
+  }
+  if (!query.trim()) {
+    return "Query di ricerca mancante.";
+  }
+  return callAnalysisService("/search", { repo: repoKey, query });
+}
+
+async function gitLogTool(repoArg: string, limit: number | undefined): Promise<string> {
+  const repoKey = repoArg.trim().toLowerCase();
+  if (!isHorusGithubRepoKey(repoKey)) {
+    return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
+  }
+  return callAnalysisService("/git-log", { repo: repoKey, limit });
+}
+
 /**
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
  * da rimandare come messaggio role:"tool".
@@ -437,6 +621,17 @@ export async function executeHorusTool(
         return await githubRead(String(args.repo ?? ""), String(args.path ?? ""));
       case "remember_note":
         return rememberNote(String(args.note ?? ""));
+      case "typecheck_repo":
+        return await typecheckRepoTool(String(args.repo ?? ""));
+      case "lint_repo":
+        return await lintRepoTool(String(args.repo ?? ""));
+      case "search_code":
+        return await searchCodeTool(String(args.repo ?? ""), String(args.query ?? ""));
+      case "git_log":
+        return await gitLogTool(
+          String(args.repo ?? ""),
+          typeof args.limit === "number" ? args.limit : undefined
+        );
       default:
         return `Tool sconosciuto: "${name}".`;
     }

@@ -56,3 +56,11 @@ A user-provided fine-grained PAT (93 chars total: `github_pat_` + 82-char suffix
 **Why:** the raw secret value can't be inspected directly (secrets are opaque), so a truncated/malformed token looks identical to a wrong or expired one until you check its length/prefix via a bash echo of the env var.
 
 **How to apply:** when a GitHub PAT integration returns 401 unexpectedly, check `echo "len=${#TOKEN_VAR}"` and the first few characters in bash — a fine-grained PAT is always ~93 chars and starts with `github_pat_`; a classic PAT starts with `ghp_`. If the stored value is missing the expected prefix, normalize it in code (prepend `github_pat_` if neither known prefix is present) rather than asking the user to regenerate the token.
+
+## Real code analysis (typecheck/lint/search/git-log) must run on user hardware, not in the Repl or via the agent
+
+When a user wants an LLM chat assistant to do more than talk about code — actually run `tsc`/eslint/grep/git-log against real repos — that execution surface cannot live in the agent's own tool-calling loop or in the Repl's sandbox: the agent has no way to keep a persistent, fast, always-on execution environment for a third-party chat model to call into on its own schedule.
+
+**Why:** the agent's tool execution is turn-based and scoped to the current session; a chat model doing multi-turn tool-calling against a live web UI needs an always-available HTTP service it can hit synchronously, independent of any agent session. If the user already has their own always-on hardware serving the LLM (e.g. via a tunnel), that same box is the natural place to also host the analysis service and persistent git clones.
+
+**How to apply:** design this as a small standalone HTTP service (gated by its own bearer/header token, separate from other secrets) that the user runs on their own hardware, with the chat-side integration treating its tools as *optional*: only advertise them to the model (via a `getXTools()`-style helper) when the service's URL + token env vars are actually configured, and fall back to a base tool set otherwise. The agent cannot execute anything on the user's physical machine or read secret values, so setup docs must be self-contained (README) and the user must copy secret values in themselves.
