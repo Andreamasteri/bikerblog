@@ -45,6 +45,7 @@ import {
 } from "node:fs";
 import { pool } from "@workspace/db";
 import { publishFromClusters } from "./publish-from-clusters.js";
+import { sendPipelineAlert } from "./notify.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scriptsCwd = resolve(here, "..");
@@ -142,7 +143,7 @@ class PipelineReport {
     return "pass";
   }
 
-  write(): void {
+  write(): PipelineReportData {
     const totalMs = Date.now() - this.startTime;
     const totals = {
       posts_published: this.steps.reduce((s, r) => s + (r.posts_published ?? 0), 0),
@@ -176,6 +177,8 @@ class PipelineReport {
       `posts=${totals.posts_published} translated=${totals.translations_done} ` +
       `audio=${totals.audio_generated} errors=${totals.errors} warnings=${totals.warnings}`
     );
+
+    return data;
   }
 
   private pruneHistory(historyDir: string, maxFiles: number): void {
@@ -262,6 +265,16 @@ const report = new PipelineReport(today);
  * always completes, and we exit non-zero at the very end if needed.
  */
 let pipelineHardFailed = false;
+
+/**
+ * Operational failures that only surface as a "warn" step status (so they
+ * don't flip overall to "fail" and don't stop the pipeline) but still
+ * represent a real broken run — e.g. translate/podcast scripts exiting
+ * non-zero, or self-check reporting an unresolved production gap. These
+ * must still trigger the failure notification even when posts/audio were
+ * produced elsewhere in the same run.
+ */
+const criticalWarnings: string[] = [];
 
 console.log("[cluster-daily] avvio —", new Date().toISOString());
 
@@ -361,9 +374,23 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
 
   try {
     await publishFromClusters();
+    const postsAfter = await countPosts();
+    report.addStep({
+      step: 3,
+      name: "cluster posts publish",
+      status: "ok",
+      duration_ms: Date.now() - stepStart,
+      posts_published: Math.max(0, postsAfter - postsBefore),
+      errors: [],
+      warnings: [],
+    });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error("[cluster-daily] ✗ publishFromClusters fallito:", errMsg);
+    console.error(
+      "[cluster-daily] ✗ publishFromClusters fallito:", errMsg,
+      "— pipeline continua per permettere al self-check di rilevare gap e inviare la notifica di fallimento"
+    );
+    pipelineHardFailed = true;
     report.addStep({
       step: 3,
       name: "cluster posts publish",
@@ -372,21 +399,7 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
       errors: [errMsg],
       warnings: [],
     });
-    report.write();
-    await pool.end();
-    throw err;
   }
-
-  const postsAfter = await countPosts();
-  report.addStep({
-    step: 3,
-    name: "cluster posts publish",
-    status: "ok",
-    duration_ms: Date.now() - stepStart,
-    posts_published: Math.max(0, postsAfter - postsBefore),
-    errors: [],
-    warnings: [],
-  });
 }
 
 // ── Step 3.5: auto-fetch attività BikerLink dal DB live ───────────────────────
@@ -737,6 +750,7 @@ let diaryPostCreatedThisRun = false;
   if (translateResult.status !== 0) {
     const msg = `translate:posts exited with code ${translateResult.status}`;
     warnings.push(msg);
+    criticalWarnings.push(`step 5 (EN translation): ${msg}`);
     console.warn("[cluster-daily] ⚠", msg, "— il pipeline continua");
   }
 
@@ -809,6 +823,7 @@ let diaryPostCreatedThisRun = false;
     if (podcastResult.status !== 0) {
       const msg = `podcast:generate exited with code ${podcastResult.status}`;
       warnings.push(msg);
+      criticalWarnings.push(`step 6 (audio generation): ${msg}`);
       console.warn("[cluster-daily] ⚠", msg, "— il pipeline si conclude comunque");
     }
 
@@ -865,7 +880,9 @@ let diaryPostCreatedThisRun = false;
     // exit 1 = hard failure (gap non risolvibili)
     // exit 2 = soft warning (DIARY-SPARSE: post generato da dati insufficienti)
     if (selfCheckResult.status === 1) {
-      warnings.push("self-check: gap non risolvibili in produzione (hard failure)");
+      const msg = "self-check: gap non risolvibili in produzione (hard failure)";
+      warnings.push(msg);
+      criticalWarnings.push(`step 7 (production self-check): ${msg}`);
       console.warn("[cluster-daily] ⚠ self-check ha rilevato gap non risolvibili automaticamente");
     } else if (selfCheckResult.status === 2) {
       warnings.push("self-check: DIARY-SPARSE — post diaristico generato da dati insufficienti, richiede revisione manuale");
@@ -883,9 +900,69 @@ let diaryPostCreatedThisRun = false;
   }
 }
 
-// ── Scrivi il report e termina ────────────────────────────────────────────────
+// ── Scrivi il report ─────────────────────────────────────────────────────────
 
-report.write();
+const reportData = report.write();
+
+// ── Notifica in caso di fallimento o pipeline inaspettatamente silenziosa ────
+// Silent-on-success: nessuna notifica se overall === "pass" e qualcosa è stato
+// effettivamente prodotto (o gli step erano legittimamente skippati/vuoti).
+
+{
+  const failedSteps = reportData.steps
+    .filter((s) => s.status === "failed")
+    .map((s) => s.name);
+
+  // "Pipeline silenziosa": nessun post pubblicato E nessun audio generato,
+  // pur avendo eseguito almeno uno step non skippato (altrimenti sarebbe
+  // solo un giorno senza nulla da fare, non un'anomalia).
+  const ranAnyActionableStep = reportData.steps.some((s) => s.status !== "skipped");
+  const silentRun =
+    ranAnyActionableStep &&
+    reportData.totals.posts_published === 0 &&
+    reportData.totals.audio_generated === 0;
+
+  const shouldAlert =
+    reportData.overall === "fail" || silentRun || criticalWarnings.length > 0;
+
+  if (shouldAlert) {
+    const reasons: string[] = [];
+    if (reportData.overall === "fail") reasons.push("FALLITA");
+    if (silentRun) reasons.push("SILENZIOSA (0 post pubblicati, 0 audio generati)");
+    if (criticalWarnings.length > 0) {
+      reasons.push(`STEP CRITICI IN WARNING (${criticalWarnings.length})`);
+    }
+    const reason = reasons.join(" + ");
+
+    console.log(`[cluster-daily] anomalia rilevata (${reason}) — invio notifica`);
+
+    const allErrors = reportData.steps.flatMap((s) => s.errors);
+    const allWarnings = [...reportData.steps.flatMap((s) => s.warnings), ...criticalWarnings];
+    const failedOrCriticalSteps = Array.from(
+      new Set([...failedSteps, ...criticalWarnings.map((c) => c.split(":")[0]?.trim() ?? c)])
+    );
+
+    try {
+      await sendPipelineAlert({
+        date: reportData.date,
+        reason,
+        failedSteps: failedOrCriticalSteps,
+        postsPublished: reportData.totals.posts_published,
+        audioGenerated: reportData.totals.audio_generated,
+        translationsDone: reportData.totals.translations_done,
+        errors: allErrors,
+        warnings: allWarnings,
+      });
+    } catch (err) {
+      // La notifica non deve mai far fallire la pipeline.
+      console.error(
+        "[cluster-daily] invio notifica fallito:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+}
+
 await pool.end();
 
 console.log("[cluster-daily] completato —", new Date().toISOString());

@@ -4,3 +4,4 @@
 - [Horus shared lib + web chat](horus-shared-lib.md) — Horus client/tools live in `@workspace/horus` so scripts (CLI) and api-server (web chat) share one implementation; web chat streams via SSE, gated by `HORUS_CHAT_PASSWORD`.
 - [Bowie second agent](bowie-second-agent.md) — Bowie is a second Ollama agent on the same TC tunnel; generalized client config + fallback env vars pattern for adding more agents later.
 - [Bounded history tables](bounded-history-tables.md) — pattern for "save history without bloating the DB": jsonb transcript column + delete-oldest-beyond-N after each insert, sized column via jsonb_array_length instead of fetching full rows for list views.
+- [Pipeline failure alerts](pipeline-failure-alerts.md) — notify module fans out to all configured channels, never throws; every hard-failure path must reach it.

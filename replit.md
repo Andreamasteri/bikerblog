@@ -15,6 +15,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run cluster:tasks -- --state MERGED --by day` — raggruppa i task per giornata → `inbox/clusters-merged-by-day.md` (candidati post)
 - `pnpm --filter @workspace/scripts run cluster:daily` — cron entry point completo in 7 step: (1) aggiorna inbox chat se INBOX_URL è impostato, (2) genera cluster, (3) pubblica post cluster nel DB, (3.5) auto-fetch attività BikerLink da DB live (OTA + restart → diary-notes automatiche), (4) genera il post diaristico del giorno corrente (idempotente), (5) traduce i post senza EN in inglese (idempotente), (6) genera audio TTS per i post senza audio, (7) self-check produzione (verifica + ripara automaticamente dev→prod)
 - `pnpm --filter @workspace/scripts run pipeline:status` — **eseguire all'inizio di ogni sessione** per leggere il report dell'ultima run notturna (`inbox/pipeline-last-run.json`). Mostra step eseguiti, post pubblicati, traduzioni, audio generati, errori e warning. Exit code != 0 se la run è fallita.
+- `pnpm --filter @workspace/scripts run pipeline:notify-test` — invia un alert di prova per verificare la configurazione dei canali di notifica (vedi "Notifica di fallimento pipeline" sotto).
 - `pnpm --filter @workspace/scripts run self-check` — verifica che ogni post pubblicato negli ultimi 7 giorni sia presente in produzione con `body_en`, `audio_url` e contenuto aggiornato (rileva stale tramite excerpt diff). Se rileva gap, fa push automatico via `/_internal/seed-posts` usando `SEED_TOKEN`. Env opzionali: `PROD_URL` (default `https://bikerlink-blog.replit.app`), `SELF_CHECK_DAYS` (default 7).
 - `pnpm --filter @workspace/scripts run bikerlink:activity -- --date YYYY-MM-DD` — recupera OTA release e server restart del DB BikerLink per una data e scrive `inbox/diary-notes-YYYY-MM-DD.md`. Eseguito automaticamente dallo step 3.5 della pipeline. Non sovrascrive note manuali già esistenti. Richiede `BIKERLINK_DATABASE_URL`.
 - `pnpm --filter @workspace/scripts run publish:from-clusters` — pubblica manualmente i cluster già generati come post del blog
@@ -32,6 +33,15 @@ _Replace the heading above with the project's name, and this line with one sente
     - `it-IT-GiuseppeNeural` — maschile
   - Esempio voce femminile: `pnpm --filter @workspace/scripts run podcast:generate -- --voice it-IT-ElsaNeural`
 - Required env: `DATABASE_URL` — Postgres connection string
+
+## Notifica di fallimento pipeline
+
+`run-cluster-daily.ts` invia un alert (silent-on-success: nessun invio se tutto va bene) quando la run notturna fallisce (`overall === "fail"`) o è inaspettatamente silenziosa (0 post pubblicati e 0 audio generati pur avendo eseguito almeno uno step non skippato). Il messaggio include data, motivo, step falliti, post pubblicati, audio generati, traduzioni completate ed errori/warning raccolti. Logica e invio in `scripts/src/notify.ts` (`sendPipelineAlert`), testabile con `pnpm --filter @workspace/scripts run pipeline:notify-test`.
+
+Canali opzionali (si inviano a tutti quelli configurati contemporaneamente; se nessuno è configurato viene solo loggato un warning, la pipeline non si blocca mai per questo):
+- **Email via Resend**: `RESEND_API_KEY`, `PIPELINE_ALERT_EMAIL_TO` (opzionale `PIPELINE_ALERT_EMAIL_FROM`)
+- **Slack** (incoming webhook): `PIPELINE_ALERT_SLACK_WEBHOOK_URL`
+- **Telegram** (bot): `PIPELINE_ALERT_TELEGRAM_BOT_TOKEN`, `PIPELINE_ALERT_TELEGRAM_CHAT_ID`
 
 ## Deployment schedulato (cron 23:30 Europe/Rome)
 
