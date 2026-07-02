@@ -23,7 +23,12 @@ BikerLink has a proprietary matching engine. In all translations, NEVER reveal:
 - Numerical values of match types or internal states (e.g. numerical codes, internal enums)
 - Details on how GPS distance or search radius is calculated
 - Source file names or internal code paths of the matching engine
-Describe matching in an anecdotal, user-impact way: "improved the matching", "the system now recognizes similar bikes", "fixed a bug in the match flow". NEVER the internal technical how.`;
+Describe matching in an anecdotal, user-impact way: "improved the matching", "the system now recognizes similar bikes", "fixed a bug in the match flow". NEVER the internal technical how.
+
+TRANSLATION FIDELITY RULE:
+Translate faithfully — never amplify, elaborate on, or add technical detail about the matching engine that is not already present in the original Italian text. If the source text keeps matching vague, the English translation must stay equally vague; do not "fill in" technical color that a translator might be tempted to add for fluency.
+
+If the Italian source text itself contains internal technical terms that violate the rule above (e.g. literal database/table names, raw SQL snippets, or specific numerical matching criteria), do NOT preserve them literally in the translation — rewrite that part generically per the anecdotal style above, exactly as if the source had already been vague.`;
 
 /**
  * Translates an Italian motorcycle blog post to English.
