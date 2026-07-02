@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import { Router, type IRouter } from "express";
 import { and, desc, eq, ilike, lte, or, sql } from "drizzle-orm";
 import {
@@ -14,35 +13,22 @@ import {
   GetPostParams,
   LikePostParams,
 } from "@workspace/api-zod";
+import {
+  createLikeRateLimiter,
+  getClientIp,
+  hashIp,
+} from "../lib/like-rate-limit";
 
-function hashIp(ip: string): string {
-  return createHash("sha256").update(ip).digest("hex");
-}
-
-const LIKE_RATE_WINDOW_MS = 60_000;
-const LIKE_RATE_MAX = 10;
-const likeRateMap = new Map<string, number[]>();
-
-setInterval(() => {
-  const cutoff = Date.now() - LIKE_RATE_WINDOW_MS;
-  for (const [key, timestamps] of likeRateMap) {
-    const remaining = timestamps.filter((t) => t > cutoff);
-    if (remaining.length === 0) likeRateMap.delete(key);
-    else likeRateMap.set(key, remaining);
-  }
-}, 5 * 60_000).unref();
-
-function checkLikeRateLimit(connectionIp: string): boolean {
-  const now = Date.now();
-  const cutoff = now - LIKE_RATE_WINDOW_MS;
-  const bucket = (likeRateMap.get(connectionIp) ?? []).filter(
-    (t) => t > cutoff,
-  );
-  if (bucket.length >= LIKE_RATE_MAX) return false;
-  bucket.push(now);
-  likeRateMap.set(connectionIp, bucket);
-  return true;
-}
+// One like per post per visit is the expected pattern, so this stays tighter
+// than the comment-like limiter (see comments.ts), which allows more actions
+// per minute since a single post can host many likeable comments. Kept in
+// its own bucket so post-liking and comment-liking bursts never share budget.
+const POST_LIKE_RATE_WINDOW_MS = 60_000;
+const POST_LIKE_RATE_MAX = 10;
+const checkLikeRateLimit = createLikeRateLimiter({
+  windowMs: POST_LIKE_RATE_WINDOW_MS,
+  max: POST_LIKE_RATE_MAX,
+});
 
 const router: IRouter = Router();
 
@@ -237,13 +223,13 @@ router.post("/posts/:slug/like", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Post not found" });
     return;
   }
-  const connectionIp = req.socket.remoteAddress ?? "unknown";
-  if (!checkLikeRateLimit(connectionIp)) {
+  const clientIp = getClientIp(req);
+  if (!checkLikeRateLimit(clientIp)) {
+    req.log.warn({ slug: parsed.data.slug }, "post like rate limit exceeded");
     res.status(429).json({ error: "Too many requests. Please slow down." });
     return;
   }
-  const ip = req.ip ?? connectionIp;
-  const ipHash = hashIp(ip);
+  const ipHash = hashIp(clientIp);
   let updated: typeof postsTable.$inferSelect | undefined;
   try {
     await db.transaction(async (tx) => {
