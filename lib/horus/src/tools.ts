@@ -733,6 +733,7 @@ interface BlogComment {
   authorName?: string;
   body?: string;
   createdAt?: string;
+  likeCount?: number;
 }
 
 const READ_BLOG_BODY_TRUNCATE_LEN = 4000;
@@ -768,7 +769,9 @@ function formatBlogPostDetail(p: BlogPostSummary): string {
 }
 
 function formatBlogComment(c: BlogComment): string {
-  return `- ${c.authorName ?? "Anonimo"} (${c.createdAt ?? "?"}): ${c.body ?? ""}`;
+  const likes = c.likeCount ?? 0;
+  const likeSuffix = likes > 0 ? ` [${likes} like]` : "";
+  return `- ${c.authorName ?? "Anonimo"} (${c.createdAt ?? "?"})${likeSuffix}: ${c.body ?? ""}`;
 }
 
 type CommentSentiment = "positivo" | "negativo" | "neutro";
@@ -848,10 +851,21 @@ function buildCommentsEngagementSummary(comments: BlogComment[]): string {
     tono = "prevalentemente neutro/informativo";
   }
 
+  const topLiked = [...comments]
+    .filter((c) => (c.likeCount ?? 0) > 0)
+    .sort((a, b) => (b.likeCount ?? 0) - (a.likeCount ?? 0))
+    .slice(0, COMMENTS_HIGHLIGHT_COUNT);
+
+  const topLikedBlock =
+    topLiked.length > 0
+      ? `\n- Più apprezzati:\n${topLiked.map(formatBlogComment).join("\n")}`
+      : "\n- Più apprezzati: nessun commento ha ancora ricevuto like";
+
   return (
     `Riepilogo engagement (${total} commenti totali, tono ${tono}):\n` +
     `- Positivi: ${positive} (${pct(positive)}) — Negativi: ${negative} (${pct(negative)}) — Neutri/altro: ${neutral} (${pct(neutral)})\n` +
-    `- Ultimi 7 giorni: ${recentCount} commenti nuovi su ${total} totali`
+    `- Ultimi 7 giorni: ${recentCount} commenti nuovi su ${total} totali` +
+    topLikedBlock
   );
 }
 

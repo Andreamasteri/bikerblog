@@ -12,4 +12,5 @@ export interface Comment {
   authorName: string;
   body: string;
   createdAt: Date;
+  likeCount: number;
 }

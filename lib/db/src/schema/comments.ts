@@ -17,6 +17,7 @@ export const commentsTable = pgTable("comments", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  likeCount: integer("like_count").notNull().default(0),
 });
 
 export type CommentRow = typeof commentsTable.$inferSelect;

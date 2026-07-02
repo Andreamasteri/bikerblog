@@ -178,6 +178,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/Comment"
 
+  /posts/{slug}/comments/{commentId}/like:
+    post:
+      operationId: likeComment
+      tags: [comments]
+      summary: Increment like counter for a comment
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+        - in: path
+          name: commentId
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited or already liked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /tags:
     get:
       operationId: listTags
@@ -344,13 +378,14 @@ components:
 
     Comment:
       type: object
-      required: [id, postId, authorName, body, createdAt]
+      required: [id, postId, authorName, body, createdAt, likeCount]
       properties:
         id: { type: integer }
         postId: { type: integer }
         authorName: { type: string }
         body: { type: string }
         createdAt: { type: string, format: date-time }
+        likeCount: { type: integer }
 
     CommentInput:
       type: object

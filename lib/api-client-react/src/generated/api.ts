@@ -663,6 +663,78 @@ export const useCreatePostComment = <TError = ErrorType<unknown>,
       return useMutation(getCreatePostCommentMutationOptions(options));
     }
 
+export const getLikeCommentUrl = (slug: string,
+    commentId: number,) => {
+
+
+
+
+  return `/api/posts/${slug}/comments/${commentId}/like`
+}
+
+/**
+ * @summary Increment like counter for a comment
+ */
+export const likeComment = async (slug: string,
+    commentId: number, options?: RequestInit): Promise<Comment> => {
+
+  return customFetch<Comment>(getLikeCommentUrl(slug,commentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getLikeCommentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof likeComment>>, TError,{slug: string;commentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof likeComment>>, TError,{slug: string;commentId: number}, TContext> => {
+
+const mutationKey = ['likeComment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof likeComment>>, {slug: string;commentId: number}> = (props) => {
+          const {slug,commentId} = props ?? {};
+
+          return  likeComment(slug,commentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LikeCommentMutationResult = NonNullable<Awaited<ReturnType<typeof likeComment>>>
+
+    export type LikeCommentMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Increment like counter for a comment
+ */
+export const useLikeComment = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof likeComment>>, TError,{slug: string;commentId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof likeComment>>,
+        TError,
+        {slug: string;commentId: number},
+        TContext
+      > => {
+      return useMutation(getLikeCommentMutationOptions(options));
+    }
+
 export const getListTagsUrl = () => {
 
 

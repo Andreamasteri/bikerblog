@@ -223,7 +223,8 @@ export const ListPostCommentsResponseItem = zod.object({
   "postId": zod.number(),
   "authorName": zod.string(),
   "body": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "likeCount": zod.number()
 })
 export const ListPostCommentsResponse = zod.array(ListPostCommentsResponseItem)
 
@@ -244,6 +245,24 @@ export const createPostCommentBodyBodyMax = 2000;
 export const CreatePostCommentBody = zod.object({
   "authorName": zod.string().min(1).max(createPostCommentBodyAuthorNameMax),
   "body": zod.string().min(1).max(createPostCommentBodyBodyMax)
+})
+
+
+/**
+ * @summary Increment like counter for a comment
+ */
+export const LikeCommentParams = zod.object({
+  "slug": zod.coerce.string(),
+  "commentId": zod.coerce.number()
+})
+
+export const LikeCommentResponse = zod.object({
+  "id": zod.number(),
+  "postId": zod.number(),
+  "authorName": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "likeCount": zod.number()
 })
 
 

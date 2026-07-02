@@ -261,7 +261,9 @@ router.post("/posts/:slug/like", async (req, res): Promise<void> => {
       updated = u;
     });
   } catch (err) {
-    const pgCode = (err as { code?: string }).code;
+    const pgCode =
+      (err as { code?: string }).code ??
+      (err as { cause?: { code?: string } }).cause?.code;
     if (pgCode === "23505") {
       res.status(429).json({ error: "You already liked this post." });
     } else {

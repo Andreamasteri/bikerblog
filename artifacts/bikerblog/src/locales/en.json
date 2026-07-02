@@ -56,6 +56,7 @@
     "commentPostedDesc": "Your voice has been added to the mix.",
     "commentError": "Error",
     "commentErrorDesc": "Failed to post comment. Try again.",
+    "commentLikeError": "Failed to like comment. Try again.",
     "noComments": "No comments yet. Be the first.",
     "deadEnd": "Dead End",
     "notFound": "The post you're looking for doesn't exist or has been moved.",

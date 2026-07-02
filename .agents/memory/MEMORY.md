@@ -8,3 +8,5 @@
 - [Horus abort/cancel pattern](horus-abort-cancel.md) — how mid-run cancellation is wired across web SSE, CLI Ctrl+C, and the shared tool executor; reuse this shape for any new Horus surface that adds tool calls.
 - [Content audit / draft status](content-audit-draft-status.md) — posts table has a `status` column ("published"/"draft"); every public-facing post query must filter on it, not just the write path that sets it.
 - [SSE abort regression test](sse-abort-regression-test.md) — testing req vs res "close" timing needs a real http server, not mocks; reusable pattern for any new SSE endpoint.
+- [Drizzle pg error code](drizzle-pg-error-code.md) — Drizzle wraps raw pg errors; unique-violation code lives at `err.cause.code`, not `err.code` — check both when mapping 23505 to a status.
+- [DB migrations vs push](db-migrations-vs-push.md) — `drizzle-kit push` (dev) doesn't create migration files; `generate` is currently broken here — new migrations must be added by hand alongside schema.ts changes.

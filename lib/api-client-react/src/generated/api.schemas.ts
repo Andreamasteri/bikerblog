@@ -127,6 +127,7 @@ export interface Comment {
   authorName: string;
   body: string;
   createdAt: string;
+  likeCount: number;
 }
 
 export interface CommentInput {

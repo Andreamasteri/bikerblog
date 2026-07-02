@@ -1,4 +1,4 @@
-import { useGetPost, useLikePost, useListPostComments, useCreatePostComment, getGetPostQueryKey, getListPostCommentsQueryKey } from "@workspace/api-client-react";
+import { useGetPost, useLikePost, useListPostComments, useCreatePostComment, useLikeComment, getGetPostQueryKey, getListPostCommentsQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { format } from "date-fns";
 import { Clock, MapPin, Bike, ThumbsUp, MessageSquare, ChevronLeft, Quote, Languages } from "lucide-react";
@@ -68,6 +68,7 @@ export function PostDetail() {
 
   const likeMutation = useLikePost();
   const commentMutation = useCreatePostComment();
+  const commentLikeMutation = useLikeComment();
 
   const [commentName, setCommentName] = useState("");
   const [commentBody, setCommentBody] = useState("");
@@ -78,6 +79,18 @@ export function PostDetail() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetPostQueryKey(slug) });
       }
+    });
+  };
+
+  const handleCommentLike = (commentId: number) => {
+    if (!slug) return;
+    commentLikeMutation.mutate({ slug, commentId }, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListPostCommentsQueryKey(slug) });
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: t("postDetail.commentLikeError") });
+      },
     });
   };
 
@@ -316,7 +329,17 @@ export function PostDetail() {
                     <span className="font-bold uppercase tracking-wider">{comment.authorName}</span>
                     <span className="text-xs text-muted-foreground font-mono">{format(new Date(comment.createdAt), "MMM d, yyyy h:mm a")}</span>
                   </div>
-                  <p className="text-foreground/90 whitespace-pre-wrap">{comment.body}</p>
+                  <p className="text-foreground/90 whitespace-pre-wrap mb-3">{comment.body}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto p-0 text-xs uppercase tracking-wider font-bold text-muted-foreground hover:text-primary"
+                    onClick={() => handleCommentLike(comment.id)}
+                    disabled={commentLikeMutation.isPending}
+                  >
+                    <ThumbsUp className="w-3 h-3 mr-1.5" />
+                    {comment.likeCount} {t("postDetail.likes")}
+                  </Button>
                 </div>
               ))
             )}

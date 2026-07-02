@@ -92,7 +92,7 @@ overrides:
   esbuild>@esbuild/win32-ia32: '-'
   esbuild>@esbuild/win32-x64: '-'
   form-data: '>=2.5.6'
-  js-yaml: '>=4.2.0'
+  js-yaml: '^4.2.0'
   lightningcss>lightningcss-android-arm64: '-'
   lightningcss>lightningcss-darwin-arm64: '-'
   lightningcss>lightningcss-darwin-x64: '-'
