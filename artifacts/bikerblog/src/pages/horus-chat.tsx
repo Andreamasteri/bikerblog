@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Flame, Send, Lock, Wrench, User, RotateCcw, Cpu, Play, Square } from "lucide-react";
+import { Flame, Send, Lock, Wrench, User, RotateCcw, Cpu, Play, Square, History, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,35 @@ function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-type Mode = "chat" | "conversation";
+type Mode = "chat" | "conversation" | "history";
+
+interface ConvoHistoryItem {
+  id: number;
+  topic: string;
+  turnCount: number;
+  createdAt: string;
+}
+
+interface ConvoHistoryDetail {
+  id: number;
+  topic: string;
+  createdAt: string;
+  transcript: { agent: ConvoAgent; content: string }[];
+}
+
+function formatConvoDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
 
 export function HorusChat() {
   const [password, setPassword] = useState<string | null>(() =>
@@ -52,6 +80,12 @@ export function HorusChat() {
   const [isConvoRunning, setIsConvoRunning] = useState(false);
   const [convoError, setConvoError] = useState<string | null>(null);
 
+  const [historyItems, setHistoryItems] = useState<ConvoHistoryItem[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [viewingConvo, setViewingConvo] = useState<ConvoHistoryDetail | null>(null);
+  const [isViewingLoading, setIsViewingLoading] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const convoScrollRef = useRef<HTMLDivElement>(null);
@@ -64,6 +98,62 @@ export function HorusChat() {
   useEffect(() => {
     convoScrollRef.current?.scrollTo({ top: convoScrollRef.current.scrollHeight, behavior: "smooth" });
   }, [convoMessages, convoActiveAgent]);
+
+  useEffect(() => {
+    if (mode !== "history" || !password) return;
+    void loadHistoryList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, password]);
+
+  async function loadHistoryList() {
+    if (!password) return;
+    setIsHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const base = import.meta.env.BASE_URL;
+      const res = await fetch(`${base}api/horus/bowie-conversations`, {
+        headers: { "X-Horus-Password": password },
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem(SESSION_KEY);
+        setPassword(null);
+        setAuthError("Password errata. Riprova.");
+        return;
+      }
+      if (!res.ok) throw new Error(`Richiesta fallita (HTTP ${res.status})`);
+      const data = (await res.json()) as ConvoHistoryItem[];
+      setHistoryItems(data);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Errore nel caricamento della cronologia.");
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }
+
+  async function openHistoryItem(id: number) {
+    if (!password) return;
+    setIsViewingLoading(true);
+    setHistoryError(null);
+    try {
+      const base = import.meta.env.BASE_URL;
+      const res = await fetch(`${base}api/horus/bowie-conversations/${id}`, {
+        headers: { "X-Horus-Password": password },
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem(SESSION_KEY);
+        setPassword(null);
+        setAuthError("Password errata. Riprova.");
+        return;
+      }
+      if (!res.ok) throw new Error(`Richiesta fallita (HTTP ${res.status})`);
+      const data = (await res.json()) as ConvoHistoryDetail;
+      setViewingConvo(data);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Errore nel caricamento della conversazione.");
+    } finally {
+      setIsViewingLoading(false);
+    }
+  }
 
   function handleUnlock(e: FormEvent) {
     e.preventDefault();
@@ -355,7 +445,11 @@ export function HorusChat() {
               Horus
             </h1>
             <p className="text-xs text-muted-foreground mt-1">
-              {mode === "chat" ? "bikerlink:latest" : "Conversazione con Bowie"}
+              {mode === "chat"
+                ? "bikerlink:latest"
+                : mode === "conversation"
+                  ? "Conversazione con Bowie"
+                  : "Cronologia conversazioni"}
             </p>
           </div>
         </div>
@@ -364,12 +458,17 @@ export function HorusChat() {
             <RotateCcw className="w-4 h-4" />
             Nuova chat
           </Button>
-        ) : (
+        ) : mode === "conversation" ? (
           <Button variant="ghost" size="sm" onClick={resetConversation} className="gap-2">
             <RotateCcw className="w-4 h-4" />
             Nuova conversazione
           </Button>
-        )}
+        ) : viewingConvo ? (
+          <Button variant="ghost" size="sm" onClick={() => setViewingConvo(null)} className="gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Torna alla cronologia
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex gap-2 mb-4 shrink-0">
@@ -392,6 +491,16 @@ export function HorusChat() {
         >
           <Cpu className="w-4 h-4" />
           Horus ↔ Bowie
+        </Button>
+        <Button
+          type="button"
+          variant={mode === "history" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setMode("history")}
+          className="gap-2"
+        >
+          <History className="w-4 h-4" />
+          Cronologia
         </Button>
       </div>
 
@@ -470,7 +579,7 @@ export function HorusChat() {
             </Button>
           </form>
         </>
-      ) : (
+      ) : mode === "conversation" ? (
         <>
           <div ref={convoScrollRef} className="flex-1 border border-border bg-muted/5 mb-4 overflow-y-auto">
             <div className="p-6 space-y-6">
@@ -546,6 +655,94 @@ export function HorusChat() {
             )}
           </form>
         </>
+      ) : viewingConvo ? (
+        <div className="flex-1 border border-border bg-muted/5 mb-4 overflow-y-auto">
+          <div className="p-6 space-y-6">
+            <div className="pb-4 border-b border-border">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold mb-1">
+                {formatConvoDate(viewingConvo.createdAt)}
+              </p>
+              <p className="text-sm font-medium">{viewingConvo.topic}</p>
+            </div>
+            {viewingConvo.transcript.map((m, i) => (
+              <div
+                key={i}
+                className={`flex gap-3 ${m.agent === "bowie" ? "flex-row-reverse" : "flex-row"}`}
+              >
+                <Avatar className="w-8 h-8 shrink-0">
+                  <AvatarFallback
+                    className={
+                      m.agent === "bowie"
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-foreground text-background"
+                    }
+                  >
+                    {m.agent === "bowie" ? <Cpu className="w-4 h-4" /> : <Flame className="w-4 h-4" />}
+                  </AvatarFallback>
+                </Avatar>
+                <div
+                  className={`max-w-[80%] flex flex-col gap-1 ${
+                    m.agent === "bowie" ? "items-end" : "items-start"
+                  }`}
+                >
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+                    {m.agent === "bowie" ? "Bowie" : "Horus"}
+                  </span>
+                  <div
+                    className={`px-4 py-3 whitespace-pre-wrap text-sm leading-relaxed ${
+                      m.agent === "bowie"
+                        ? "bg-accent/20 border border-accent/40"
+                        : "bg-background border border-border"
+                    }`}
+                  >
+                    {m.content}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 border border-border bg-muted/5 mb-4 overflow-y-auto">
+          <div className="p-6 space-y-3">
+            {isHistoryLoading && (
+              <div className="flex justify-center py-16">
+                <Spinner className="w-5 h-5" />
+              </div>
+            )}
+            {!isHistoryLoading && historyError && (
+              <div className="text-sm text-destructive text-center py-16">{historyError}</div>
+            )}
+            {!isHistoryLoading && !historyError && historyItems.length === 0 && (
+              <div className="text-center text-muted-foreground text-sm py-16">
+                Nessuna conversazione tra Horus e Bowie salvata finora.
+              </div>
+            )}
+            {!isHistoryLoading &&
+              !historyError &&
+              historyItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => void openHistoryItem(item.id)}
+                  disabled={isViewingLoading}
+                  className="w-full text-left border border-border bg-background hover:bg-muted/20 transition-colors px-4 py-3 flex items-center justify-between gap-3 disabled:opacity-60"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{item.topic}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatConvoDate(item.createdAt)} · {item.turnCount} turni
+                    </p>
+                  </div>
+                  {isViewingLoading ? (
+                    <Spinner className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <Cpu className="w-4 h-4 shrink-0 text-muted-foreground" />
+                  )}
+                </button>
+              ))}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -3,3 +3,4 @@
 - [Horus (Ollama) integration lessons](horus-integration.md) — Cloudflare Tunnel needs streaming for long generations; bash tool can't reliably read new secrets or host background processes; fine-grained GitHub PATs pasted as secrets can lose their `github_pat_` prefix (401s).
 - [Horus shared lib + web chat](horus-shared-lib.md) — Horus client/tools live in `@workspace/horus` so scripts (CLI) and api-server (web chat) share one implementation; web chat streams via SSE, gated by `HORUS_CHAT_PASSWORD`.
 - [Bowie second agent](bowie-second-agent.md) — Bowie is a second Ollama agent on the same TC tunnel; generalized client config + fallback env vars pattern for adding more agents later.
+- [Bounded history tables](bounded-history-tables.md) — pattern for "save history without bloating the DB": jsonb transcript column + delete-oldest-beyond-N after each insert, sized column via jsonb_array_length instead of fetching full rows for list views.

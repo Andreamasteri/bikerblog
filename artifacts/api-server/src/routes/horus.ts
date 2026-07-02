@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import express from "express";
+import { desc, eq, lt, and, sql } from "drizzle-orm";
+import { db, horusBowieConversationsTable, type HorusConversationTurn } from "@workspace/db";
 import {
   horusChatRaw,
   bowieChatRaw,
@@ -11,6 +13,21 @@ import {
 } from "@workspace/horus";
 
 const router: IRouter = Router();
+
+// Conserviamo solo le conversazioni più recenti per non far crescere la
+// tabella all'infinito: ogni nuovo salvataggio elimina le più vecchie oltre
+// questo limite.
+const MAX_STORED_CONVERSATIONS = 50;
+
+function requireHorusPassword(req: express.Request, res: express.Response): boolean {
+  const password = process.env["HORUS_CHAT_PASSWORD"];
+  const provided = req.headers["x-horus-password"];
+  if (!password || provided !== password) {
+    res.status(401).json({ error: "unauthorized" });
+    return false;
+  }
+  return true;
+}
 
 const CHAT_SYSTEM_PROMPT: HorusMessage = {
   role: "system",
@@ -61,12 +78,7 @@ function sendEvent(res: express.Response, event: string, data: unknown): void {
 }
 
 router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Promise<void> => {
-  const password = process.env["HORUS_CHAT_PASSWORD"];
-  const provided = req.headers["x-horus-password"];
-  if (!password || provided !== password) {
-    res.status(401).json({ error: "unauthorized" });
-    return;
-  }
+  if (!requireHorusPassword(req, res)) return;
 
   const { message, history } = req.body as {
     message?: unknown;
@@ -196,12 +208,7 @@ router.post(
   "/horus/bowie-conversation",
   express.json({ limit: "1mb" }),
   async (req, res): Promise<void> => {
-    const password = process.env["HORUS_CHAT_PASSWORD"];
-    const provided = req.headers["x-horus-password"];
-    if (!password || provided !== password) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
+    if (!requireHorusPassword(req, res)) return;
 
     const { topic, maxTurns } = req.body as { topic?: unknown; maxTurns?: unknown };
 
@@ -278,6 +285,14 @@ router.post(
 
       if (!abortController.signal.aborted) {
         sendEvent(res, "done", {});
+
+        if (transcript.length > 0) {
+          try {
+            await saveBowieConversation(topic, transcript);
+          } catch (err) {
+            req.log.error({ err }, "failed to persist horus-bowie conversation");
+          }
+        }
       }
     } catch (err) {
       if (!abortController.signal.aborted) {
@@ -293,5 +308,77 @@ router.post(
     }
   }
 );
+
+async function saveBowieConversation(topic: string, transcript: ConvoTurn[]): Promise<void> {
+  await db.insert(horusBowieConversationsTable).values({
+    topic,
+    transcript: transcript satisfies HorusConversationTurn[],
+  });
+
+  // Manteniamo la tabella leggera: dopo ogni inserimento cancelliamo tutto
+  // ciò che eccede il numero massimo di conversazioni conservate.
+  const overflow = await db
+    .select({ id: horusBowieConversationsTable.id })
+    .from(horusBowieConversationsTable)
+    .orderBy(desc(horusBowieConversationsTable.createdAt))
+    .offset(MAX_STORED_CONVERSATIONS);
+
+  if (overflow.length > 0) {
+    const cutoffId = Math.max(...overflow.map((row) => row.id));
+    await db
+      .delete(horusBowieConversationsTable)
+      .where(and(lt(horusBowieConversationsTable.id, cutoffId + 1)));
+  }
+}
+
+router.get("/horus/bowie-conversations", async (req, res): Promise<void> => {
+  if (!requireHorusPassword(req, res)) return;
+
+  const rows = await db
+    .select({
+      id: horusBowieConversationsTable.id,
+      topic: horusBowieConversationsTable.topic,
+      turnCount: sql<number>`jsonb_array_length(${horusBowieConversationsTable.transcript})`,
+      createdAt: horusBowieConversationsTable.createdAt,
+    })
+    .from(horusBowieConversationsTable)
+    .orderBy(desc(horusBowieConversationsTable.createdAt));
+
+  res.json(
+    rows.map((row) => ({
+      id: row.id,
+      topic: row.topic,
+      turnCount: Number(row.turnCount),
+      createdAt: row.createdAt.toISOString(),
+    }))
+  );
+});
+
+router.get("/horus/bowie-conversations/:id", async (req, res): Promise<void> => {
+  if (!requireHorusPassword(req, res)) return;
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "invalid id" });
+    return;
+  }
+
+  const [row] = await db
+    .select()
+    .from(horusBowieConversationsTable)
+    .where(eq(horusBowieConversationsTable.id, id));
+
+  if (!row) {
+    res.status(404).json({ error: "conversation not found" });
+    return;
+  }
+
+  res.json({
+    id: row.id,
+    topic: row.topic,
+    transcript: row.transcript,
+    createdAt: row.createdAt.toISOString(),
+  });
+});
 
 export default router;
