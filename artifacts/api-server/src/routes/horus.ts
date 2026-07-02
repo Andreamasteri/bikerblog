@@ -25,7 +25,12 @@ const CHAT_SYSTEM_PROMPT: HorusMessage = {
 };
 
 const MAX_TOOL_ITERATIONS = 5;
-const MAX_HISTORY_MESSAGES = 40;
+// Ogni messaggio rimanda l'intera cronologia a Ollama, che la rielabora da
+// zero (nessun riuso del contesto tra richieste HTTP separate). Su hardware
+// CPU questo tempo di "prompt processing" cresce con la lunghezza della
+// conversazione, quindi teniamo la finestra inviata ragionevolmente corta
+// per mantenere le risposte veloci anche in chat lunghe.
+const MAX_HISTORY_MESSAGES = 16;
 
 interface ChatRequestMessage {
   role: "user" | "assistant";

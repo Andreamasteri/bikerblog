@@ -102,6 +102,15 @@ export interface HorusChatOptions {
   tools?: HorusToolSpec[];
   /** Se true, non allega la memoria persistente come system message (usato quando il chiamante la gestisce da sé). */
   skipMemory?: boolean;
+  /**
+   * Per quanto tempo Ollama tiene il modello caricato in RAM dopo questa
+   * richiesta (formato Ollama, es. "30m", "-1" per sempre). Se il modello
+   * viene scaricato tra un messaggio e l'altro (default Ollama: 5 minuti di
+   * inattività), ogni nuovo messaggio paga il costo di ricaricarlo da disco
+   * prima ancora di iniziare a generare — è spesso la causa principale di
+   * lentezza percepita in una chat con pause tra i messaggi.
+   */
+  keepAlive?: string;
 }
 
 export interface HorusRawResult {
@@ -165,6 +174,7 @@ export async function horusChatRaw(
         model: HORUS_MODEL,
         messages: finalMessages,
         stream: true,
+        keep_alive: options.keepAlive ?? "30m",
         ...(options.tools ? { tools: options.tools } : {}),
         options: {
           num_predict: options.maxTokens ?? 4096,
