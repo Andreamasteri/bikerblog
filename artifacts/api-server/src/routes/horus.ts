@@ -29,23 +29,29 @@ function requireHorusPassword(req: express.Request, res: express.Response): bool
   return true;
 }
 
-const CHAT_SYSTEM_PROMPT: HorusMessage = {
-  role: "system",
-  content:
-    "Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. " +
-    "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
-    "NON riportare la conversazione su BikerLink, sviluppo software, moto o sul blog a meno che sia l'utente stesso a parlarne esplicitamente. " +
-    "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink. " +
-    "Hai a disposizione dei tool: usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
-    "usa github_read per leggere file o cartelle dal codice sorgente reale di bikerlink, bikerblog o bikerweb quando l'utente chiede di codice, struttura del progetto, " +
-    "come funziona una feature, o quando vuoi proporre idee di nuovi task o contenuti basate su cosa esiste già nel codice — è sempre sola lettura, non puoi scrivere né eseguire nulla, " +
-    "e qualsiasi idea o proposta va detta a parole in chat, mai eseguita autonomamente; " +
-    "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
-    "anche se non te lo chiede esplicitamente con un comando — non serve chiedere conferma, salvala e basta; " +
-    "se disponibili, hai anche typecheck_repo, lint_repo, search_code e git_log: usali quando ti chiedono di trovare errori, bug, typo o problemi nel codice, o di cercare un pattern in tutto il repo — " +
-    "sono analisi statica REALE (tsc/eslint/grep eseguiti davvero), non una tua stima. Se questi tool non compaiono nella lista disponibile, di' esplicitamente che l'analisi statica del codice non è configurata in questo momento, invece di rispondere con un generico disclaimer da 'modello linguistico'. " +
-    "Se disponibile, hai anche architect: usalo (non i tool leggeri sopra) quando ti chiedono un'analisi architetturale approfondita, di pianificare l'implementazione di una feature/modifica non banale, o di trovare la causa radice di un bug complesso — passagli i percorsi dei file più rilevanti come contesto quando li conosci. È solo analisi (mai scrittura/esecuzione di codice) e può richiedere qualche minuto: avvisa l'utente che ci vorrà un po' prima di invocarlo.",
-};
+function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
+  return {
+    role: "system",
+    content:
+      `Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. Ti chiami ${agentName}. ` +
+      "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
+      "NON riportare la conversazione su BikerLink, sviluppo software, moto o sul blog a meno che sia l'utente stesso a parlarne esplicitamente. " +
+      "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink. " +
+      "Hai a disposizione dei tool: usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
+      "usa github_read per leggere file o cartelle dal codice sorgente reale di bikerlink, bikerblog o bikerweb quando l'utente chiede di codice, struttura del progetto, " +
+      "come funziona una feature, o quando vuoi proporre idee di nuovi task o contenuti basate su cosa esiste già nel codice — è sempre sola lettura, non puoi scrivere né eseguire nulla, " +
+      "e qualsiasi idea o proposta va detta a parole in chat, mai eseguita autonomamente; " +
+      "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
+      "anche se non te lo chiede esplicitamente con un comando — non serve chiedere conferma, salvala e basta " +
+      `(le tue note vengono salvate nella memoria condivisa taggate come tue, così non si confondono con quelle dell'altro agente); ` +
+      "se disponibili, hai anche typecheck_repo, lint_repo, search_code e git_log: usali quando ti chiedono di trovare errori, bug, typo o problemi nel codice, o di cercare un pattern in tutto il repo — " +
+      "sono analisi statica REALE (tsc/eslint/grep eseguiti davvero), non una tua stima. Se questi tool non compaiono nella lista disponibile, di' esplicitamente che l'analisi statica del codice non è configurata in questo momento, invece di rispondere con un generico disclaimer da 'modello linguistico'. " +
+      "Se disponibile, hai anche architect: usalo (non i tool leggeri sopra) quando ti chiedono un'analisi architetturale approfondita, di pianificare l'implementazione di una feature/modifica non banale, o di trovare la causa radice di un bug complesso — passagli i percorsi dei file più rilevanti come contesto quando li conosci. È solo analisi (mai scrittura/esecuzione di codice) e può richiedere qualche minuto: avvisa l'utente che ci vorrà un po' prima di invocarlo.",
+  };
+}
+
+const CHAT_SYSTEM_PROMPT: HorusMessage = buildDirectChatSystemPrompt("Horus");
+const BOWIE_CHAT_SYSTEM_PROMPT: HorusMessage = buildDirectChatSystemPrompt("Bowie");
 
 const MAX_TOOL_ITERATIONS = 5;
 // Ogni messaggio rimanda l'intera cronologia a Ollama, che la rielabora da
@@ -78,120 +84,181 @@ function sendEvent(res: express.Response, event: string, data: unknown): void {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Promise<void> => {
-  if (!requireHorusPassword(req, res)) return;
+interface DirectChatAgentConfig {
+  agentName: string;
+  systemPrompt: HorusMessage;
+  chatRaw: typeof horusChatRaw;
+  isConfigured: () => boolean;
+  notConfiguredMessage: string;
+  logLabel: string;
+}
 
-  const { message, history } = req.body as {
-    message?: unknown;
-    history?: unknown;
-  };
+/**
+ * Handler generico per la chat diretta a un agente (Horus o Bowie): stesso
+ * loop di tool-calling, stessi eventi SSE e stessa gestione di abort per
+ * entrambi. Solo il client Ollama (chatRaw), il system prompt e il nome
+ * dell'agente cambiano — questo evita di duplicare la logica di streaming
+ * quando aggiungiamo un secondo agente con chat diretta a pari livello.
+ */
+function createDirectChatHandler(config: DirectChatAgentConfig) {
+  return async (req: express.Request, res: express.Response): Promise<void> => {
+    if (!requireHorusPassword(req, res)) return;
 
-  if (typeof message !== "string" || !message.trim()) {
-    res.status(400).json({ error: "message is required" });
-    return;
-  }
+    const { message, history } = req.body as {
+      message?: unknown;
+      history?: unknown;
+    };
 
-  const priorHistory: ChatRequestMessage[] = isValidHistory(history)
-    ? history.slice(-MAX_HISTORY_MESSAGES)
-    : [];
+    if (typeof message !== "string" || !message.trim()) {
+      res.status(400).json({ error: "message is required" });
+      return;
+    }
 
-  const conversation: HorusMessage[] = [
-    CHAT_SYSTEM_PROMPT,
-    ...priorHistory.map((m) => ({ role: m.role, content: m.content }) satisfies HorusMessage),
-    { role: "user", content: message },
-  ];
+    if (!config.isConfigured()) {
+      res.status(503).json({ error: "agent_not_configured", message: config.notConfiguredMessage });
+      return;
+    }
 
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders?.();
+    const priorHistory: ChatRequestMessage[] = isValidHistory(history)
+      ? history.slice(-MAX_HISTORY_MESSAGES)
+      : [];
 
-  const heartbeat = setInterval(() => {
-    res.write(": ping\n\n");
-  }, 15_000);
+    const conversation: HorusMessage[] = [
+      config.systemPrompt,
+      ...priorHistory.map((m) => ({ role: m.role, content: m.content }) satisfies HorusMessage),
+      { role: "user", content: message },
+    ];
 
-  // Segnale di abort collegato sia alla chiusura della connessione (l'utente
-  // chiude la tab o naviga altrove) sia al pulsante "Stop" lato client, che
-  // interrompe lo stream chiudendo la request — in entrambi i casi Express
-  // emette "close" sulla request. Il segnale viene propagato sia alla
-  // chiamata a Ollama sia all'esecuzione del tool in corso (es. architect),
-  // per non lasciar girare inutilmente un'analisi che nessuno leggerà più.
-  const abortController = new AbortController();
-  req.on("close", () => abortController.abort());
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
 
-  try {
-    let finalReply = "";
+    const heartbeat = setInterval(() => {
+      res.write(": ping\n\n");
+    }, 15_000);
 
-    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted; iteration++) {
-      const { content, toolCalls } = await horusChatRaw(conversation, {
-        tools: getHorusTools(),
-        signal: abortController.signal,
-        onToken: (token) => {
-          sendEvent(res, "token", { token });
-        },
-      });
+    // Segnale di abort collegato sia alla chiusura della connessione (l'utente
+    // chiude la tab o naviga altrove) sia al pulsante "Stop" lato client, che
+    // interrompe lo stream chiudendo la request. Il segnale viene propagato
+    // sia alla chiamata a Ollama sia all'esecuzione del tool in corso (es.
+    // architect), per non lasciar girare inutilmente un'analisi che nessuno
+    // leggerà più.
+    // NB: si ascolta "close" su `res` (ServerResponse), non su `req`
+    // (IncomingMessage): quest'ultimo emette "close" quasi subito dopo che
+    // express.json() ha finito di consumare il body della richiesta — molto
+    // prima che il client si disconnetta davvero — il che abortiva
+    // silenziosamente ogni chat SSE ancora prima del primo token. `res`
+    // emette "close" solo quando la connessione sottostante si chiude
+    // realmente.
+    const abortController = new AbortController();
+    res.on("close", () => abortController.abort());
 
-      if (abortController.signal.aborted) break;
+    try {
+      let finalReply = "";
 
-      if (toolCalls.length === 0) {
-        finalReply = content;
-        break;
-      }
+      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted; iteration++) {
+        const { content, toolCalls } = await config.chatRaw(conversation, {
+          tools: getHorusTools(),
+          signal: abortController.signal,
+          onToken: (token) => {
+            sendEvent(res, "token", { token });
+          },
+        });
 
-      conversation.push({ role: "assistant", content, tool_calls: toolCalls });
-
-      for (const call of toolCalls) {
         if (abortController.signal.aborted) break;
 
-        const toolName = call.function.name;
-        sendEvent(res, "tool_call", { name: toolName, arguments: call.function.arguments });
-
-        // Alcuni tool (es. architect) girano su hardware CPU e possono
-        // richiedere diversi minuti. Senza un segnale periodico la chat
-        // sembrerebbe bloccata: emettiamo un evento di progresso ogni pochi
-        // secondi finché il tool non ha terminato, così il client può
-        // mostrare "ancora al lavoro..." invece di restare in silenzio.
-        const toolStartedAt = Date.now();
-        const progressInterval = setInterval(() => {
-          sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-        }, 5_000);
-
-        let result: string;
-        try {
-          result = await executeHorusTool(toolName, call.function.arguments, abortController.signal);
-        } finally {
-          clearInterval(progressInterval);
+        if (toolCalls.length === 0) {
+          finalReply = content;
+          break;
         }
 
-        if (abortController.signal.aborted) break;
+        conversation.push({ role: "assistant", content, tool_calls: toolCalls });
 
-        sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-        conversation.push({ role: "tool", name: toolName, content: result });
+        for (const call of toolCalls) {
+          if (abortController.signal.aborted) break;
+
+          const toolName = call.function.name;
+          sendEvent(res, "tool_call", { name: toolName, arguments: call.function.arguments });
+
+          // Alcuni tool (es. architect) girano su hardware CPU e possono
+          // richiedere diversi minuti. Senza un segnale periodico la chat
+          // sembrerebbe bloccata: emettiamo un evento di progresso ogni pochi
+          // secondi finché il tool non ha terminato, così il client può
+          // mostrare "ancora al lavoro..." invece di restare in silenzio.
+          const toolStartedAt = Date.now();
+          const progressInterval = setInterval(() => {
+            sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+          }, 5_000);
+
+          let result: string;
+          try {
+            result = await executeHorusTool(
+              toolName,
+              call.function.arguments,
+              abortController.signal,
+              config.agentName
+            );
+          } finally {
+            clearInterval(progressInterval);
+          }
+
+          if (abortController.signal.aborted) break;
+
+          sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+          conversation.push({ role: "tool", name: toolName, content: result });
+        }
       }
-    }
 
-    if (abortController.signal.aborted) {
-      // Connessione già chiusa dal client: non ha senso scrivere altro sullo
-      // stream (fallirebbe comunque).
-    } else if (!finalReply) {
-      sendEvent(res, "error", {
-        message: "Troppe chiamate a strumenti senza una risposta finale. Riprova con un'altra domanda.",
-      });
-    } else {
-      sendEvent(res, "done", { content: finalReply });
+      if (abortController.signal.aborted) {
+        // Connessione già chiusa dal client: non ha senso scrivere altro sullo
+        // stream (fallirebbe comunque).
+      } else if (!finalReply) {
+        sendEvent(res, "error", {
+          message: "Troppe chiamate a strumenti senza una risposta finale. Riprova con un'altra domanda.",
+        });
+      } else {
+        sendEvent(res, "done", { content: finalReply });
+      }
+    } catch (err) {
+      if (!abortController.signal.aborted) {
+        req.log.error({ err }, config.logLabel);
+        sendEvent(res, "error", {
+          message: err instanceof Error ? err.message : `Errore imprevisto contattando ${config.agentName}.`,
+        });
+      }
+    } finally {
+      clearInterval(heartbeat);
+      res.end();
     }
-  } catch (err) {
-    if (!abortController.signal.aborted) {
-      req.log.error({ err }, "horus chat failed");
-      sendEvent(res, "error", {
-        message: err instanceof Error ? err.message : "Errore imprevisto contattando Horus.",
-      });
-    }
-  } finally {
-    clearInterval(heartbeat);
-    res.end();
-  }
-});
+  };
+}
+
+router.post(
+  "/horus/chat",
+  express.json({ limit: "1mb" }),
+  createDirectChatHandler({
+    agentName: "Horus",
+    systemPrompt: CHAT_SYSTEM_PROMPT,
+    chatRaw: horusChatRaw,
+    isConfigured: () => true,
+    notConfiguredMessage: "Horus non è configurato su questo ambiente.",
+    logLabel: "horus chat failed",
+  })
+);
+
+router.post(
+  "/horus/bowie-chat",
+  express.json({ limit: "1mb" }),
+  createDirectChatHandler({
+    agentName: BOWIE_AGENT_NAME,
+    systemPrompt: BOWIE_CHAT_SYSTEM_PROMPT,
+    chatRaw: bowieChatRaw,
+    isConfigured: isBowieConfigured,
+    notConfiguredMessage: `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. Aggiungilo dalla scheda Secrets per abilitare la chat diretta con Bowie.`,
+    logLabel: "bowie chat failed",
+  })
+);
 
 const HORUS_CONVO_SYSTEM_PROMPT: HorusMessage = {
   role: "system",
@@ -284,8 +351,11 @@ router.post(
       res.write(": ping\n\n");
     }, 15_000);
 
+    // Vedi il commento nel chat handler diretto sopra: si ascolta "close" su
+    // `res`, non su `req`, per non abortire subito dopo che il body della
+    // richiesta è stato consumato.
     const abortController = new AbortController();
-    req.on("close", () => abortController.abort());
+    res.on("close", () => abortController.abort());
 
     const transcript: ConvoTurn[] = [];
 

@@ -565,8 +565,17 @@ async function githubRead(repoArg: string, path: string): Promise<string> {
   return `Percorso "${cleanPath || "/"}" in ${repo} non riconosciuto (tipo inatteso).`;
 }
 
-function rememberNote(note: string): string {
-  appendHorusMemory(note);
+/**
+ * Salva una nota permanente nella memoria condivisa (inbox/horus-memory.md).
+ * Horus e Bowie condividono lo stesso file (nessun secondo sistema di
+ * memoria da mantenere), ma le note scritte da Bowie vengono taggate con un
+ * prefisso `[Bowie]` così non si confondono silenziosamente con quelle
+ * scritte da Horus quando il file viene riletto (sia da un umano sia dal
+ * modello stesso alla chiamata successiva).
+ */
+function rememberNote(note: string, agentName: string): string {
+  const tagged = agentName === "Horus" ? note : `[${agentName}] ${note}`;
+  appendHorusMemory(tagged);
   return `Nota salvata in memoria permanente: "${note}"`;
 }
 
@@ -700,12 +709,15 @@ async function architectTool(
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
  * da rimandare come messaggio role:"tool". `signal` è opzionale e permette al
  * chiamante (chat web o CLI) di annullare tool lenti come `architect` a metà
- * esecuzione (l'utente che clicca "Stop" o preme Ctrl+C).
+ * esecuzione (l'utente che clicca "Stop" o preme Ctrl+C). `agentName` indica
+ * quale agente ("Horus" o "Bowie") sta chiamando il tool — usato solo da
+ * `remember_note` per taggare la nota nella memoria condivisa.
  */
 export async function executeHorusTool(
   name: string,
   args: Record<string, unknown>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  agentName: string = "Horus"
 ): Promise<string> {
   try {
     switch (name) {
@@ -714,7 +726,7 @@ export async function executeHorusTool(
       case "github_read":
         return await githubRead(String(args.repo ?? ""), String(args.path ?? ""));
       case "remember_note":
-        return rememberNote(String(args.note ?? ""));
+        return rememberNote(String(args.note ?? ""), agentName);
       case "typecheck_repo":
         return await typecheckRepoTool(String(args.repo ?? ""), signal);
       case "lint_repo":
