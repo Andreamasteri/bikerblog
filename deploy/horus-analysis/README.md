@@ -122,6 +122,55 @@ aggiornato con `git fetch` + `reset --hard`.
 - `POST /lint` `{ "repo": ... }`
 - `POST /search` `{ "repo": ..., "query": "testo o pattern" }` (usa `git grep`)
 - `POST /git-log` `{ "repo": ..., "limit": 10 }`
+- `POST /architect` `{ "repo": ..., "mode": "plan"|"debug"|"evaluate", "task": "...", "paths": ["src/foo.ts", "src/bar/"] }`
+  — vedi sezione dedicata sotto.
 - `GET /health`
 
 Tutti (tranne `/health`) richiedono l'header `X-Analysis-Gate-Token`.
+
+## `/architect` — analisi/pianificazione/debug profondo
+
+A differenza di `/typecheck`, `/lint`, `/search`, `/git-log` (segnali grezzi
+eseguiti da strumenti esterni), `/architect` fa davvero ragionare un modello
+sul contesto fornito e restituisce un report scritto: pianificazione di una
+feature/modifica (`mode: "plan"`), ricerca della causa radice di un bug
+(`mode: "debug"`), o valutazione di uno stato/implementazione esistente
+(`mode: "evaluate"`). È solo analisi: non scrive, non committa, non esegue
+codice.
+
+**Importante: usa Ollama in locale su TC, non il tunnel Cloudflare.** La
+generazione avviene con una chiamata diretta a `http://localhost:11434`
+(stessa macchina), quindi non soffre del limite di ~100s del tunnel usato per
+`HORUS_OLLAMA_URL`. La richiesta che Replit fa VERSO `/architect`, invece,
+passa comunque dal tunnel: l'endpoint scrive heartbeat (byte di spazio bianco,
+innocui per il parsing JSON) mentre attende il risultato, per tenere viva
+quella connessione durante generazioni lunghe.
+
+Variabili d'ambiente opzionali (default già ragionevoli per l'uso attuale):
+
+```bash
+ARCHITECT_OLLAMA_URL=http://localhost:11434   # endpoint Ollama locale su TC
+ARCHITECT_OLLAMA_MODEL=bikerlink:latest       # modello usato per il ragionamento
+ARCHITECT_TIMEOUT_MS=480000                   # 8 minuti, timeout della generazione
+```
+
+Limiti applicati per contenere costo/tempo di ogni chiamata: al massimo 8
+percorsi di file/cartelle per richiesta, 6000 caratteri per file e 30000
+caratteri di contesto totale (troncati oltre soglia), 4000 caratteri massimi
+per il campo `task`, e un tetto sulla lunghezza del report generato (num_predict
+del modello). Se il servizio impiega più di `ARCHITECT_TIMEOUT_MS`, l'endpoint
+risponde con un errore esplicito invece di restare appeso.
+
+Esempio:
+
+```bash
+curl -X POST https://analysis.tuodominio.com/architect \
+  -H "Content-Type: application/json" \
+  -H "X-Analysis-Gate-Token: <token>" \
+  -d '{
+    "repo": "bikerblog",
+    "mode": "plan",
+    "task": "Aggiungere un filtro per categoria nella pagina podcast",
+    "paths": ["artifacts/bikerblog/src/pages", "artifacts/api-server/src/routes/podcast.ts"]
+  }'
+```

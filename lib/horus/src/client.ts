@@ -94,7 +94,15 @@ export interface HorusToolSpec {
     description: string;
     parameters: {
       type: "object";
-      properties: Record<string, { type: string; description?: string; enum?: string[] }>;
+      properties: Record<
+        string,
+        {
+          type: string;
+          description?: string;
+          enum?: string[];
+          items?: { type: string };
+        }
+      >;
       required?: string[];
     };
   };

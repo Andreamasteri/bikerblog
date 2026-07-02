@@ -255,6 +255,45 @@ const ANALYSIS_TOOL_SPECS: HorusToolSpec[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "architect",
+      description:
+        "Analisi profonda di architettura, pianificazione di una modifica/feature, o debug di root cause su uno dei repo del progetto. " +
+        "A differenza di typecheck_repo/lint_repo/search_code/git_log (segnali grezzi), questo tool ragiona sul contesto che gli fornisci " +
+        "(file/cartelle rilevanti + commit recenti) e restituisce un report scritto strutturato. Usalo per richieste tipo \"come lo implementeresti\", " +
+        "\"qual è la causa di questo bug\", \"valuta questa implementazione\" — non per typo o errori sintattici semplici, per quelli usa gli altri tool. " +
+        "Solo analisi: non scrive, non modifica, non esegue codice. Può richiedere alcuni minuti su hardware CPU.",
+      parameters: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: 'Quale repo analizzare: "bikerlink", "bikerblog" o "bikerweb".',
+            enum: ["bikerlink", "bikerblog", "bikerweb"],
+          },
+          mode: {
+            type: "string",
+            description:
+              '"plan" per pianificare una nuova feature/modifica, "debug" per trovare la causa radice di un problema, "evaluate" per valutare uno stato/implementazione esistente.',
+            enum: ["plan", "debug", "evaluate"],
+          },
+          task: {
+            type: "string",
+            description: "Descrizione chiara del compito, del bug o di cosa valutare.",
+          },
+          paths: {
+            type: "array",
+            description:
+              "Percorsi di file o cartelle nel repo rilevanti per l'analisi (fino a 8), usati come contesto grezzo. Opzionale ma consigliato.",
+            items: { type: "string" },
+          },
+        },
+        required: ["repo", "mode", "task"],
+      },
+    },
+  },
 ];
 
 function isAnalysisServiceConfigured(): boolean {
@@ -563,7 +602,7 @@ async function callAnalysisService(
 
   const data = (await res.json().catch(() => ({}))) as AnalysisServiceResponse;
 
-  if (!res.ok) {
+  if (!res.ok || data.error) {
     return `Servizio di analisi codice ha risposto con errore (HTTP ${res.status}): ${data.error ?? "errore sconosciuto"}.`;
   }
 
@@ -605,6 +644,36 @@ async function gitLogTool(repoArg: string, limit: number | undefined): Promise<s
   return callAnalysisService("/git-log", { repo: repoKey, limit });
 }
 
+const ARCHITECT_MODES = ["plan", "debug", "evaluate"] as const;
+type ArchitectMode = (typeof ARCHITECT_MODES)[number];
+
+function isArchitectMode(value: string): value is ArchitectMode {
+  return (ARCHITECT_MODES as readonly string[]).includes(value);
+}
+
+async function architectTool(
+  repoArg: string,
+  modeArg: string,
+  task: string,
+  paths: unknown
+): Promise<string> {
+  const repoKey = repoArg.trim().toLowerCase();
+  if (!isHorusGithubRepoKey(repoKey)) {
+    return `Repo "${repoArg}" sconosciuto. Valori validi: "bikerlink", "bikerblog", "bikerweb".`;
+  }
+  const mode = modeArg.trim().toLowerCase();
+  if (!isArchitectMode(mode)) {
+    return `Modalità "${modeArg}" sconosciuta. Valori validi: "plan", "debug", "evaluate".`;
+  }
+  if (!task.trim()) {
+    return "Compito mancante: descrivi cosa vuoi pianificare, debuggare o valutare.";
+  }
+  const pathList = Array.isArray(paths)
+    ? paths.filter((p): p is string => typeof p === "string").slice(0, 8)
+    : undefined;
+  return callAnalysisService("/architect", { repo: repoKey, mode, task, paths: pathList });
+}
+
 /**
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
  * da rimandare come messaggio role:"tool".
@@ -631,6 +700,13 @@ export async function executeHorusTool(
         return await gitLogTool(
           String(args.repo ?? ""),
           typeof args.limit === "number" ? args.limit : undefined
+        );
+      case "architect":
+        return await architectTool(
+          String(args.repo ?? ""),
+          String(args.mode ?? ""),
+          String(args.task ?? ""),
+          args.paths
         );
       default:
         return `Tool sconosciuto: "${name}".`;

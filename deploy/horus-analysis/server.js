@@ -23,6 +23,28 @@ const WORKDIR = process.env.ANALYSIS_WORKDIR || path.join(__dirname, "repos");
 const EXEC_TIMEOUT_MS = 10 * 60 * 1000; // 10 minuti: npm install + typecheck su repo grandi può richiedere tempo
 const MAX_OUTPUT_CHARS = 12000;
 
+// --- Config del tool "architetto" (analisi/pianificazione/debug profondo) ---
+// Gira interamente su TC: usa Ollama in locale (NON il tunnel Cloudflare usato
+// da HORUS_OLLAMA_URL per Replit->TC — qui la chiamata è TC->TC), quindi niente
+// problema di timeout del tunnel per il round-trip verso il modello. La
+// richiesta HTTP che Replit fa VERSO questo endpoint, invece, passa comunque
+// dal tunnel: per questo l'handler scrive heartbeat mentre aspetta la
+// generazione (vedi architectHandler più sotto), come già fa horusChat con lo
+// streaming NDJSON lato client Replit.
+const ARCHITECT_OLLAMA_URL = process.env.ARCHITECT_OLLAMA_URL || "http://localhost:11434";
+const ARCHITECT_MODEL = process.env.ARCHITECT_OLLAMA_MODEL || "bikerlink:latest";
+const ARCHITECT_TIMEOUT_MS = Number(process.env.ARCHITECT_TIMEOUT_MS) || 8 * 60 * 1000; // 8 minuti
+const ARCHITECT_MAX_PATHS = 8;
+const ARCHITECT_MAX_FILE_CHARS = 6000;
+const ARCHITECT_MAX_CONTEXT_CHARS = 30000;
+const ARCHITECT_MAX_TASK_CHARS = 4000;
+const ARCHITECT_MAX_OUTPUT_TOKENS = 2048;
+const ARCHITECT_MODES = {
+  plan: "Pianificazione: proponi un piano di implementazione concreto e ordinato in step, con i file probabilmente coinvolti, le dipendenze tra step e i rischi principali.",
+  debug: "Debug/root cause: analizza il problema descritto e il contesto fornito per identificare la causa più probabile, come verificarla e una direzione di fix.",
+  evaluate: "Valutazione: analizza lo stato o l'implementazione esistente descritta, evidenziando qualità, rischi, gap e possibili miglioramenti.",
+};
+
 const REPOS = {
   bikerlink: {
     repo: "Andreamasteri/Bikerlink",
@@ -240,6 +262,120 @@ async function gitLog(repoKey, limit) {
   return truncate(res.stdout || "(nessun commit trovato)");
 }
 
+/**
+ * Legge un file (o elenca una cartella) dal clone locale del repo, restando
+ * dentro la cartella del repo (niente path traversal via "..").
+ */
+function readRepoPath(dir, relPath, maxChars) {
+  const cleaned = String(relPath || "").trim().replace(/^\/+/, "");
+  const full = path.resolve(dir, cleaned || ".");
+  const rootResolved = path.resolve(dir);
+  if (full !== rootResolved && !full.startsWith(rootResolved + path.sep)) {
+    return `"${cleaned}" è fuori dal repo, ignorato.`;
+  }
+  let stat;
+  try {
+    stat = fs.statSync(full);
+  } catch {
+    return `"${cleaned || "/"}" non trovato nel repo.`;
+  }
+  if (stat.isDirectory()) {
+    const entries = fs.readdirSync(full);
+    return `[cartella "${cleaned || "/"}"] ${entries.join(", ") || "(vuota)"}`;
+  }
+  try {
+    const content = fs.readFileSync(full, "utf-8");
+    return content.length > maxChars
+      ? `${content.slice(0, maxChars)}\n… (troncato ai primi ${maxChars} caratteri)`
+      : content;
+  } catch {
+    return `"${cleaned}" non leggibile come testo (binario?).`;
+  }
+}
+
+/** Raccoglie il contesto (file/cartelle) per il tool "architetto", entro un budget totale di caratteri. */
+function gatherArchitectContext(dir, paths) {
+  const limitedPaths = (Array.isArray(paths) ? paths : []).slice(0, ARCHITECT_MAX_PATHS);
+  if (limitedPaths.length === 0) return "";
+  let budget = ARCHITECT_MAX_CONTEXT_CHARS;
+  const parts = [];
+  for (const p of limitedPaths) {
+    if (budget <= 0) {
+      parts.push("… (budget di contesto esaurito, altri percorsi ignorati)");
+      break;
+    }
+    const perFileCap = Math.min(ARCHITECT_MAX_FILE_CHARS, budget);
+    const content = readRepoPath(dir, p, perFileCap);
+    parts.push(`--- ${p} ---\n${content}`);
+    budget -= content.length;
+  }
+  return parts.join("\n\n");
+}
+
+/**
+ * Chiama il modello Ollama IN LOCALE su TC (non il tunnel Cloudflare usato da
+ * Replit) per produrre il report di analisi/pianificazione/debug. stream:false
+ * va bene qui perché non c'è tunnel nel mezzo di questa chiamata specifica.
+ */
+async function callArchitectModel(systemPrompt, userPrompt, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${ARCHITECT_OLLAMA_URL.replace(/\/$/, "")}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: ARCHITECT_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        stream: false,
+        options: { num_predict: ARCHITECT_MAX_OUTPUT_TOKENS },
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Ollama locale ha risposto ${res.status}: ${body.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    const content = data && data.message && data.message.content;
+    if (!content) throw new Error("Ollama locale ha restituito una risposta vuota.");
+    return truncate(content.trim());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function architect({ repoKey, mode, task, paths }) {
+  const modeDesc = ARCHITECT_MODES[mode];
+  const dir = await ensureRepo(repoKey);
+  const fileContext = gatherArchitectContext(dir, paths);
+  const logRes = await run(
+    "git",
+    ["log", "-n", "5", "--pretty=format:--- %h %ad %s ---", "--date=short"],
+    dir
+  );
+  const recentLog = logRes.code === 0 ? logRes.stdout : "(git log non disponibile)";
+
+  const systemPrompt =
+    "Sei un architetto software senior che analizza codice reale per conto di un altro sviluppatore/agente. " +
+    "Non scrivi né modifichi codice, non esegui comandi: produci solo un report scritto, chiaro e concreto. " +
+    "Basati sui fatti forniti (file, commit recenti, compito); se ti manca contesto essenziale, dillo esplicitamente " +
+    "invece di inventare dettagli sul codice che non hai visto.";
+  const userPrompt =
+    `Repo: ${repoKey}\n` +
+    `Modalità richiesta: ${mode} — ${modeDesc}\n\n` +
+    `Compito/domanda:\n${task}\n\n` +
+    `Commit recenti:\n${recentLog}\n\n` +
+    `File/cartelle di contesto forniti:\n${fileContext || "(nessuno fornito)"}\n\n` +
+    "Rispondi con un report strutturato (usa un breve elenco puntato o step numerati dove utile), " +
+    "concreto e diretto, coerente con la modalità richiesta.";
+
+  return callArchitectModel(systemPrompt, userPrompt, ARCHITECT_TIMEOUT_MS);
+}
+
 const app = express();
 app.use(express.json({ limit: "256kb" }));
 
@@ -301,6 +437,58 @@ app.post("/git-log", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
+});
+
+// L'analisi profonda dell'"architetto" può richiedere minuti su CPU. La
+// richiesta arriva a questo servizio passando dal tunnel Cloudflare, che
+// chiude la connessione dopo ~100s di silenzio: scriviamo quindi heartbeat
+// (spazi bianchi, innocui per JSON.parse che ignora whitespace iniziale/
+// finale) mentre aspettiamo il risultato, poi chiudiamo con il JSON vero.
+app.post("/architect", (req, res) => {
+  const { repo, mode, task, paths } = req.body || {};
+  if (!isValidRepoKey(repo)) return res.status(400).json({ error: "repo non valido" });
+  if (!Object.prototype.hasOwnProperty.call(ARCHITECT_MODES, mode)) {
+    return res.status(400).json({ error: 'mode non valido, usa "plan", "debug" o "evaluate"' });
+  }
+  if (typeof task !== "string" || !task.trim()) {
+    return res.status(400).json({ error: "task mancante" });
+  }
+  if (task.length > ARCHITECT_MAX_TASK_CHARS) {
+    return res.status(400).json({
+      error: `task troppo lungo (max ${ARCHITECT_MAX_TASK_CHARS} caratteri)`,
+    });
+  }
+  if (paths !== undefined && !Array.isArray(paths)) {
+    return res.status(400).json({ error: "paths deve essere un array di stringhe" });
+  }
+
+  res.setHeader("Content-Type", "application/json");
+  let finished = false;
+  const heartbeat = setInterval(() => {
+    if (!finished) res.write(" ");
+  }, 15_000);
+
+  withRepoLock(repo, () => architect({ repoKey: repo, mode, task, paths }))
+    .then((result) => {
+      finished = true;
+      clearInterval(heartbeat);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ result }));
+    })
+    .catch((err) => {
+      finished = true;
+      clearInterval(heartbeat);
+      const message = err instanceof Error ? err.message : String(err);
+      const isTimeout = err instanceof Error && err.name === "AbortError";
+      res.statusCode = isTimeout ? 504 : 500;
+      res.end(
+        JSON.stringify({
+          error: isTimeout
+            ? `architetto: timeout dopo ${ARCHITECT_TIMEOUT_MS / 1000}s durante la generazione.`
+            : message,
+        })
+      );
+    });
 });
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
