@@ -83,6 +83,7 @@ export function HorusChat() {
   const [historyItems, setHistoryItems] = useState<ConvoHistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historySearch, setHistorySearch] = useState("");
   const [viewingConvo, setViewingConvo] = useState<ConvoHistoryDetail | null>(null);
   const [isViewingLoading, setIsViewingLoading] = useState(false);
 
@@ -154,6 +155,12 @@ export function HorusChat() {
       setIsViewingLoading(false);
     }
   }
+
+  const filteredHistoryItems = historySearch.trim()
+    ? historyItems.filter((item) =>
+        item.topic.toLowerCase().includes(historySearch.trim().toLowerCase())
+      )
+    : historyItems;
 
   function handleUnlock(e: FormEvent) {
     e.preventDefault();
@@ -704,6 +711,16 @@ export function HorusChat() {
         </div>
       ) : (
         <div className="flex-1 border border-border bg-muted/5 mb-4 overflow-y-auto">
+          {historyItems.length > 0 && (
+            <div className="p-4 pb-0 shrink-0">
+              <Input
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                placeholder="Cerca per argomento..."
+                className="w-full"
+              />
+            </div>
+          )}
           <div className="p-6 space-y-3">
             {isHistoryLoading && (
               <div className="flex justify-center py-16">
@@ -718,9 +735,14 @@ export function HorusChat() {
                 Nessuna conversazione tra Horus e Bowie salvata finora.
               </div>
             )}
+            {!isHistoryLoading && !historyError && historyItems.length > 0 && filteredHistoryItems.length === 0 && (
+              <div className="text-center text-muted-foreground text-sm py-16">
+                Nessuna conversazione trovata per &quot;{historySearch.trim()}&quot;.
+              </div>
+            )}
             {!isHistoryLoading &&
               !historyError &&
-              historyItems.map((item) => (
+              filteredHistoryItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
