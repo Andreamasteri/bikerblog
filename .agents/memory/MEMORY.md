@@ -10,3 +10,4 @@
 - [SSE abort regression test](sse-abort-regression-test.md) — testing req vs res "close" timing needs a real http server, not mocks; reusable pattern for any new SSE endpoint.
 - [Drizzle pg error code](drizzle-pg-error-code.md) — Drizzle wraps raw pg errors; unique-violation code lives at `err.cause.code`, not `err.code` — check both when mapping 23505 to a status.
 - [DB migrations vs push](db-migrations-vs-push.md) — `drizzle-kit push` (dev) doesn't create migration files; `generate` is currently broken here — new migrations must be added by hand alongside schema.ts changes.
+- [Bash background process lifetime](bash-background-process-lifetime.md) — `&`/nohup/setsid processes die between bash tool calls; start server + test in the same call to smoke-test real HTTP endpoints.
