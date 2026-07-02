@@ -17,7 +17,8 @@
 
 import * as readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { horusChat, type HorusMessage } from "./horus-client.js";
+import { horusChatRaw, appendHorusMemory, type HorusMessage } from "./horus-client.js";
+import { HORUS_TOOLS, executeHorusTool } from "./horus-tools.js";
 
 // Il modello bikerlink:latest ha un system prompt di base orientato a
 // BikerLink/BikerBlog (usato per diario, traduzioni, recap). In chat libera
@@ -30,8 +31,53 @@ const CHAT_SYSTEM_PROMPT: HorusMessage = {
     "Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. " +
     "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
     "NON riportare la conversazione su BikerLink, sviluppo software, moto o sul blog a meno che sia l'utente stesso a parlarne esplicitamente. " +
-    "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink.",
+    "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink. " +
+    "Hai a disposizione dei tool: usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
+    "usa github_read per leggere file o cartelle del repository GitHub del progetto BikerLink quando l'utente chiede di codice o struttura del progetto; " +
+    "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
+    "anche se non te lo chiede esplicitamente con un comando — non serve chiedere conferma, salvala e basta.",
 };
+
+const MAX_TOOL_ITERATIONS = 5;
+
+// Nota tecnica: il tool remember_note (function calling) è disponibile, ma
+// nei test il modello a volte "racconta" a parole di aver salvato una nota
+// senza emettere davvero un tool_call. Per rendere l'auto-apprendimento
+// affidabile aggiungiamo anche questo controllo deterministico: dopo ogni
+// scambio, una chiamata leggera e separata chiede al modello se c'è qualcosa
+// da ricordare, e se sì lo salviamo direttamente (senza passare dal tool
+// loop). Le due strade sono complementari, non in conflitto: se il modello ha
+// già chiamato remember_note in modo corretto durante il turno, questo
+// controllo viene saltato.
+const MEMORY_CLASSIFIER_PROMPT =
+  "Sei un classificatore silenzioso. Leggi lo scambio tra utente e assistente qui sotto. " +
+  "Se contiene un'informazione che vale la pena ricordare in modo permanente per le conversazioni future " +
+  "(una preferenza personale dell'utente, un fatto su di sé, una correzione, una convenzione da rispettare), " +
+  'rispondi SOLO con una riga nel formato: MEMORIZE: <nota breve, in terza persona, es. "L\'utente si chiama Marco e ha una Ducati Multistrada 2021">. ' +
+  "Se non c'è nulla di rilevante da ricordare, rispondi SOLO con: NONE. Non aggiungere altro testo, non commentare.";
+
+async function maybeAutoRemember(userInput: string, assistantReply: string): Promise<void> {
+  try {
+    const { content } = await horusChatRaw(
+      [
+        { role: "system", content: MEMORY_CLASSIFIER_PROMPT },
+        { role: "user", content: `Utente: ${userInput}\nAssistente: ${assistantReply}` },
+      ],
+      { skipMemory: true, maxTokens: 80, timeoutMs: 150_000 }
+    );
+    const match = content.match(/MEMORIZE:\s*(.+)/is);
+    if (match) {
+      const note = match[1].trim();
+      if (note) {
+        appendHorusMemory(note);
+        stdout.write(`🧠 [memorizzato: ${note}]\n`);
+      }
+    }
+  } catch {
+    // Best-effort: un fallimento della classificazione di memoria non deve
+    // interrompere la chat né essere mostrato come errore all'utente.
+  }
+}
 
 const history: HorusMessage[] = [CHAT_SYSTEM_PROMPT];
 
@@ -75,18 +121,44 @@ async function main(): Promise<void> {
     history.push({ role: "user", content: userInput });
 
     stdout.write("horus> ");
-    let replied = "";
     try {
-      const reply = await horusChat(history, {
-        onToken: (token) => {
-          stdout.write(token);
-          replied += token;
-        },
-      });
-      // Se onToken non ha stampato nulla (es. edge case), stampa la risposta completa.
-      if (!replied) stdout.write(reply);
+      let finalReply = "";
+      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+        let replied = "";
+        const { content, toolCalls } = await horusChatRaw(history, {
+          tools: HORUS_TOOLS,
+          onToken: (token) => {
+            stdout.write(token);
+            replied += token;
+          },
+        });
+
+        if (toolCalls.length === 0) {
+          finalReply = content;
+          if (!replied && content) stdout.write(content);
+          break;
+        }
+
+        history.push({ role: "assistant", content, tool_calls: toolCalls });
+
+        for (const call of toolCalls) {
+          const toolName = call.function.name;
+          stdout.write(`\n  ↳ [tool: ${toolName}(${JSON.stringify(call.function.arguments)})...] `);
+          const result = await executeHorusTool(toolName, call.function.arguments);
+          stdout.write("fatto\n");
+          history.push({ role: "tool", name: toolName, content: result });
+        }
+        stdout.write("horus> ");
+      }
+
       stdout.write("\n\n");
-      history.push({ role: "assistant", content: reply });
+      if (finalReply) {
+        history.push({ role: "assistant", content: finalReply });
+        await maybeAutoRemember(userInput, finalReply);
+      } else {
+        // Troppe iterazioni di tool senza risposta finale: evita di sporcare la cronologia.
+        console.error("⚠ Troppe chiamate a tool senza risposta finale.\n");
+      }
     } catch (err) {
       console.error(
         `\n⚠ Errore: ${err instanceof Error ? err.message : String(err)}\n`
