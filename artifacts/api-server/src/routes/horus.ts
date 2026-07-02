@@ -84,7 +84,7 @@ function sendEvent(res: express.Response, event: string, data: unknown): void {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-interface DirectChatAgentConfig {
+export interface DirectChatAgentConfig {
   agentName: string;
   systemPrompt: HorusMessage;
   chatRaw: typeof horusChatRaw;
@@ -100,7 +100,7 @@ interface DirectChatAgentConfig {
  * dell'agente cambiano — questo evita di duplicare la logica di streaming
  * quando aggiungiamo un secondo agente con chat diretta a pari livello.
  */
-function createDirectChatHandler(config: DirectChatAgentConfig) {
+export function createDirectChatHandler(config: DirectChatAgentConfig) {
   return async (req: express.Request, res: express.Response): Promise<void> => {
     if (!requireHorusPassword(req, res)) return;
 
