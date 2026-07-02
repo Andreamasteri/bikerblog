@@ -69,6 +69,8 @@ export interface HorusMessage {
 export interface HorusChatOptions {
   maxTokens?: number;
   timeoutMs?: number;
+  /** Chiamato per ogni frammento di testo ricevuto in streaming (es. per stampa live in una CLI). */
+  onToken?: (token: string) => void;
 }
 
 function assertConfigured(): void {
@@ -169,6 +171,7 @@ export async function horusChat(
         }
         if (chunk.message?.content) {
           full += chunk.message.content;
+          options.onToken?.(chunk.message.content);
         }
       }
     }

@@ -20,3 +20,11 @@ Additionally, detached/backgrounded processes (setsid+nohup+disown) do not survi
 **Why:** the bash tool sandbox appears to tear down/reset backgrounded work and does not guarantee env-var propagation the way a persistent workflow process does.
 
 **How to apply:** for (a) verifying a newly-added secret/env var, or (b) any long-running/slow external call (e.g. a slow self-hosted LLM), don't rely on the bash tool directly — add a temporary route/script invoked through an actual running workflow (or trigger the real pipeline workflow) and check results via logs, then remove the temporary scaffolding once verified.
+
+## Bash tool kills interactive CLIs waiting on a slow response, misreading it as "waiting on user input"
+
+Piping input non-interactively into a `readline`-based interactive CLI (e.g. `printf 'msg\n/exit\n' | tsx chat.ts`) does not reliably work for testing: once the script is waiting on a slow upstream response (like a CPU-hosted Ollama call), the bash tool's "waiting on user input" heuristic can trigger and terminate the shell, even though the process was actually just blocked on network I/O, not stdin.
+
+**Why:** the heuristic can't distinguish "idle process blocked on stdin" from "readline interface open, but currently awaiting an async response" — both look like a hung foreground process.
+
+**How to apply:** don't try to smoke-test slow interactive CLIs (chat REPLs, etc.) via piped bash input. Trust code review + typecheck + the already-validated underlying client function (e.g. `horusChat()` proven via the real pipeline run) instead, or ask the user to try the interactive command themselves in their own terminal.

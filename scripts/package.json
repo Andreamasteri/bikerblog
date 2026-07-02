@@ -21,6 +21,7 @@
     "self-check": "tsx src/self-check.ts",
     "bikerlink:activity": "tsx src/fetch-bikerlink-activity.ts",
     "horus:remember": "tsx src/horus-remember.ts",
+    "horus:chat": "tsx src/horus-chat.ts",
     "migrate:author-mendo": "tsx src/migrate-author-mendo.ts",
     "pipeline:status": "tsx src/read-last-run.ts",
     "pipeline:summary": "tsx src/pipeline-summary.ts",
