@@ -42,13 +42,18 @@
  *  - read_blog     — legge i contenuti PUBBLICATI di BikerBlog (non il codice)
  *                     tramite gli endpoint pubblici e di sola lettura
  *                     dell'api-server (GET /posts, /posts/:slug,
- *                     /posts/featured, /posts/popular). Usato da Horus per
- *                     studiare stile e argomenti già trattati prima di
- *                     proporre bozze di nuovi post. Nessuna scrittura né
- *                     pubblicazione: solo lettura di ciò che è già visibile
- *                     pubblicamente sul sito. Nessun nuovo secret richiesto
- *                     (endpoint già pubblici); opzionale API_BASE_URL per
- *                     puntare a un'istanza diversa da quella locale.
+ *                     /posts/featured, /posts/popular,
+ *                     /posts/:slug/comments). Usato da Horus per studiare
+ *                     stile e argomenti già trattati, capire se un post ha
+ *                     già un episodio podcast (campo audioUrl, incluso nelle
+ *                     azioni "list"/"get"/"featured"/"popular") e leggere il
+ *                     riscontro dei lettori nei commenti (azione "comments")
+ *                     prima di proporre bozze di nuovi post. Nessuna
+ *                     scrittura né pubblicazione: solo lettura di ciò che è
+ *                     già visibile pubblicamente sul sito. Nessun nuovo
+ *                     secret richiesto (endpoint già pubblici); opzionale
+ *                     API_BASE_URL per puntare a un'istanza diversa da
+ *                     quella locale.
  *  - typecheck_repo, lint_repo, search_code, git_log — analisi statica REALE
  *                     del codice (non solo lettura file), delegata a un
  *                     servizio dedicato che gira su TC (mai su Replit o sul
@@ -183,19 +188,19 @@ const BASE_HORUS_TOOLS: HorusToolSpec[] = [
     function: {
       name: "read_blog",
       description:
-        "Legge i contenuti GIA' PUBBLICATI di BikerBlog (questo stesso sito), non il codice sorgente. Usalo per studiare stile, argomenti e categorie già trattate prima di proporre a parole una bozza di nuovo post, o per rispondere a domande sui contenuti del blog. Sola lettura: non puoi creare, modificare o pubblicare nulla con questo tool.",
+        "Legge i contenuti GIA' PUBBLICATI di BikerBlog (questo stesso sito), non il codice sorgente: post, presenza di episodi podcast e commenti dei lettori. Usalo per studiare stile, argomenti e categorie già trattate, per capire se un post ha già un episodio audio, o per vedere cosa dicono i lettori nei commenti prima di proporre a parole una bozza di nuovo post. Sola lettura: non puoi creare, modificare o pubblicare nulla con questo tool.",
       parameters: {
         type: "object",
         properties: {
           action: {
             type: "string",
             description:
-              '"list" per elencare i post pubblicati (con filtri opzionali), "get" per leggere il dettaglio di un post per slug, "featured" per il post in evidenza in home, "popular" per i post più apprezzati.',
-            enum: ["list", "get", "featured", "popular"],
+              '"list" per elencare i post pubblicati (con filtri opzionali, include se hanno un episodio podcast), "get" per leggere il dettaglio di un post per slug (include se ha un episodio podcast), "featured" per il post in evidenza in home, "popular" per i post più apprezzati, "comments" per leggere i commenti dei lettori su un post.',
+            enum: ["list", "get", "featured", "popular", "comments"],
           },
           slug: {
             type: "string",
-            description: 'Slug del post da leggere. Richiesto solo per action="get".',
+            description: 'Slug del post da leggere. Richiesto per action="get" e action="comments".',
           },
           tag: {
             type: "string",
@@ -211,7 +216,8 @@ const BASE_HORUS_TOOLS: HorusToolSpec[] = [
           },
           limit: {
             type: "number",
-            description: 'Numero massimo di post da restituire (default 5, max 20). Usabile solo con action="popular".',
+            description:
+              'Numero massimo di risultati da restituire. Con action="popular": default 5, max 20. Con action="comments": default 20, max 50 (i più recenti).',
           },
         },
         required: ["action"],
@@ -646,6 +652,14 @@ interface BlogPostSummary {
   publishedAt?: string;
   likeCount?: number;
   commentCount?: number;
+  audioUrl?: string | null;
+}
+
+interface BlogComment {
+  id?: number;
+  authorName?: string;
+  body?: string;
+  createdAt?: string;
 }
 
 const READ_BLOG_BODY_TRUNCATE_LEN = 4000;
@@ -660,9 +674,9 @@ function truncateBody(content: string | undefined): string {
 function formatBlogPostSummary(p: BlogPostSummary): string {
   return `- "${p.title ?? "(senza titolo)"}" (slug: ${p.slug ?? "?"}, categoria: ${p.category ?? "?"}, autore: ${
     p.author?.name ?? "?"
-  }, pubblicato: ${p.publishedAt ?? "?"}, tag: ${(p.tags ?? []).join(", ") || "nessuno"})\n  Estratto: ${
-    p.excerpt ?? ""
-  }`;
+  }, pubblicato: ${p.publishedAt ?? "?"}, tag: ${(p.tags ?? []).join(", ") || "nessuno"}, podcast: ${
+    p.audioUrl ? "sì" : "no"
+  })\n  Estratto: ${p.excerpt ?? ""}`;
 }
 
 function formatBlogPostDetail(p: BlogPostSummary): string {
@@ -674,9 +688,14 @@ function formatBlogPostDetail(p: BlogPostSummary): string {
     `Autore: ${p.author?.name ?? "?"}\n` +
     `Pubblicato: ${p.publishedAt ?? "?"}\n` +
     `Like: ${p.likeCount ?? 0} — Commenti: ${p.commentCount ?? 0}\n` +
+    `Episodio podcast: ${p.audioUrl ? "sì, disponibile" : "no, questo post non ha audio"}\n` +
     `Estratto: ${p.excerpt ?? ""}\n\n` +
     `Corpo:\n${truncateBody(p.content)}`
   );
+}
+
+function formatBlogComment(c: BlogComment): string {
+  return `- ${c.authorName ?? "Anonimo"} (${c.createdAt ?? "?"}): ${c.body ?? ""}`;
 }
 
 async function fetchBlogApi(path: string): Promise<
@@ -764,6 +783,28 @@ async function readBlog(args: Record<string, unknown>): Promise<string> {
     return `Post in evidenza (home):\n\n${formatBlogPostDetail(result.data as BlogPostSummary)}`;
   }
 
+  if (action === "comments") {
+    const slug = String(args.slug ?? "").trim();
+    if (!slug) {
+      return 'action="comments" richiede uno slug (es. slug: "il-mio-post").';
+    }
+    const result = await fetchBlogApi(`/posts/${encodeURIComponent(slug)}/comments`);
+    if (!result.ok) {
+      return result.message === "not_found"
+        ? `Nessun post pubblicato trovato con slug "${slug}".`
+        : result.message;
+    }
+    const comments = result.data as BlogComment[];
+    if (!Array.isArray(comments) || comments.length === 0) {
+      return `Nessun commento su "${slug}".`;
+    }
+    const limit = typeof args.limit === "number" && args.limit > 0 ? Math.min(args.limit, 50) : 20;
+    const recent = comments.slice(-limit).reverse();
+    return `${comments.length} commenti totali su "${slug}" (i più recenti prima, mostrati ${recent.length}):\n\n${recent
+      .map(formatBlogComment)
+      .join("\n")}`;
+  }
+
   if (action === "popular") {
     const limit = typeof args.limit === "number" ? args.limit : undefined;
     const qs = limit ? `?limit=${encodeURIComponent(String(limit))}` : "";
@@ -780,7 +821,7 @@ async function readBlog(args: Record<string, unknown>): Promise<string> {
     return `${posts.length} post più apprezzati:\n\n${posts.map(formatBlogPostSummary).join("\n\n")}`;
   }
 
-  return `Azione "${action}" sconosciuta per read_blog. Valori validi: "list", "get", "featured", "popular".`;
+  return `Azione "${action}" sconosciuta per read_blog. Valori validi: "list", "get", "featured", "popular", "comments".`;
 }
 
 interface AnalysisServiceResponse {
