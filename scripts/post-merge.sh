@@ -12,3 +12,8 @@ echo ""
 echo "══ Overnight pipeline report ══════════════════════════════════════════"
 pnpm --filter @workspace/scripts run pipeline:status || true
 echo "════════════════════════════════════════════════════════════════════════"
+
+# ── Highlighted banner on failure/warning ────────────────────────────────────
+# Printed last (after everything else) so a fail/warn is impossible to miss
+# without scrolling. Silent when overall=pass.
+pnpm --filter @workspace/scripts run pipeline:status -- --banner || true

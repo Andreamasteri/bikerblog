@@ -62,15 +62,19 @@ interface PipelineReport {
   };
 }
 
+const bannerOnly = process.argv.includes("--banner");
+
 let resolvedPath = reportPath;
 let usedFallback = false;
 
 if (!existsSync(reportPath)) {
   const fallbackPath = findMostRecentHistoryReport();
   if (!fallbackPath) {
-    console.log("No pipeline report found at inbox/pipeline-last-run.json");
-    console.log("No archived reports found in inbox/pipeline-history/ either.");
-    console.log("The pipeline has not run yet, or the report file was not written.");
+    if (!bannerOnly) {
+      console.log("No pipeline report found at inbox/pipeline-last-run.json");
+      console.log("No archived reports found in inbox/pipeline-history/ either.");
+      console.log("The pipeline has not run yet, or the report file was not written.");
+    }
     process.exit(1);
   }
   resolvedPath = fallbackPath;
@@ -82,14 +86,51 @@ let report: PipelineReport;
 try {
   report = JSON.parse(raw) as PipelineReport;
 } catch {
-  console.error(`Failed to parse ${resolvedPath} — file may be corrupt.`);
+  if (!bannerOnly) {
+    console.error(`Failed to parse ${resolvedPath} — file may be corrupt.`);
+  }
   process.exit(1);
 }
 
-if (usedFallback) {
+if (usedFallback && !bannerOnly) {
   console.log(
     `⚠ inbox/pipeline-last-run.json non trovato — mostro l'archivio più recente: ${resolvedPath.split("/").pop()}`
   );
+}
+
+if (bannerOnly) {
+  if (report.overall === "pass") {
+    process.exit(0);
+  }
+
+  const isFail = report.overall === "fail";
+  const label = isFail ? "PIPELINE FAILED OVERNIGHT" : "PIPELINE WARNING OVERNIGHT";
+  const color = isFail ? "\x1b[1;97;41m" : "\x1b[1;30;43m";
+  const reset = "\x1b[0m";
+  const t = report.totals;
+
+  const lines = [
+    `${label} — ${report.date}`,
+    `posts=${t.posts_published}  translated=${t.translations_done}  audio=${t.audio_generated}  errors=${t.errors}  warnings=${t.warnings}`,
+  ];
+  const failedSteps = report.steps.filter((s) => s.status === "failed" || s.status === "warn");
+  for (const step of failedSteps) {
+    for (const err of step.errors) lines.push(`Step ${step.step} (${step.name}): ${err}`);
+    for (const warn of step.warnings) lines.push(`Step ${step.step} (${step.name}): ${warn}`);
+  }
+
+  const width = Math.max(...lines.map((l) => l.length)) + 4;
+  const pad = (l: string) => ` ${l}${" ".repeat(width - l.length - 2)} `;
+
+  console.log("");
+  console.log(color + " ".repeat(width) + reset);
+  for (const l of lines) {
+    console.log(color + pad(l) + reset);
+  }
+  console.log(color + " ".repeat(width) + reset);
+  console.log("");
+
+  process.exit(isFail ? 1 : 0);
 }
 
 const statusIcon: Record<string, string> = {
