@@ -2,7 +2,8 @@
  * Horus — client per il modello Ollama locale (server ThinkCentre "TC" di BikerLink,
  * raggiunto tramite tunnel Cloudflare + Cloudflare Access Service Token).
  *
- * Sostituisce Claude per generazione post diario e traduzioni IT→EN.
+ * Sostituisce Claude per generazione post diario e traduzioni IT→EN, ed è
+ * anche il client usato dalla chat interattiva (CLI e web).
  *
  * Env richiesti:
  *   HORUS_OLLAMA_URL        — URL Cloudflare del server Ollama (es. https://ollama-tc.biker-link.net)
@@ -25,7 +26,8 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MEMORY_FILE = resolve(__dirname, "..", "..", "inbox", "horus-memory.md");
+// lib/horus/src -> lib/horus -> lib -> root -> inbox
+const MEMORY_FILE = resolve(__dirname, "..", "..", "..", "inbox", "horus-memory.md");
 
 const MEMORY_HEADER = `# Memoria di Horus
 

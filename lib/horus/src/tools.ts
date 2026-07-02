@@ -1,6 +1,8 @@
 /**
  * Tool disponibili per Horus durante la chat interattiva (function calling
- * nativo di Ollama — confermato supportato da bikerlink:latest).
+ * nativo di Ollama — confermato supportato da bikerlink:latest). Usato sia
+ * dalla chat CLI (`scripts/src/horus-chat.ts`) sia dalla chat web
+ * (`artifacts/api-server/src/routes/horus.ts`).
  *
  * Importante: l'esecuzione dei tool avviene sempre lato client (qui), mai sul
  * server Ollama/TC. Quando il modello richiede un tool_call, noi eseguiamo la
@@ -39,8 +41,8 @@
  *                     essere ricordato tra una sessione e l'altra
  */
 
-import type { HorusToolSpec } from "./horus-client.js";
-import { appendHorusMemory } from "./horus-client.js";
+import type { HorusToolSpec } from "./client.js";
+import { appendHorusMemory } from "./client.js";
 
 const GITHUB_API = "https://api.github.com";
 

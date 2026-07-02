@@ -184,6 +184,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/horus':
+        specifier: workspace:*
+        version: link:../../lib/horus
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -662,6 +665,12 @@ importers:
         specifier: 'catalog:'
         version: 4.21.0
 
+  lib/horus:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.2
+
   scripts:
     dependencies:
       '@google-cloud/storage':
@@ -670,6 +679,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../lib/db
+      '@workspace/horus':
+        specifier: workspace:*
+        version: link:../lib/horus
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.2(@types/pg@8.20.0)(pg@8.20.0)

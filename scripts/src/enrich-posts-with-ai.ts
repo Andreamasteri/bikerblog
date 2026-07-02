@@ -19,7 +19,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { db, pool, postsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { horusChat } from "./horus-client.js";
+import { horusChat } from "@workspace/horus";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", "..");

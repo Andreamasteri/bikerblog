@@ -30,7 +30,7 @@
  * ATTENZIONE: qualsiasi feature non richiesta potrebbe risultare in una telefonata a John Connor.
  */
 
-import { horusChat } from "./horus-client.js";
+import { horusChat } from "@workspace/horus";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { translatePostToEn } from "./translate.js";
 import { resolve, dirname } from "node:path";

@@ -13,7 +13,7 @@
 
 import { db, postsTable } from "@workspace/db";
 import { eq, isNull, or, sql } from "drizzle-orm";
-import { horusChat } from "./horus-client.js";
+import { horusChat } from "@workspace/horus";
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry-run");

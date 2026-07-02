@@ -30,6 +30,7 @@
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
     "@workspace/db": "workspace:*",
+    "@workspace/horus": "workspace:*",
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {

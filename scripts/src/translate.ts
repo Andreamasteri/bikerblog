@@ -6,7 +6,7 @@
  * Model: Horus (bikerlink:latest su Ollama, server TC via Cloudflare Access)
  */
 
-import { horusChat } from "./horus-client.js";
+import { horusChat } from "@workspace/horus";
 
 export interface TranslationResult {
   titleEn:   string;

@@ -17,8 +17,13 @@
 
 import * as readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { horusChatRaw, appendHorusMemory, type HorusMessage } from "./horus-client.js";
-import { HORUS_TOOLS, executeHorusTool } from "./horus-tools.js";
+import {
+  horusChatRaw,
+  appendHorusMemory,
+  HORUS_TOOLS,
+  executeHorusTool,
+  type HorusMessage,
+} from "@workspace/horus";
 
 // Il modello bikerlink:latest ha un system prompt di base orientato a
 // BikerLink/BikerBlog (usato per diario, traduzioni, recap). In chat libera

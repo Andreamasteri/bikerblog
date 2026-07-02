@@ -5,7 +5,7 @@
  *   pnpm --filter @workspace/scripts run horus:remember -- "Non inventare mai fatti se mancano le fonti"
  */
 
-import { appendHorusMemory, loadHorusMemory } from "./horus-client.js";
+import { appendHorusMemory, loadHorusMemory } from "@workspace/horus";
 
 const note = process.argv.slice(2).join(" ").trim();
 
