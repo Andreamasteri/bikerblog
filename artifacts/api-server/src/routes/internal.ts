@@ -247,40 +247,4 @@ router.delete(
   },
 );
 
-router.post(
-  "/_internal/test-horus",
-  async (req, res): Promise<void> => {
-    const auth = req.headers.authorization;
-    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
-      res.status(401).json({ error: "unauthorized" });
-      return;
-    }
-
-    const url = process.env["HORUS_OLLAMA_URL"];
-    const cfId = process.env["CF_ACCESS_CLIENT_ID"];
-    const cfSecret = process.env["CF_ACCESS_CLIENT_SECRET"];
-
-    try {
-      const r = await fetch(`${url}/api/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(cfId && cfSecret
-            ? { "CF-Access-Client-Id": cfId, "CF-Access-Client-Secret": cfSecret }
-            : {}),
-        },
-        body: JSON.stringify({
-          model: "bikerlink:latest",
-          messages: [{ role: "user", content: 'Rispondi SOLO con: {"ok": true}' }],
-          stream: false,
-        }),
-      });
-      const text = await r.text();
-      res.status(r.status).json({ status: r.status, body: text.slice(0, 1000), envOk: { url: !!url, cfId: !!cfId, cfSecret: !!cfSecret } });
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err), envOk: { url: !!url, cfId: !!cfId, cfSecret: !!cfSecret } });
-    }
-  },
-);
-
 export default router;

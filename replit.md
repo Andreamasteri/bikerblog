@@ -18,10 +18,11 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run self-check` — verifica che ogni post pubblicato negli ultimi 7 giorni sia presente in produzione con `body_en`, `audio_url` e contenuto aggiornato (rileva stale tramite excerpt diff). Se rileva gap, fa push automatico via `/_internal/seed-posts` usando `SEED_TOKEN`. Env opzionali: `PROD_URL` (default `https://bikerlink-blog.replit.app`), `SELF_CHECK_DAYS` (default 7).
 - `pnpm --filter @workspace/scripts run bikerlink:activity -- --date YYYY-MM-DD` — recupera OTA release e server restart del DB BikerLink per una data e scrive `inbox/diary-notes-YYYY-MM-DD.md`. Eseguito automaticamente dallo step 3.5 della pipeline. Non sovrascrive note manuali già esistenti. Richiede `BIKERLINK_DATABASE_URL`.
 - `pnpm --filter @workspace/scripts run publish:from-clusters` — pubblica manualmente i cluster già generati come post del blog
-- `pnpm --filter @workspace/scripts run diary:generate` — genera/aggiorna post narrativi per tutti i 73 giorni (12 mar – 23 mag 2026) usando Claude + chat + task. Flag: `--dry-run`, `--force`, `--map-only`, `--date YYYY-MM-DD`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`. Scrive la mappa sessioni in `inbox/bikerlink-chat-day-map.json`.
-  - **Note developer**: per aggiungere contesto manuale a un giorno (es. giornate di sviluppo intenso senza attività utenti), crea `inbox/diary-notes-YYYY-MM-DD.md` prima che la pipeline giri (23:30). Il generatore lo carica automaticamente e lo passa a Claude come fonte prioritaria. Se il file esiste ma la chat è vuota, genera il post solo dalle note. Se né note né chat sono disponibili, genera un post breve e onesto che riconosce l'assenza di dati invece di inventare narrazioni poetiche ("silenzio del terminale" ecc.).
-- `pnpm --filter @workspace/scripts run translate:posts` — traduce i post IT→EN con Claude e salva `title_en`, `excerpt_en`, `body_en` nel DB. Flag: `--dry-run`, `--slug <slug>` (singolo post), `--force` (ritraduci anche chi ha già EN).
-- `pnpm --filter @workspace/scripts run translate:backfill` — backfill di massa: traduce tutti i post con `body_en` NULL usando Claude Haiku (economico). Flag: `--dry-run`, `--slug <slug>` (singolo post), `--force` (ritraduci anche chi ha già EN). Logga: X translated, Y skipped, Z failed.
+- `pnpm --filter @workspace/scripts run diary:generate` — genera/aggiorna post narrativi per tutti i giorni usando Horus + chat + task. Flag: `--dry-run`, `--force`, `--map-only`, `--date YYYY-MM-DD`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`. Scrive la mappa sessioni in `inbox/bikerlink-chat-day-map.json`.
+  - **Note developer**: per aggiungere contesto manuale a un giorno (es. giornate di sviluppo intenso senza attività utenti), crea `inbox/diary-notes-YYYY-MM-DD.md` prima che la pipeline giri (23:30). Il generatore lo carica automaticamente e lo passa a Horus come fonte prioritaria. Se il file esiste ma la chat è vuota, genera il post solo dalle note. Se né note né chat sono disponibili, genera un post breve e onesto che riconosce l'assenza di dati invece di inventare narrazioni poetiche ("silenzio del terminale" ecc.).
+- `pnpm --filter @workspace/scripts run translate:posts` — traduce i post IT→EN con Horus e salva `title_en`, `excerpt_en`, `body_en` nel DB. Flag: `--dry-run`, `--slug <slug>` (singolo post), `--force` (ritraduci anche chi ha già EN).
+- `pnpm --filter @workspace/scripts run translate:backfill` — backfill di massa: traduce tutti i post con `body_en` NULL usando Horus. Flag: `--dry-run`, `--slug <slug>` (singolo post), `--force` (ritraduci anche chi ha già EN). Logga: X translated, Y skipped, Z failed.
+- `pnpm --filter @workspace/scripts run horus:remember -- "nota"` — aggiunge una nota permanente alla memoria di Horus (`inbox/horus-memory.md`), allegata automaticamente a ogni chiamata (correzioni, convenzioni, stile).
 - `pnpm --filter @workspace/scripts run podcast:generate` — genera audio TTS (edge-tts, voce configurabile) per i post senza `audio_url` e li carica su GCS. Flag: `--slug <slug>` (solo un post), `--dry-run`, `--force` (rigenera anche chi ha già audio), `--voice <nome>` (sovrascrive la voce). Env: `PODCAST_VOICE` (default: `it-IT-DiegoNeural`). Richiede `SESSION_SECRET` (già presente).
   - Voci italiane disponibili (`edge-tts --list-voices | grep it-IT`):
     - `it-IT-DiegoNeural` — maschile (default)
@@ -45,7 +46,7 @@ Il comando esegue 6 step in sequenza (tutti idempotenti):
 2. Genera `inbox/clusters-merged-by-day.md` dai task MERGED
 3. Pubblica i cluster nuovi come post del blog (cluster già pubblicati vengono ignorati)
 4. Genera il post diaristico per la data odierna (post già esistenti vengono ignorati)
-5. Traduce i post senza contenuto EN in inglese (salta i già tradotti) — richiede `ANTHROPIC_API_KEY`
+5. Traduce i post senza contenuto EN in inglese (salta i già tradotti) — richiede Horus (vedi sotto)
 6. Genera audio TTS (edge-tts) per i post nuovi o riscritti senza `audio_url` — richiede `SESSION_SECRET` (per il token interno) e `edge-tts` installato (installato automaticamente via `postinstall` in `scripts/package.json`)
 
 Env opzionali per lo step 1: `INBOX_URL`, `INBOX_TOKEN`, `INBOX_SOURCE` (default: `bikerlink`).
@@ -75,6 +76,9 @@ Env opzionali per lo step 1: `INBOX_URL`, `INBOX_TOKEN`, `INBOX_SOURCE` (default
 
 - **Podcast audio via API streaming**: i file MP3 sono salvati privati su GCS (bucket con public access prevention); vengono serviti da `GET /api/podcast/audio/:slug` nell'api-server usando il sidecar GCS Replit. Il frontend usa questo URL come `src` del player.
 - **Token interno derivato da SESSION_SECRET**: gli endpoint `/_internal/*` usano un HMAC(SESSION_SECRET, "internal-api-token-v1") come token di autenticazione. Nessun segreto aggiuntivo necessario per la comunicazione script→server.
+- **Horus (Ollama `bikerlink:latest`) sostituisce Claude/Anthropic per tutta la generazione AI**: diario, traduzioni (`translate.ts`, `translate-backfill.ts`) e recap (`enrich-posts-with-ai.ts`) usano `horusChat()` in `scripts/src/horus-client.ts`. Horus gira su un server dell'utente ("TC") raggiunto via Cloudflare Tunnel + Access Service Token (`HORUS_OLLAMA_URL`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`). Genera solo contenuto per la pipeline editoriale — non ha accesso al codice/GitHub (nessun harness di coding, nessuna review): quella parte resta esclusivamente all'agente Replit.
+- **Horus richiede `stream: true`**: il Cloudflare Tunnel chiude le richieste dopo ~100s di silenzio (524), ma un post diario/traduzione completo su CPU può richiedere 300s+. `horusChat()` usa streaming NDJSON (accumulando `message.content` chunk per chunk) per mantenere il tunnel vivo; `stream: false` causa fallimenti sistematici sui contenuti lunghi.
+- **Memoria persistente di Horus**: `inbox/horus-memory.md` viene caricato automaticamente da `horusChat()` come system message ad ogni chiamata. Per aggiungere una nota permanente (correzioni di stile, convenzioni), usare `pnpm --filter @workspace/scripts run horus:remember -- "nota"`.
 
 ## Product
 
@@ -117,6 +121,7 @@ linkata dal footer del sito.
 
 - **GCS sidecar funziona solo nell'api-server workflow** — non in bash o code_execution. Per caricare file su GCS dai script, usare l'endpoint `POST /api/_internal/podcast-store` che gira nell'api-server.
 - **podcast:generate usa edge-tts (gratuito)** — non richiede API key. Richiede `edge-tts` installato tramite pip (installato automaticamente via `postinstall` in `scripts/package.json`). Richiede `SESSION_SECRET` per il token interno verso l'api-server.
+- **Env di Horus instabili nella sessione bash dell'agente**: `HORUS_OLLAMA_URL`/`CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET` possono risultare presenti o assenti in modo incoerente tra una chiamata bash e l'altra. I workflow (es. api-server, Daily Pipeline) hanno sempre l'env corretto — usarli per verificare la connettività, non la sessione bash diretta.
 
 ## Pointers
 

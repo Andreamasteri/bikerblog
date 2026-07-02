@@ -20,13 +20,13 @@
     "translate:backfill": "tsx src/translate-backfill.ts",
     "self-check": "tsx src/self-check.ts",
     "bikerlink:activity": "tsx src/fetch-bikerlink-activity.ts",
+    "horus:remember": "tsx src/horus-remember.ts",
     "migrate:author-mendo": "tsx src/migrate-author-mendo.ts",
     "pipeline:status": "tsx src/read-last-run.ts",
     "pipeline:summary": "tsx src/pipeline-summary.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.98.0",
     "@google-cloud/storage": "^7.19.0",
     "@workspace/db": "workspace:*",
     "drizzle-orm": "catalog:"

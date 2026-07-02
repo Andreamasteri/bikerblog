@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * enrich-posts-with-ai — riscrive i post recap usando Claude + la chat di BikerLink.
+ * enrich-posts-with-ai — riscrive i post recap usando Horus + la chat di BikerLink.
  *
  * Per ogni giornata dei cluster:
  *   1. Estrae i task (titoli + descrizioni) da clusters-merged-by-day.md

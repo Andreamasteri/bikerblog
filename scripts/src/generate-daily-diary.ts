@@ -56,7 +56,7 @@ const DATE_END_BASE  = "2026-05-23";
 const MAX_RELEVANT_SESSIONS   = 8;
 /** Maximum proportional-slice (contextual background) sessions for task days */
 const MAX_CONTEXTUAL_SESSIONS = 5;
-/** Maximum sessions to pass to Claude per day (non-task days / legacy cap) */
+/** Maximum sessions to pass to Horus per day (non-task days / legacy cap) */
 const MAX_SESSIONS_PER_DAY = 13;
 /** Maximum boundary shift (in sessions) for content-signal adjustment */
 const MAX_BOUNDARY_SHIFT   = 5;
@@ -232,7 +232,7 @@ const MIN_FACT_LINES = 3;
  * Returns the anti-fabrication instruction block to inject into the prompt
  * when notes are sparse (below the MIN_FACT_LINES threshold).
  *
- * This block overrides Claude's tendency to invent plausible context.
+ * This block overrides Horus's tendency to invent plausible context.
  */
 function sparseDataWarningBlock(factCount: number): string {
   return `
@@ -518,7 +518,7 @@ function buildPromptWithTasks(
   if (notes) {
     if (factCount === 0) {
       // Note sintetiche (solo boilerplate/Limiti): etichettate come vincoli,
-      // non come fonte narrativa, per evitare che Claude le "interpreti" come fatti.
+      // non come fonte narrativa, per evitare che Horus le "interpreti" come fatti.
       chatSection +=
         `\n\n### Metadati di sistema (vincoli, non contenuto narrativo)\n` +
         `> Queste note contengono solo metadati tecnici (fonti mancanti, limiti di acquisizione).\n` +
@@ -585,8 +585,8 @@ function buildPromptChatOnly(date: string, sessions: string[], notes: string | n
 
   // ── Zero-data guard ──────────────────────────────────────────────────────────
   // When neither chat sessions nor developer notes are available, instruct
-  // Claude to be explicitly honest rather than fabricating a narrative.
-  // This prevents the "silence of the terminal" antipattern where Claude
+  // Horus to be explicitly honest rather than fabricating a narrative.
+  // This prevents the "silence of the terminal" antipattern where Horus
   // invents poetic reflections on nothingness because the inbox was empty.
   if (!hasData) {
     return `${PERSONA}
