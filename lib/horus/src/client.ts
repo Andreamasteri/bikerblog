@@ -1,14 +1,24 @@
 /**
- * Horus — client per il modello Ollama locale (server ThinkCentre "TC" di BikerLink,
- * raggiunto tramite tunnel Cloudflare + Cloudflare Access Service Token).
+ * Client generico per un "agente Ollama" raggiunto tramite tunnel Cloudflare
+ * (URL + Cloudflare Access Service Token) sullo stesso server ThinkCentre
+ * "TC" di BikerLink. Usato sia da Horus (`bikerlink:latest`, generazione
+ * contenuti + chat interattiva) sia da Bowie (chat osservabile Horus↔Bowie).
  *
- * Sostituisce Claude per generazione post diario e traduzioni IT→EN, ed è
- * anche il client usato dalla chat interattiva (CLI e web).
+ * Horus resta il client di default esportato da questo modulo (stesso
+ * comportamento e stessi export di sempre): sostituisce Claude per
+ * generazione post diario e traduzioni IT→EN, ed è anche il client usato
+ * dalla chat interattiva (CLI e web).
  *
- * Env richiesti:
+ * Env richiesti per Horus:
  *   HORUS_OLLAMA_URL        — URL Cloudflare del server Ollama (es. https://ollama-tc.biker-link.net)
  *   CF_ACCESS_CLIENT_ID     — Service Token Cloudflare Access (Client ID)
  *   CF_ACCESS_CLIENT_SECRET — Service Token Cloudflare Access (Client Secret)
+ *
+ * Env per Bowie (vedi `getBowieClient()`):
+ *   BOWIE_OLLAMA_MODEL          — nome del modello Ollama di Bowie (richiesto per abilitarlo)
+ *   BOWIE_OLLAMA_URL            — opzionale, default HORUS_OLLAMA_URL (stesso tunnel)
+ *   BOWIE_CF_ACCESS_CLIENT_ID   — opzionale, default CF_ACCESS_CLIENT_ID
+ *   BOWIE_CF_ACCESS_CLIENT_SECRET — opzionale, default CF_ACCESS_CLIENT_SECRET
  *
  * Nota: il server è un Ollama consumer-grade (CPU), le risposte possono richiedere
  * da alcune decine di secondi a qualche minuto per prompt lunghi (es. traduzione
@@ -18,7 +28,8 @@
  * Per dare a Horus continuità, ogni chiamata allega automaticamente il contenuto
  * di inbox/horus-memory.md come messaggio di sistema (note, correzioni, convenzioni
  * imparate nel tempo). Usa `appendHorusMemory()` per aggiungere una nota, oppure
- * `pnpm --filter @workspace/scripts run horus:remember -- "nota"`.
+ * `pnpm --filter @workspace/scripts run horus:remember -- "nota"`. Bowie non
+ * condivide questa memoria (è un agente distinto con la propria identità).
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
@@ -35,10 +46,6 @@ Note persistenti, correzioni e convenzioni da rispettare sempre nella
 generazione di contenuti per BikerBlog. Aggiunte con:
 \`pnpm --filter @workspace/scripts run horus:remember -- "nota"\`
 `;
-
-const OLLAMA_URL = process.env.HORUS_OLLAMA_URL;
-const CF_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID;
-const CF_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET;
 
 export const HORUS_MODEL = "bikerlink:latest";
 
@@ -102,6 +109,8 @@ export interface HorusChatOptions {
   tools?: HorusToolSpec[];
   /** Se true, non allega la memoria persistente come system message (usato quando il chiamante la gestisce da sé). */
   skipMemory?: boolean;
+  /** Segnale di abort esterno (es. per interrompere una conversazione multi-turno su richiesta dell'utente). */
+  signal?: AbortSignal;
   /**
    * Per quanto tempo Ollama tiene il modello caricato in RAM dopo questa
    * richiesta (formato Ollama, es. "30m", "-1" per sempre). Se il modello
@@ -118,13 +127,187 @@ export interface HorusRawResult {
   toolCalls: HorusToolCall[];
 }
 
-function assertConfigured(): void {
-  if (!OLLAMA_URL) {
-    throw new Error(
-      "HORUS_OLLAMA_URL non configurato — impossibile contattare Horus (Ollama su TC)."
-    );
-  }
+/** Configurazione di un agente Ollama generico (Horus, Bowie, o altri in futuro). */
+export interface OllamaAgentConfig {
+  /** Nome leggibile dell'agente, usato solo nei messaggi di errore. */
+  agentName: string;
+  ollamaUrl: string | undefined;
+  cfAccessClientId: string | undefined;
+  cfAccessClientSecret: string | undefined;
+  model: string;
+  /** Se true, allega la memoria persistente di Horus (inbox/horus-memory.md) di default. */
+  useHorusMemoryByDefault: boolean;
 }
+
+export interface OllamaAgentClient {
+  chatRaw: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<HorusRawResult>;
+  chat: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<string>;
+  isConfigured: () => boolean;
+}
+
+/**
+ * Crea un client per un agente Ollama parametrico (URL, credenziali
+ * Cloudflare Access, modello, keep-alive). Horus e Bowie sono entrambi
+ * istanze di questo client con configurazioni diverse — la logica di
+ * streaming/keep-alive/tool-calling non è duplicata.
+ */
+export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentClient {
+  function isConfigured(): boolean {
+    return Boolean(config.ollamaUrl && config.model);
+  }
+
+  function assertConfigured(): void {
+    if (!config.ollamaUrl) {
+      throw new Error(
+        `${config.agentName}: URL Ollama non configurato — impossibile contattare l'agente.`
+      );
+    }
+    if (!config.model) {
+      throw new Error(`${config.agentName}: nome modello non configurato.`);
+    }
+  }
+
+  async function chatRaw(
+    messages: HorusMessage[],
+    options: HorusChatOptions = {}
+  ): Promise<HorusRawResult> {
+    assertConfigured();
+
+    const attachMemory = options.skipMemory === undefined
+      ? config.useHorusMemoryByDefault
+      : !options.skipMemory;
+    const memory = attachMemory ? loadHorusMemory() : "";
+    const finalMessages: HorusMessage[] = memory
+      ? [
+          {
+            role: "system",
+            content: `Memoria persistente di Horus — note e correzioni da rispettare sempre:\n\n${memory}`,
+          },
+          ...messages,
+        ]
+      : messages;
+
+    const timeoutMs = options.timeoutMs ?? 5 * 60_000; // 5 minuti default (CPU lenta)
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const onExternalAbort = () => controller.abort();
+    options.signal?.addEventListener("abort", onExternalAbort);
+
+    try {
+      // Streaming: senza questo, Cloudflare Tunnel chiude la connessione dopo
+      // ~100s di silenzio (errore 524) mentre Ollama genera in CPU. Con lo
+      // streaming i byte arrivano di continuo e la connessione resta viva anche
+      // per generazioni di diversi minuti. Confermato che i tool_calls arrivano
+      // regolarmente anche con stream:true (in un chunk con done:false).
+      const res = await fetch(`${config.ollamaUrl!.replace(/\/$/, "")}/api/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(config.cfAccessClientId && config.cfAccessClientSecret
+            ? {
+                "CF-Access-Client-Id": config.cfAccessClientId,
+                "CF-Access-Client-Secret": config.cfAccessClientSecret,
+              }
+            : {}),
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: finalMessages,
+          stream: true,
+          keep_alive: options.keepAlive ?? "30m",
+          ...(options.tools ? { tools: options.tools } : {}),
+          options: {
+            num_predict: options.maxTokens ?? 4096,
+          },
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `${config.agentName} request failed: ${res.status} ${res.statusText} — ${body.slice(0, 300)}`
+        );
+      }
+
+      if (!res.body) {
+        throw new Error(`${config.agentName}: risposta senza body (stream non disponibile)`);
+      }
+
+      let full = "";
+      let buffer = "";
+      const toolCalls: HorusToolCall[] = [];
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIdx: number;
+        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, newlineIdx).trim();
+          buffer = buffer.slice(newlineIdx + 1);
+          if (!line) continue;
+
+          let chunk: {
+            message?: { content?: string; tool_calls?: HorusToolCall[] };
+            done?: boolean;
+            error?: string;
+          };
+          try {
+            chunk = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (chunk.error) {
+            throw new Error(`${config.agentName} streaming error: ${chunk.error}`);
+          }
+          if (chunk.message?.content) {
+            full += chunk.message.content;
+            options.onToken?.(chunk.message.content);
+          }
+          if (chunk.message?.tool_calls?.length) {
+            toolCalls.push(...chunk.message.tool_calls);
+          }
+        }
+      }
+
+      return { content: full.trim(), toolCalls };
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        if (options.signal?.aborted) {
+          throw new Error(`${config.agentName}: conversazione interrotta dall'utente`);
+        }
+        throw new Error(`${config.agentName} request timeout dopo ${Math.round(timeoutMs / 1000)}s`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onExternalAbort);
+    }
+  }
+
+  async function chat(messages: HorusMessage[], options: HorusChatOptions = {}): Promise<string> {
+    const { content } = await chatRaw(messages, options);
+    if (!content) {
+      throw new Error(`${config.agentName}: risposta vuota`);
+    }
+    return content;
+  }
+
+  return { chatRaw, chat, isConfigured };
+}
+
+const horusClient = createOllamaAgentClient({
+  agentName: "Horus",
+  ollamaUrl: process.env.HORUS_OLLAMA_URL,
+  cfAccessClientId: process.env.CF_ACCESS_CLIENT_ID,
+  cfAccessClientSecret: process.env.CF_ACCESS_CLIENT_SECRET,
+  model: HORUS_MODEL,
+  useHorusMemoryByDefault: true,
+});
 
 /**
  * Invia una conversazione a Horus e restituisce sia il testo che eventuali
@@ -132,117 +315,11 @@ function assertConfigured(): void {
  * Non lancia errore se il contenuto è vuoto (caso normale quando il modello
  * chiede solo un tool_call, senza testo).
  */
-export async function horusChatRaw(
+export function horusChatRaw(
   messages: HorusMessage[],
   options: HorusChatOptions = {}
 ): Promise<HorusRawResult> {
-  assertConfigured();
-
-  const memory = options.skipMemory ? "" : loadHorusMemory();
-  const finalMessages: HorusMessage[] = memory
-    ? [
-        {
-          role: "system",
-          content: `Memoria persistente di Horus — note e correzioni da rispettare sempre:\n\n${memory}`,
-        },
-        ...messages,
-      ]
-    : messages;
-
-  const timeoutMs = options.timeoutMs ?? 5 * 60_000; // 5 minuti default (CPU lenta)
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    // Streaming: senza questo, Cloudflare Tunnel chiude la connessione dopo
-    // ~100s di silenzio (errore 524) mentre Ollama genera in CPU. Con lo
-    // streaming i byte arrivano di continuo e la connessione resta viva anche
-    // per generazioni di diversi minuti. Confermato che i tool_calls arrivano
-    // regolarmente anche con stream:true (in un chunk con done:false).
-    const res = await fetch(`${OLLAMA_URL!.replace(/\/$/, "")}/api/chat`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(CF_CLIENT_ID && CF_CLIENT_SECRET
-          ? {
-              "CF-Access-Client-Id": CF_CLIENT_ID,
-              "CF-Access-Client-Secret": CF_CLIENT_SECRET,
-            }
-          : {}),
-      },
-      body: JSON.stringify({
-        model: HORUS_MODEL,
-        messages: finalMessages,
-        stream: true,
-        keep_alive: options.keepAlive ?? "30m",
-        ...(options.tools ? { tools: options.tools } : {}),
-        options: {
-          num_predict: options.maxTokens ?? 4096,
-        },
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(
-        `Horus request failed: ${res.status} ${res.statusText} — ${body.slice(0, 300)}`
-      );
-    }
-
-    if (!res.body) {
-      throw new Error("Horus: risposta senza body (stream non disponibile)");
-    }
-
-    let full = "";
-    let buffer = "";
-    const toolCalls: HorusToolCall[] = [];
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      let newlineIdx: number;
-      while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-        const line = buffer.slice(0, newlineIdx).trim();
-        buffer = buffer.slice(newlineIdx + 1);
-        if (!line) continue;
-
-        let chunk: {
-          message?: { content?: string; tool_calls?: HorusToolCall[] };
-          done?: boolean;
-          error?: string;
-        };
-        try {
-          chunk = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (chunk.error) {
-          throw new Error(`Horus streaming error: ${chunk.error}`);
-        }
-        if (chunk.message?.content) {
-          full += chunk.message.content;
-          options.onToken?.(chunk.message.content);
-        }
-        if (chunk.message?.tool_calls?.length) {
-          toolCalls.push(...chunk.message.tool_calls);
-        }
-      }
-    }
-
-    return { content: full.trim(), toolCalls };
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      throw new Error(`Horus request timeout dopo ${Math.round(timeoutMs / 1000)}s`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
+  return horusClient.chatRaw(messages, options);
 }
 
 /**
@@ -250,15 +327,44 @@ export async function horusChatRaw(
  * Lancia un errore se la richiesta fallisce o la risposta è vuota.
  * Per conversazioni con tool calling usa `horusChatRaw`.
  */
-export async function horusChat(
+export function horusChat(messages: HorusMessage[], options: HorusChatOptions = {}): Promise<string> {
+  return horusClient.chat(messages, options);
+}
+
+export const BOWIE_AGENT_NAME = "Bowie";
+
+/**
+ * Client di Bowie, la seconda IA più leggera installata sullo stesso TC di
+ * Horus. Riusa lo stesso tunnel/credenziali di Horus per default (stesso
+ * meccanismo di rete), a meno che non vengano configurate env var dedicate:
+ *   BOWIE_OLLAMA_MODEL            — richiesto per abilitare Bowie
+ *   BOWIE_OLLAMA_URL              — opzionale, default HORUS_OLLAMA_URL
+ *   BOWIE_CF_ACCESS_CLIENT_ID     — opzionale, default CF_ACCESS_CLIENT_ID
+ *   BOWIE_CF_ACCESS_CLIENT_SECRET — opzionale, default CF_ACCESS_CLIENT_SECRET
+ * Bowie non allega la memoria persistente di Horus per default: è un agente
+ * distinto con la propria identità, non un alter ego di Horus.
+ */
+const bowieClient = createOllamaAgentClient({
+  agentName: BOWIE_AGENT_NAME,
+  ollamaUrl: process.env.BOWIE_OLLAMA_URL || process.env.HORUS_OLLAMA_URL,
+  cfAccessClientId: process.env.BOWIE_CF_ACCESS_CLIENT_ID || process.env.CF_ACCESS_CLIENT_ID,
+  cfAccessClientSecret:
+    process.env.BOWIE_CF_ACCESS_CLIENT_SECRET || process.env.CF_ACCESS_CLIENT_SECRET,
+  model: process.env.BOWIE_OLLAMA_MODEL ?? "",
+  useHorusMemoryByDefault: false,
+});
+
+/** True se Bowie è configurato (BOWIE_OLLAMA_MODEL impostato e un URL disponibile). */
+export function isBowieConfigured(): boolean {
+  return bowieClient.isConfigured();
+}
+
+/** Invia una conversazione a Bowie e restituisce testo + eventuali tool_calls. */
+export function bowieChatRaw(
   messages: HorusMessage[],
   options: HorusChatOptions = {}
-): Promise<string> {
-  const { content } = await horusChatRaw(messages, options);
-  if (!content) {
-    throw new Error("Horus: risposta vuota");
-  }
-  return content;
+): Promise<HorusRawResult> {
+  return bowieClient.chatRaw(messages, options);
 }
 
 /**

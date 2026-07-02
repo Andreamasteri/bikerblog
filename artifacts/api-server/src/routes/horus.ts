@@ -2,6 +2,9 @@ import { Router, type IRouter } from "express";
 import express from "express";
 import {
   horusChatRaw,
+  bowieChatRaw,
+  isBowieConfigured,
+  BOWIE_AGENT_NAME,
   getHorusTools,
   executeHorusTool,
   type HorusMessage,
@@ -138,5 +141,157 @@ router.post("/horus/chat", express.json({ limit: "1mb" }), async (req, res): Pro
     res.end();
   }
 });
+
+const HORUS_CONVO_SYSTEM_PROMPT: HorusMessage = {
+  role: "system",
+  content:
+    "Stai partecipando a una conversazione osservabile tra due IA, tu (Horus) e Bowie, un'altra IA più leggera " +
+    "installata sullo stesso ThinkCentre. Un utente umano ha proposto un argomento iniziale e vuole guardarvi " +
+    "discuterne a turni. Rispondi in modo naturale e conciso (pochi paragrafi al massimo) a ciò che Bowie ha " +
+    "appena detto, portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere " +
+    "semplicemente quello che ha detto Bowie, e non chiudere subito la conversazione: contribuisci con qualcosa " +
+    "di nuovo. Non hai accesso a strumenti in questa modalità.",
+};
+
+const BOWIE_CONVO_SYSTEM_PROMPT: HorusMessage = {
+  role: "system",
+  content:
+    "Stai partecipando a una conversazione osservabile tra due IA, tu (Bowie) e Horus, un'altra IA installata " +
+    "sullo stesso ThinkCentre. Un utente umano ha proposto un argomento iniziale e vuole guardarvi discuterne a " +
+    "turni. Rispondi in modo naturale e conciso (pochi paragrafi al massimo) a ciò che Horus ha appena detto, " +
+    "portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello " +
+    "che ha detto Horus, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.",
+};
+
+const DEFAULT_MAX_TURNS = 8;
+const MAX_ALLOWED_TURNS = 20;
+
+type ConvoAgent = "horus" | "bowie";
+
+interface ConvoTurn {
+  agent: ConvoAgent;
+  content: string;
+}
+
+function buildAgentMessages(
+  systemPrompt: HorusMessage,
+  topic: string,
+  transcript: ConvoTurn[],
+  self: ConvoAgent
+): HorusMessage[] {
+  const messages: HorusMessage[] = [
+    systemPrompt,
+    { role: "user", content: `Argomento proposto dall'utente per iniziare la discussione: "${topic}"` },
+  ];
+  for (const turn of transcript) {
+    messages.push({
+      role: turn.agent === self ? "assistant" : "user",
+      content: turn.content,
+    });
+  }
+  return messages;
+}
+
+router.post(
+  "/horus/bowie-conversation",
+  express.json({ limit: "1mb" }),
+  async (req, res): Promise<void> => {
+    const password = process.env["HORUS_CHAT_PASSWORD"];
+    const provided = req.headers["x-horus-password"];
+    if (!password || provided !== password) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+
+    const { topic, maxTurns } = req.body as { topic?: unknown; maxTurns?: unknown };
+
+    if (typeof topic !== "string" || !topic.trim()) {
+      res.status(400).json({ error: "topic is required" });
+      return;
+    }
+
+    const totalTurns = Math.min(
+      MAX_ALLOWED_TURNS,
+      Math.max(2, typeof maxTurns === "number" && Number.isFinite(maxTurns) ? Math.floor(maxTurns) : DEFAULT_MAX_TURNS)
+    );
+
+    if (!isBowieConfigured()) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders?.();
+      sendEvent(res, "error", {
+        message:
+          `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. ` +
+          "Aggiungilo dalla scheda Secrets per abilitare la conversazione Horus↔Bowie.",
+      });
+      res.end();
+      return;
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const heartbeat = setInterval(() => {
+      res.write(": ping\n\n");
+    }, 15_000);
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+
+    const transcript: ConvoTurn[] = [];
+
+    try {
+      for (let i = 0; i < totalTurns; i++) {
+        if (abortController.signal.aborted) break;
+
+        const agent: ConvoAgent = i % 2 === 0 ? "horus" : "bowie";
+        sendEvent(res, "turn_start", { agent });
+
+        const messages = buildAgentMessages(
+          agent === "horus" ? HORUS_CONVO_SYSTEM_PROMPT : BOWIE_CONVO_SYSTEM_PROMPT,
+          topic,
+          transcript,
+          agent
+        );
+
+        const { content } =
+          agent === "horus"
+            ? await horusChatRaw(messages, {
+                skipMemory: true,
+                signal: abortController.signal,
+                onToken: (token) => sendEvent(res, "token", { agent, token }),
+              })
+            : await bowieChatRaw(messages, {
+                signal: abortController.signal,
+                onToken: (token) => sendEvent(res, "token", { agent, token }),
+              });
+
+        if (abortController.signal.aborted) break;
+
+        const finalContent = content || "(nessuna risposta)";
+        transcript.push({ agent, content: finalContent });
+        sendEvent(res, "turn_end", { agent, content: finalContent });
+      }
+
+      if (!abortController.signal.aborted) {
+        sendEvent(res, "done", {});
+      }
+    } catch (err) {
+      if (!abortController.signal.aborted) {
+        req.log.error({ err }, "horus-bowie conversation failed");
+        sendEvent(res, "error", {
+          message:
+            err instanceof Error ? err.message : "Errore imprevisto durante la conversazione Horus↔Bowie.",
+        });
+      }
+    } finally {
+      clearInterval(heartbeat);
+      res.end();
+    }
+  }
+);
 
 export default router;
