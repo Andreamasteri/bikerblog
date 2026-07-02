@@ -188,14 +188,14 @@ const BASE_HORUS_TOOLS: HorusToolSpec[] = [
     function: {
       name: "read_blog",
       description:
-        "Legge i contenuti GIA' PUBBLICATI di BikerBlog (questo stesso sito), non il codice sorgente: post, presenza di episodi podcast e commenti dei lettori. Usalo per studiare stile, argomenti e categorie già trattate, per capire se un post ha già un episodio audio, o per vedere cosa dicono i lettori nei commenti prima di proporre a parole una bozza di nuovo post. Sola lettura: non puoi creare, modificare o pubblicare nulla con questo tool.",
+        "Legge i contenuti GIA' PUBBLICATI di BikerBlog (questo stesso sito), non il codice sorgente: post, presenza di episodi podcast e commenti dei lettori. Usalo per studiare stile, argomenti e categorie già trattate, per capire se un post ha già un episodio audio, o per vedere cosa dicono i lettori nei commenti prima di proporre a parole una bozza di nuovo post. Per i post con molti commenti, action=\"comments\" restituisce automaticamente anche un riepilogo di sentiment/tono (positivo/negativo/neutro) e il trend nel tempo, così non devi leggere ogni commento per farti un'idea del gradimento dei lettori. Sola lettura: non puoi creare, modificare o pubblicare nulla con questo tool.",
       parameters: {
         type: "object",
         properties: {
           action: {
             type: "string",
             description:
-              '"list" per elencare i post pubblicati (con filtri opzionali, include se hanno un episodio podcast), "get" per leggere il dettaglio di un post per slug (include se ha un episodio podcast), "featured" per il post in evidenza in home, "popular" per i post più apprezzati, "comments" per leggere i commenti dei lettori su un post.',
+              '"list" per elencare i post pubblicati (con filtri opzionali, include se hanno un episodio podcast), "get" per leggere il dettaglio di un post per slug (include se ha un episodio podcast), "featured" per il post in evidenza in home, "popular" per i post più apprezzati, "comments" per leggere i commenti dei lettori su un post (include sempre un riepilogo di sentiment/trend; il testo integrale dei commenti compare solo se non sono troppi, altrimenti mostra solo i più recenti).',
             enum: ["list", "get", "featured", "popular", "comments"],
           },
           slug: {
@@ -217,7 +217,7 @@ const BASE_HORUS_TOOLS: HorusToolSpec[] = [
           limit: {
             type: "number",
             description:
-              'Numero massimo di risultati da restituire. Con action="popular": default 5, max 20. Con action="comments": default 20, max 50 (i più recenti).',
+              'Numero massimo di risultati da restituire. Con action="popular": default 5, max 20. Con action="comments": default 20, max 50 — numero massimo di commenti integrali/evidenziati mostrati (il riepilogo di sentiment invece considera sempre tutti i commenti).',
           },
         },
         required: ["action"],
@@ -698,6 +698,90 @@ function formatBlogComment(c: BlogComment): string {
   return `- ${c.authorName ?? "Anonimo"} (${c.createdAt ?? "?"}): ${c.body ?? ""}`;
 }
 
+type CommentSentiment = "positivo" | "negativo" | "neutro";
+
+/**
+ * Parole chiave italiane (con qualche variante di genere/numero) usate per un
+ * punteggio di sentiment leggero e deterministico, senza chiamare Horus/un
+ * modello per ogni commento (costerebbe una chiamata AI per commento, troppo
+ * lento/costoso). Non è un vero NLP: è pensato solo per dare a Horus un
+ * segnale rapido di tono aggregato su thread lunghi, non un'analisi precisa
+ * commento per commento.
+ */
+const POSITIVE_KEYWORDS = [
+  "grazie", "bellissimo", "bellissima", "bello", "bella", "ottimo", "ottima",
+  "fantastico", "fantastica", "adoro", "amo", "top", "grande", "stupendo",
+  "stupenda", "consiglio", "consigliato", "utilissimo", "utile", "perfetto",
+  "perfetta", "spettacolare", "meraviglioso", "meravigliosa", "complimenti",
+  "bravo", "brava", "bravi", "super", "incredibile", "adorabile", "genio",
+];
+
+const NEGATIVE_KEYWORDS = [
+  "brutto", "brutta", "pessimo", "pessima", "male", "peggio", "delusione",
+  "deludente", "sbagliato", "sbagliata", "errore", "problema", "problemi",
+  "odio", "orribile", "schifo", "inutile", "noioso", "noiosa", "falso",
+  "falsa", "truffa", "vergogna", "basta", "no grazie", "non funziona",
+  "rotto", "rotta", "scam", "spam",
+];
+
+function classifyCommentSentiment(text: string): CommentSentiment {
+  const normalized = text.toLowerCase();
+  let score = 0;
+  for (const word of POSITIVE_KEYWORDS) {
+    if (normalized.includes(word)) score += 1;
+  }
+  for (const word of NEGATIVE_KEYWORDS) {
+    if (normalized.includes(word)) score -= 1;
+  }
+  if (score > 0) return "positivo";
+  if (score < 0) return "negativo";
+  return "neutro";
+}
+
+const COMMENTS_FULL_LIST_THRESHOLD = 12;
+const COMMENTS_HIGHLIGHT_COUNT = 5;
+
+/**
+ * Riepilogo leggero di engagement/sentiment su un thread di commenti: conteggio
+ * totale, distribuzione di tono (positivo/negativo/neutro), trend "ultimi 7
+ * giorni vs prima" e i commenti più recenti come highlight. Pensato per far
+ * capire a Horus il gradimento dei lettori senza dover leggere ogni singolo
+ * commento (costoso in contesto su thread lunghi).
+ */
+function buildCommentsEngagementSummary(comments: BlogComment[]): string {
+  const total = comments.length;
+  const sentiments = comments.map((c) => classifyCommentSentiment(c.body ?? ""));
+  const positive = sentiments.filter((s) => s === "positivo").length;
+  const negative = sentiments.filter((s) => s === "negativo").length;
+  const neutral = total - positive - negative;
+
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const recentCount = comments.filter((c) => {
+    const ts = c.createdAt ? Date.parse(c.createdAt) : NaN;
+    return !Number.isNaN(ts) && ts >= sevenDaysAgo;
+  }).length;
+
+  const pct = (n: number): string => (total > 0 ? `${Math.round((n / total) * 100)}%` : "0%");
+
+  let tono: string;
+  if (positive > negative && positive > neutral) {
+    tono = "prevalentemente positivo";
+  } else if (negative > positive && negative > neutral) {
+    tono = "prevalentemente negativo";
+  } else if (negative > 0 && negative >= positive) {
+    tono = "misto, con una quota di critiche non trascurabile";
+  } else {
+    tono = "prevalentemente neutro/informativo";
+  }
+
+  return (
+    `Riepilogo engagement (${total} commenti totali, tono ${tono}):\n` +
+    `- Positivi: ${positive} (${pct(positive)}) — Negativi: ${negative} (${pct(negative)}) — Neutri/altro: ${neutral} (${pct(neutral)})\n` +
+    `- Ultimi 7 giorni: ${recentCount} commenti nuovi su ${total} totali`
+  );
+}
+
 async function fetchBlogApi(path: string): Promise<
   { ok: true; data: unknown } | { ok: false; message: string }
 > {
@@ -799,10 +883,27 @@ async function readBlog(args: Record<string, unknown>): Promise<string> {
       return `Nessun commento su "${slug}".`;
     }
     const limit = typeof args.limit === "number" && args.limit > 0 ? Math.min(args.limit, 50) : 20;
-    const recent = comments.slice(-limit).reverse();
-    return `${comments.length} commenti totali su "${slug}" (i più recenti prima, mostrati ${recent.length}):\n\n${recent
-      .map(formatBlogComment)
-      .join("\n")}`;
+    const summary = buildCommentsEngagementSummary(comments);
+
+    if (comments.length <= COMMENTS_FULL_LIST_THRESHOLD) {
+      const recent = comments.slice(-limit).reverse();
+      return (
+        `${summary}\n\n` +
+        `Commenti su "${slug}" (i più recenti prima, mostrati ${recent.length} di ${comments.length}):\n\n${recent
+          .map(formatBlogComment)
+          .join("\n")}`
+      );
+    }
+
+    const highlightCount = Math.min(COMMENTS_HIGHLIGHT_COUNT, limit);
+    const highlights = comments.slice(-highlightCount).reverse();
+    return (
+      `${summary}\n\n` +
+      `Thread lungo: mostrati solo i ${highlights.length} commenti più recenti su ${comments.length} totali ` +
+      `su "${slug}" (usa il riepilogo sopra per il tono generale; aumenta "limit" se ti servono più commenti integrali):\n\n${highlights
+        .map(formatBlogComment)
+        .join("\n")}`
+    );
   }
 
   if (action === "popular") {
