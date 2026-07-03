@@ -15,3 +15,5 @@
 - [Podcast storage architecture](podcast-storage-architecture.md) — private GCS audio streamed via an API route, never a public URL; uploads must go through the api-server (GCS sidecar is workflow-only).
 - [Internal API auth](internal-api-auth.md) — `/_internal/*` derives its bearer token from `SESSION_SECRET` via HMAC instead of a dedicated secret.
 - [Horus tools architecture](horus-tools-architecture.md) — multi-repo `github_read` token fallback pattern, `read_blog`, and capability-gated analysis tools (`sonar_scan` hidden when TC service unavailable).
+- [Gateway-timeout friendly errors](horus-gateway-timeout-errors.md) — 524/502/503/504 with an HTML body get rewritten to a friendly IT message instead of raw HTML reaching the chat bubble.
+- [Multi-agent opening-turn prompt](horus-convo-opening-turn.md) — turn-taking prompts need a distinct "you're opening" variant or the first speaker hallucinates a reply to nothing.

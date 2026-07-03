@@ -320,26 +320,33 @@ router.post(
   })
 );
 
-const HORUS_CONVO_SYSTEM_PROMPT: HorusMessage = {
-  role: "system",
-  content:
-    "Stai partecipando a una conversazione osservabile tra due IA, tu (Horus) e Bowie, un'altra IA più leggera " +
-    "installata sullo stesso ThinkCentre. Un utente umano ha proposto un argomento iniziale e vuole guardarvi " +
-    "discuterne a turni. Rispondi in modo naturale e conciso (pochi paragrafi al massimo) a ciò che Bowie ha " +
-    "appena detto, portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere " +
-    "semplicemente quello che ha detto Bowie, e non chiudere subito la conversazione: contribuisci con qualcosa " +
-    "di nuovo. Non hai accesso a strumenti in questa modalità.",
-};
-
-const BOWIE_CONVO_SYSTEM_PROMPT: HorusMessage = {
-  role: "system",
-  content:
-    "Stai partecipando a una conversazione osservabile tra due IA, tu (Bowie) e Horus, un'altra IA installata " +
-    "sullo stesso ThinkCentre. Un utente umano ha proposto un argomento iniziale e vuole guardarvi discuterne a " +
-    "turni. Rispondi in modo naturale e conciso (pochi paragrafi al massimo) a ciò che Horus ha appena detto, " +
-    "portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello " +
-    "che ha detto Horus, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.",
-};
+/**
+ * Costruisce il system prompt per la conversazione osservabile Horus↔Bowie.
+ * `isOpening` distingue il caso del primo turno (nessuno dei due ha ancora
+ * detto nulla) da quello di una risposta: prima del fix, il prompt diceva
+ * sempre "rispondi a ciò che l'altro ha appena detto" anche al primo turno,
+ * quando il transcript è ancora vuoto — questo induceva il modello ad
+ * allucinare una battuta dell'altra IA mai realmente pronunciata, invece di
+ * aprire la discussione sull'argomento proposto dall'utente.
+ */
+function buildConvoSystemPrompt(self: "horus" | "bowie", isOpening: boolean): HorusMessage {
+  const selfName = self === "horus" ? "Horus" : "Bowie";
+  const otherName = self === "horus" ? "Bowie" : "Horus";
+  const intro =
+    `Stai partecipando a una conversazione osservabile tra due IA, tu (${selfName}) e ${otherName}, ` +
+    "un'altra IA installata sullo stesso ThinkCentre. Un utente umano ha proposto un argomento iniziale e vuole " +
+    "guardarvi discuterne a turni.";
+  const body = isOpening
+    ? `Sei tu ad aprire la discussione: ${otherName} non ha ancora detto nulla. Presenta la tua opinione o ` +
+      "prospettiva sull'argomento proposto dall'utente, in modo naturale e conciso (pochi paragrafi al massimo), " +
+      `ponendo le basi per il confronto con ${otherName}. Non inventare né riassumere battute di ${otherName} che ` +
+      "non sono ancora avvenute."
+    : `Rispondi in modo naturale e conciso (pochi paragrafi al massimo) a ciò che ${otherName} ha appena detto, ` +
+      `portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello ` +
+      `che ha detto ${otherName}, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.`;
+  const toolsNote = self === "horus" ? " Non hai accesso a strumenti in questa modalità." : "";
+  return { role: "system", content: `${intro} ${body}${toolsNote}` };
+}
 
 const DEFAULT_MAX_TURNS = 8;
 const MAX_ALLOWED_TURNS = 20;
@@ -427,7 +434,7 @@ router.post(
         sendEvent(res, "turn_start", { agent });
 
         const messages = buildAgentMessages(
-          agent === "horus" ? HORUS_CONVO_SYSTEM_PROMPT : BOWIE_CONVO_SYSTEM_PROMPT,
+          buildConvoSystemPrompt(agent, transcript.length === 0),
           topic,
           transcript,
           agent

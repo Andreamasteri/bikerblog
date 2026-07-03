@@ -172,6 +172,41 @@ export interface OllamaAgentClient {
  * se il server risponde, non aspettare una generazione. */
 const HEALTH_CHECK_TIMEOUT_MS = 6_000;
 
+/** Status code tipici di un gateway/tunnel che ha interrotto la richiesta
+ * prima che Ollama potesse rispondere (es. Cloudflare Tunnel 524 dopo un
+ * timeout su una generazione molto pesante). */
+const GATEWAY_TIMEOUT_STATUSES = new Set([502, 503, 504, 524]);
+
+/** Vero se il corpo della risposta sembra una pagina HTML di errore
+ * (tipica dei gateway/edge come Cloudflare) invece di testo/JSON da Ollama. */
+function looksLikeHtmlErrorPage(body: string): boolean {
+  const trimmed = body.trimStart().slice(0, 200).toLowerCase();
+  return trimmed.startsWith("<!doctype") || trimmed.startsWith("<html");
+}
+
+/**
+ * Costruisce il messaggio di errore per una risposta non-OK. Quando la
+ * risposta è chiaramente un timeout del gateway/tunnel (status tipico +
+ * corpo HTML invece di testo/JSON da Ollama), restituisce un messaggio breve
+ * e comprensibile in italiano invece di incollare l'HTML grezzo nel
+ * messaggio (che finirebbe altrimenti mostrato così com'è in chat).
+ */
+function buildRequestFailedMessage(
+  agentName: string,
+  status: number,
+  statusText: string,
+  body: string
+): string {
+  if (GATEWAY_TIMEOUT_STATUSES.has(status) && looksLikeHtmlErrorPage(body)) {
+    return (
+      `${agentName} non ha risposto in tempo: la richiesta è stata interrotta dal tunnel ` +
+      `(timeout del gateway, HTTP ${status}). Probabilmente il compito era troppo pesante o lungo. ` +
+      `Riprova con una richiesta più piccola o più specifica.`
+    );
+  }
+  return `${agentName} request failed: ${status} ${statusText} — ${body.slice(0, 300)}`;
+}
+
 /**
  * Crea un client per un agente Ollama parametrico (URL, credenziali
  * Cloudflare Access, modello, keep-alive). Horus e Bowie sono entrambi
@@ -252,9 +287,7 @@ export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentC
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        throw new Error(
-          `${config.agentName} request failed: ${res.status} ${res.statusText} — ${body.slice(0, 300)}`
-        );
+        throw new Error(buildRequestFailedMessage(config.agentName, res.status, res.statusText, body));
       }
 
       if (!res.body) {
