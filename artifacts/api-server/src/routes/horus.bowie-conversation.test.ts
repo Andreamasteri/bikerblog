@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import http from "node:http";
+import { setTimeout as sleep } from "node:timers/promises";
 import { test } from "node:test";
 import express from "express";
 import pinoHttp from "pino-http";
@@ -34,6 +35,56 @@ function makeScriptedChatRaw(
       throw new Error(reply.throws);
     }
     return { content: reply.content, toolCalls: [] };
+  };
+}
+
+interface SlowChatRawController {
+  chatRaw: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<HorusRawResult>;
+  lastSignal: AbortSignal | undefined;
+  callCount: number;
+}
+
+/**
+ * Simula un turno che resta "in volo" fino a quando il segnale non viene
+ * abortito (o scade un timeout di sicurezza) — serve a riprodurre un
+ * disconnect reale del client a metà del PRIMO turno, prima che quel turno
+ * abbia mai emesso `turn_end`.
+ */
+function makeSlowChatRaw(opts: { onToken?: () => void } = {}): SlowChatRawController {
+  const controller: SlowChatRawController = {
+    lastSignal: undefined,
+    callCount: 0,
+    chatRaw: async (_messages, options = {}) => {
+      controller.callCount++;
+      controller.lastSignal = options.signal;
+      options.onToken?.("tok0");
+      opts.onToken?.();
+      // Attende l'abort, ma con un tetto massimo di sicurezza: se il wiring
+      // dell'abort dovesse regredire, il test deve fallire deterministicamente
+      // invece di restare appeso per sempre.
+      const deadline = Date.now() + 5_000;
+      while (!options.signal?.aborted && Date.now() < deadline) {
+        await sleep(10);
+      }
+      return { content: "", toolCalls: [] };
+    },
+  };
+  return controller;
+}
+
+/** chatRaw che non dovrebbe mai essere invocato: fallisce il test se lo è. */
+function makeUncalledChatRaw(
+  label: string
+): { chatRaw: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<HorusRawResult>; callCount: number } {
+  const state = { callCount: 0 };
+  return {
+    get callCount() {
+      return state.callCount;
+    },
+    chatRaw: async () => {
+      state.callCount++;
+      throw new Error(`${label} chatRaw should never be called after a mid-turn client disconnect`);
+    },
   };
 }
 
@@ -316,6 +367,79 @@ test("bowie-conversation clamps maxTurns to MAX_ALLOWED_TURNS (20) instead of ru
     const turnEnds = events.filter((e) => e.event === "turn_end");
     assert.equal(turnEnds.length, 20, "conversation must be clamped to MAX_ALLOWED_TURNS (20), not the requested 25");
     assert.ok(events.some((e) => e.event === "done"), "clamped conversation should still complete with done");
+  } finally {
+    await server.close();
+  }
+});
+
+/**
+ * Regressione per il Task #137: se il visitatore chiude il browser (o
+ * naviga altrove) a metà di una conversazione Horus↔Bowie, la connessione
+ * TCP viene chiusa e `res.on("close")` deve abortire il turno in corso,
+ * impedendo che vengano emessi ulteriori `turn_start`/`turn_end`/`done` e
+ * che i turni successivi vengano eseguiti. Riusa il pattern del test
+ * analogo per la chat singola in `horus.sse.test.ts` (vero server HTTP,
+ * `req.destroy()` per simulare un disconnect reale, non un mock).
+ */
+test("bowie-conversation stops the loop and emits no further events when the client actually disconnects mid-turn", async () => {
+  const horus = makeSlowChatRaw();
+  const bowie = makeUncalledChatRaw("bowie");
+  const deps = makeDeps({ horusChatRaw: horus.chatRaw, bowieChatRaw: bowie.chatRaw });
+  const server = await startTestServer(deps);
+
+  try {
+    const events: Array<{ event: string; data: unknown }> = [];
+
+    await new Promise<void>((resolve, reject) => {
+      const req = http.request(
+        server.url,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Horus-Password": process.env["HORUS_CHAT_PASSWORD"]!,
+          },
+        },
+        (res) => {
+          collectSseEvents(res, {
+            onEvent: (event, data) => {
+              events.push({ event, data });
+              if (event === "token") {
+                // Il "browser" si chiude a metà del primo turno.
+                req.destroy();
+              }
+            },
+          })
+            .then(resolve)
+            .catch(() => resolve());
+        }
+      );
+      req.on("error", () => resolve());
+      req.end(JSON.stringify({ topic: "moto elettriche", maxTurns: 4 }));
+    });
+
+    await sleep(150);
+
+    assert.equal(
+      horus.lastSignal?.aborted,
+      true,
+      "a real client disconnect must abort the in-flight turn via res.on('close')"
+    );
+    const eventNames = events.map((e) => e.event);
+    const turnStarts = eventNames.filter((name) => name === "turn_start");
+    assert.equal(
+      turnStarts.length,
+      1,
+      `exactly one turn_start (Horus's, before the disconnect) should have been emitted, got: ${eventNames.join(", ")}`
+    );
+    assert.ok(!eventNames.includes("turn_end"), `no turn should complete after a mid-turn disconnect, got: ${eventNames.join(", ")}`);
+    assert.ok(!eventNames.includes("done"), "a disconnected conversation must not emit done");
+    assert.ok(!eventNames.includes("error"), "a client-initiated disconnect must not be reported as a server error");
+    assert.equal(
+      bowie.callCount,
+      0,
+      "the loop must not proceed to Bowie's turn after Horus's turn is aborted mid-flight by a disconnect"
+    );
   } finally {
     await server.close();
   }
