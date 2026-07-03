@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #170** — Add regression coverage for stopping a chat mid-tool-call <!-- a974b29 -->
+  - _In parole semplici:_ Abbiamo migliorato il sistema di chat per permettere agli utenti di fermare una conversazione durante l'utilizzo dell'app.
 - **Task #169** — End-to-end regression test for multi-tool budget threading <!-- 653c853 -->
   - _In parole semplici:_ Abbiamo eseguito dei test di regressione end-to-end per il calcolo del budget nella funzione multi-tool.
 - **Task #168** — Protect the chat-timeout safeguard's coverage at its source <!-- d963bd1 -->
@@ -198,6 +200,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **22:04** · Git commit prior to merge <!-- df1b62a -->
+  - _In parole semplici:_ Commit effettuato prima del merge.
 - **21:55** · Git commit prior to merge <!-- 5b74224 -->
   - _In parole semplici:_ Commit effettuato prima del merge.
 - **21:48** · Git commit prior to merge <!-- a1b2696 -->
