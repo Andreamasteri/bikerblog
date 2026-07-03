@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #169** — End-to-end regression test for multi-tool budget threading <!-- 653c853 -->
+  - _In parole semplici:_ Abbiamo eseguito dei test di regressione end-to-end per il calcolo del budget nella funzione multi-tool.
 - **Task #168** — Protect the chat-timeout safeguard's coverage at its source <!-- d963bd1 -->
   - _In parole semplici:_ Abbiamo migliorato il sistema di protezione del timeout delle chat per garantire una maggiore stabilità e affidabilità.
 - **Task #167** — Bound total tool-result size per turn (multi-tool reliability) <!-- dea91e7 -->
@@ -196,6 +198,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **21:55** · Git commit prior to merge <!-- 5b74224 -->
+  - _In parole semplici:_ Commit effettuato prima del merge.
 - **21:48** · Git commit prior to merge <!-- a1b2696 -->
   - _In parole semplici:_ Commit effettuato prima del merge.
 - **21:45** · Git commit prior to merge <!-- 8141dd2 -->
