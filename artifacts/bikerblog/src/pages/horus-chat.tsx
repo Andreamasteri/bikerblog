@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { AgentChatPanel } from "./agent-chat-panel";
 import { friendlyChatErrorMessage } from "@/lib/friendly-error";
+import { useAgentHealth } from "@/hooks/use-agent-health";
+import { AgentHealthGate } from "@/hooks/agent-health-status";
 
 const SESSION_KEY = "horus-chat-password";
 
@@ -69,11 +71,6 @@ export function HorusChat() {
   const [isConvoRunning, setIsConvoRunning] = useState(false);
   const [convoError, setConvoError] = useState<string | null>(null);
 
-  const [convoHealth, setConvoHealth] = useState<"checking" | "ok" | "unreachable">("checking");
-  const [convoNotConfigured, setConvoNotConfigured] = useState<string | null>(null);
-  const [convoUnreachableMessage, setConvoUnreachableMessage] = useState<string | null>(null);
-  const [convoHealthRetryKey, setConvoHealthRetryKey] = useState(0);
-
   const [historyItems, setHistoryItems] = useState<ConvoHistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -101,86 +98,20 @@ export function HorusChat() {
   // dopo aver premuto Play, quando lo stream falliva a metà turno. In
   // precedenza veniva verificato solo Bowie assumendo che Horus (già validato
   // dalla tab "Chat con Horus") fosse sempre raggiungibile — non è
-  // necessariamente vero al momento in cui si apre questa tab.
-  useEffect(() => {
-    if (mode !== "conversation" || !password) return;
-    let cancelled = false;
-
-    type HealthResult = {
-      status?: "ok" | "not_configured" | "unreachable";
-      message?: string;
-    };
-
-    async function fetchHealth(endpoint: string): Promise<{ res: Response; data: HealthResult } | "unauthorized"> {
-      const base = import.meta.env.BASE_URL;
-      const res = await fetch(`${base}${endpoint}`, {
-        headers: { "X-Horus-Password": password! },
-      });
-      if (res.status === 401) return "unauthorized";
-      if (!res.ok) return { res, data: {} };
-      const data = (await res.json()) as HealthResult;
-      return { res, data };
-    }
-
-    async function checkHealth() {
-      setConvoHealth("checking");
-      setConvoNotConfigured(null);
-      setConvoUnreachableMessage(null);
-      try {
-        const [horusResult, bowieResult] = await Promise.all([
-          fetchHealth("api/horus/health"),
-          fetchHealth("api/horus/bowie-health"),
-        ]);
-        if (cancelled) return;
-
-        if (horusResult === "unauthorized" || bowieResult === "unauthorized") {
-          sessionStorage.removeItem(SESSION_KEY);
-          setPassword(null);
-          setAuthError("Password errata. Riprova.");
-          return;
-        }
-
-        if (!horusResult.res.ok || !bowieResult.res.ok) {
-          setConvoUnreachableMessage("Impossibile verificare lo stato della connessione. Riprova tra poco.");
-          setConvoHealth("unreachable");
-          return;
-        }
-
-        const unreachableMessages = [horusResult.data, bowieResult.data]
-          .filter((d) => d.status === "unreachable")
-          .map((d) => d.message)
-          .filter((m): m is string => Boolean(m));
-
-        if (unreachableMessages.length > 0) {
-          setConvoUnreachableMessage(unreachableMessages.join(" "));
-          setConvoHealth("unreachable");
-          return;
-        }
-
-        const notConfiguredMessages = [horusResult.data, bowieResult.data]
-          .filter((d) => d.status === "not_configured")
-          .map((d) => d.message)
-          .filter((m): m is string => Boolean(m));
-
-        if (notConfiguredMessages.length > 0) {
-          setConvoNotConfigured(notConfiguredMessages.join(" "));
-        }
-
-        setConvoHealth("ok");
-      } catch {
-        if (!cancelled) {
-          setConvoUnreachableMessage("Impossibile verificare la connessione. Controlla la rete e riprova.");
-          setConvoHealth("unreachable");
-        }
-      }
-    }
-
-    void checkHealth();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, password, convoHealthRetryKey]);
+  // necessariamente vero al momento in cui si apre questa tab. Logica di
+  // controllo (incluso il supporto multi-endpoint) condivisa con
+  // `AgentChatPanel` tramite `useAgentHealth`.
+  const {
+    health: convoHealth,
+    notConfigured: convoNotConfigured,
+    unreachableMessage: convoUnreachableMessage,
+    retry: retryConvoHealth,
+  } = useAgentHealth(
+    ["api/horus/health", "api/horus/bowie-health"],
+    password,
+    handleUnauthorized,
+    mode === "conversation"
+  );
 
   async function loadHistoryList() {
     if (!password) return;
@@ -526,29 +457,14 @@ export function HorusChat() {
         />
       </div>
 
-      {mode === "conversation" && convoHealth === "checking" ? (
-        <div className="flex-1 border border-border bg-muted/5 mb-4 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner className="w-4 h-4" />
-            Verifica della connessione con Bowie in corso…
-          </div>
-        </div>
-      ) : mode === "conversation" && convoHealth === "unreachable" ? (
-        <div className="flex-1 border border-border bg-muted/5 mb-4 flex flex-col items-center justify-center gap-4">
-          <p className="text-sm text-muted-foreground text-center max-w-sm px-6">
-            {convoUnreachableMessage ?? "Bowie non è raggiungibile in questo momento."}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setConvoHealthRetryKey((k) => k + 1)}
-          >
-            <RotateCcw className="w-4 h-4" />
-            Riprova
-          </Button>
-        </div>
+      {mode === "conversation" && convoHealth !== "ok" ? (
+        <AgentHealthGate
+          health={convoHealth}
+          unreachableMessage={convoUnreachableMessage}
+          onRetry={retryConvoHealth}
+          checkingLabel="Verifica della connessione con Bowie in corso…"
+          unreachableFallback="Bowie non è raggiungibile in questo momento."
+        />
       ) : mode === "conversation" ? (
         <>
           {convoNotConfigured && (

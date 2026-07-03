@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { Send, Wrench, User, Square, RotateCcw } from "lucide-react";
+import { Send, Wrench, User, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { friendlyChatErrorMessage } from "@/lib/friendly-error";
+import { useAgentHealth } from "@/hooks/use-agent-health";
+import { AgentHealthGate } from "@/hooks/agent-health-status";
 
 type Role = "user" | "assistant";
 
@@ -25,8 +27,6 @@ interface ChatMessage {
 function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
-
-type HealthStatus = "checking" | "ok" | "unreachable";
 
 export interface AgentChatPanelProps {
   /** Endpoint relativo alla base dell'app (es. "api/horus/chat" o "api/horus/bowie-chat"). */
@@ -63,9 +63,8 @@ export function AgentChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState<string | null>(null);
 
-  const [health, setHealth] = useState<HealthStatus>("checking");
-  const [unreachableMessage, setUnreachableMessage] = useState<string | null>(null);
-  const [healthRetryKey, setHealthRetryKey] = useState(0);
+  const { health, notConfigured: healthNotConfigured, unreachableMessage, retry: retryHealth } =
+    useAgentHealth(healthEndpoint, password, onUnauthorized);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -74,63 +73,9 @@ export function AgentChatPanel({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  // Controllo di raggiungibilità eseguito subito all'apertura della chat,
-  // prima che l'utente scriva un messaggio: senza questo, un tunnel o Ollama
-  // giù sul server dell'utente si scoprivano solo dopo l'invio del primo
-  // messaggio, con un pannello che nel frattempo sembrava pronto all'uso.
   useEffect(() => {
-    let cancelled = false;
-
-    async function checkHealth() {
-      setHealth("checking");
-      setNotConfigured(null);
-      setUnreachableMessage(null);
-      try {
-        const base = import.meta.env.BASE_URL;
-        const res = await fetch(`${base}${healthEndpoint}`, {
-          headers: { "X-Horus-Password": password },
-        });
-        if (cancelled) return;
-
-        if (res.status === 401) {
-          onUnauthorized();
-          return;
-        }
-
-        if (!res.ok) {
-          setUnreachableMessage("Impossibile verificare lo stato della connessione. Riprova tra poco.");
-          setHealth("unreachable");
-          return;
-        }
-
-        const data = (await res.json()) as {
-          status?: "ok" | "not_configured" | "unreachable";
-          message?: string;
-        };
-
-        if (data.status === "not_configured") {
-          setNotConfigured(data.message ?? "Questo agente non è configurato su questo ambiente.");
-          setHealth("ok");
-        } else if (data.status === "unreachable") {
-          setUnreachableMessage(data.message ?? "L'agente non è raggiungibile in questo momento.");
-          setHealth("unreachable");
-        } else {
-          setHealth("ok");
-        }
-      } catch {
-        if (!cancelled) {
-          setUnreachableMessage("Impossibile verificare la connessione. Controlla la rete e riprova.");
-          setHealth("unreachable");
-        }
-      }
-    }
-
-    void checkHealth();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [healthEndpoint, password, healthRetryKey]);
+    setNotConfigured(healthNotConfigured);
+  }, [healthNotConfigured]);
 
   function stopMessage() {
     abortRef.current?.abort();
@@ -281,14 +226,13 @@ export function AgentChatPanel({
     }
   }
 
-  if (health === "checking") {
+  if (health !== "ok") {
     return (
-      <div className="flex-1 border border-border bg-muted/5 mb-4 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner className="w-4 h-4" />
-          Verifica della connessione in corso…
-        </div>
-      </div>
+      <AgentHealthGate
+        health={health}
+        unreachableMessage={unreachableMessage}
+        onRetry={retryHealth}
+      />
     );
   }
 
@@ -296,26 +240,6 @@ export function AgentChatPanel({
     return (
       <div className="flex-1 border border-border bg-muted/5 mb-4 flex items-center justify-center">
         <p className="text-sm text-muted-foreground text-center max-w-sm px-6">{notConfigured}</p>
-      </div>
-    );
-  }
-
-  if (health === "unreachable") {
-    return (
-      <div className="flex-1 border border-border bg-muted/5 mb-4 flex flex-col items-center justify-center gap-4">
-        <p className="text-sm text-muted-foreground text-center max-w-sm px-6">
-          {unreachableMessage ?? "L'agente non è raggiungibile in questo momento."}
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => setHealthRetryKey((k) => k + 1)}
-        >
-          <RotateCcw className="w-4 h-4" />
-          Riprova
-        </Button>
       </div>
     );
   }
