@@ -383,16 +383,37 @@ router.post(
   async (req, res): Promise<void> => {
     if (!requireHorusPassword(req, res)) return;
 
-    const { topic, maxTurns } = req.body as { topic?: unknown; maxTurns?: unknown };
+    const { topic, maxTurns, resumeTranscript } = req.body as {
+      topic?: unknown;
+      maxTurns?: unknown;
+      resumeTranscript?: unknown;
+    };
 
     if (typeof topic !== "string" || !topic.trim()) {
       res.status(400).json({ error: "topic is required" });
       return;
     }
 
+    // Se il client ci ripassa la trascrizione già ottenuta (dopo un errore o
+    // uno stallo a metà conversazione), riprendiamo da lì invece di ripartire
+    // da zero: l'utente non deve perdere i turni già completati per un
+    // singolo drop-out di uno dei due agenti.
+    const transcript: ConvoTurn[] = Array.isArray(resumeTranscript)
+      ? resumeTranscript.filter(
+          (t): t is ConvoTurn =>
+            typeof t === "object" &&
+            t !== null &&
+            (t.agent === "horus" || t.agent === "bowie") &&
+            typeof t.content === "string"
+        )
+      : [];
+
     const totalTurns = Math.min(
       MAX_ALLOWED_TURNS,
-      Math.max(2, typeof maxTurns === "number" && Number.isFinite(maxTurns) ? Math.floor(maxTurns) : DEFAULT_MAX_TURNS)
+      Math.max(
+        transcript.length + 1,
+        Math.max(2, typeof maxTurns === "number" && Number.isFinite(maxTurns) ? Math.floor(maxTurns) : DEFAULT_MAX_TURNS)
+      )
     );
 
     if (!isBowieConfigured()) {
@@ -424,13 +445,17 @@ router.post(
     const abortController = new AbortController();
     res.on("close", () => abortController.abort());
 
-    const transcript: ConvoTurn[] = [];
+    // L'agente del prossimo turno si alterna sempre partendo da Horus al
+    // turno 0, quindi se riprendiamo da una trascrizione esistente dobbiamo
+    // continuare l'alternanza da dove si era fermata, non ripartire da Horus.
+    let failingAgent: ConvoAgent | null = null;
 
     try {
-      for (let i = 0; i < totalTurns; i++) {
+      for (let i = transcript.length; i < totalTurns; i++) {
         if (abortController.signal.aborted) break;
 
         const agent: ConvoAgent = i % 2 === 0 ? "horus" : "bowie";
+        failingAgent = agent;
         sendEvent(res, "turn_start", { agent });
 
         const messages = buildAgentMessages(
@@ -472,10 +497,18 @@ router.post(
       }
     } catch (err) {
       if (!abortController.signal.aborted) {
-        req.log.error({ err }, "horus-bowie conversation failed");
+        req.log.error({ err, agent: failingAgent }, "horus-bowie conversation failed");
+        const agentName = failingAgent === "bowie" ? BOWIE_AGENT_NAME : failingAgent === "horus" ? "Horus" : null;
+        const baseMessage =
+          err instanceof Error ? err.message : "Errore imprevisto durante la conversazione Horus↔Bowie.";
+        // Attribuiamo l'errore all'agente che stava rispondendo in quel
+        // momento (non genericamente "la conversazione"): il client usa
+        // `agent` per mostrare a colpo d'occhio chi si è disconnesso e per
+        // riprendere la discussione da lì, non da zero.
         sendEvent(res, "error", {
-          message:
-            err instanceof Error ? err.message : "Errore imprevisto durante la conversazione Horus↔Bowie.",
+          agent: failingAgent,
+          message: agentName ? `${agentName}: ${baseMessage}` : baseMessage,
+          transcript,
         });
       }
     } finally {

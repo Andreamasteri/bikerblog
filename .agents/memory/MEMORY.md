@@ -17,3 +17,4 @@
 - [Horus tools architecture](horus-tools-architecture.md) — multi-repo `github_read` token fallback pattern, `read_blog`, and capability-gated analysis tools (`sonar_scan` hidden when TC service unavailable).
 - [Gateway-timeout friendly errors](horus-gateway-timeout-errors.md) — 524/502/503/504 with an HTML body get rewritten to a friendly IT message instead of raw HTML reaching the chat bubble.
 - [Multi-agent opening-turn prompt](horus-convo-opening-turn.md) — turn-taking prompts need a distinct "you're opening" variant or the first speaker hallucinates a reply to nothing.
+- [Horus↔Bowie turn attribution + resume](horus-convo-turn-attribution-retry.md) — index parity decides agent, transcript is the resume payload; keep this shape for any future multi-agent turn-taking surface.

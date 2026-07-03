@@ -19,6 +19,11 @@ interface ConvoMessage {
   content: string;
 }
 
+interface ConvoTurn {
+  agent: ConvoAgent;
+  content: string;
+}
+
 function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
@@ -69,7 +74,23 @@ export function HorusChat() {
   const [convoMessages, setConvoMessages] = useState<ConvoMessage[]>([]);
   const [convoActiveAgent, setConvoActiveAgent] = useState<ConvoAgent | null>(null);
   const [isConvoRunning, setIsConvoRunning] = useState(false);
-  const [convoError, setConvoError] = useState<string | null>(null);
+  const [convoError, setConvoError] = useState<{
+    message: string;
+    agent: ConvoAgent | null;
+    prefixed: boolean;
+  } | null>(null);
+
+  // Trascrizione dei soli turni completati (turn_end ricevuto): è quella che
+  // riproponiamo al server per riprendere la conversazione dopo un errore o
+  // uno stallo a metà turno, senza perdere ciò che era già stato detto.
+  const convoTranscriptRef = useRef<ConvoTurn[]>([]);
+  const lastTopicRef = useRef("");
+  // Rispecchia convoActiveAgent ma letto dentro il catch/finally di
+  // runConversation, dove lo stato React catturato alla creazione della
+  // closure sarebbe stantio (una caduta di rete silenziosa, es. tunnel
+  // interrotto senza un evento "error" dal server, altrimenti risulterebbe
+  // sempre attribuita ad agent: null).
+  const convoActiveAgentRef = useRef<ConvoAgent | null>(null);
 
   const [historyItems, setHistoryItems] = useState<ConvoHistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
@@ -199,8 +220,10 @@ export function HorusChat() {
     convoAbortRef.current?.abort();
     setConvoMessages([]);
     setConvoActiveAgent(null);
+    convoActiveAgentRef.current = null;
     setConvoError(null);
     setIsConvoRunning(false);
+    convoTranscriptRef.current = [];
   }
 
   async function startConversation(e?: FormEvent) {
@@ -208,8 +231,29 @@ export function HorusChat() {
     const text = topic.trim();
     if (!text || isConvoRunning || !password || convoHealth !== "ok") return;
 
-    setConvoError(null);
+    convoTranscriptRef.current = [];
     setConvoMessages([]);
+    await runConversation(text, []);
+  }
+
+  // Riprende la conversazione dopo un drop-out di uno dei due agenti,
+  // ripartendo dall'ultimo turno completato invece di azzerare tutto: il
+  // topic e la trascrizione finora ottenuta restano quelli già mostrati
+  // all'utente, si aggiunge solo il turno mancante e quelli successivi.
+  async function retryConversation() {
+    if (isConvoRunning || !password || convoHealth !== "ok") return;
+    const text = topic.trim() || lastTopicRef.current;
+    if (!text) return;
+    // Rimuoviamo dall'interfaccia l'eventuale messaggio incompleto del turno
+    // che è fallito a metà (mai arrivato il suo turn_end).
+    setConvoMessages((prev) => prev.slice(0, convoTranscriptRef.current.length));
+    await runConversation(text, convoTranscriptRef.current);
+  }
+
+  async function runConversation(text: string, resumeTranscript: ConvoTurn[]) {
+    if (!password) return;
+    lastTopicRef.current = text;
+    setConvoError(null);
     setIsConvoRunning(true);
 
     const controller = new AbortController();
@@ -225,7 +269,7 @@ export function HorusChat() {
           "Content-Type": "application/json",
           "X-Horus-Password": password,
         },
-        body: JSON.stringify({ topic: text }),
+        body: JSON.stringify({ topic: text, resumeTranscript }),
         signal: controller.signal,
       });
 
@@ -274,6 +318,7 @@ export function HorusChat() {
 
           if (eventName === "turn_start" && agent) {
             setConvoActiveAgent(agent);
+            convoActiveAgentRef.current = agent;
             currentId = uid();
             const id = currentId;
             setConvoMessages((prev) => [...prev, { id, agent, content: "" }]);
@@ -288,11 +333,29 @@ export function HorusChat() {
             setConvoMessages((prev) =>
               prev.map((m) => (m.id === id ? { ...m, content: finalContent } : m))
             );
+            convoTranscriptRef.current = [...convoTranscriptRef.current, { agent, content: finalContent }];
             setConvoActiveAgent(null);
+            convoActiveAgentRef.current = null;
           } else if (eventName === "error" && typeof payload.message === "string") {
-            setConvoError(payload.message);
+            // Il server ci ripassa la trascrizione dei turni completati fino
+            // all'errore: la usiamo come fonte di verità per il retry, così
+            // anche se qualche evento SSE si fosse perso il "riprendi" del
+            // client resta allineato a ciò che il server ha davvero salvato.
+            if (Array.isArray(payload.transcript)) {
+              convoTranscriptRef.current = (payload.transcript as unknown[]).filter(
+                (t): t is ConvoTurn =>
+                  typeof t === "object" &&
+                  t !== null &&
+                  ((t as ConvoTurn).agent === "horus" || (t as ConvoTurn).agent === "bowie") &&
+                  typeof (t as ConvoTurn).content === "string"
+              );
+            }
+            // Il server include già il nome dell'agente nel messaggio
+            // (vedi horus.ts), quindi qui non duplichiamo il prefisso in UI.
+            setConvoError({ message: payload.message, agent, prefixed: true });
           } else if (eventName === "done") {
             setConvoActiveAgent(null);
+            convoActiveAgentRef.current = null;
           }
         }
       }
@@ -300,11 +363,23 @@ export function HorusChat() {
       if (err instanceof DOMException && err.name === "AbortError") {
         // interruzione manuale, non è un errore da mostrare
       } else {
-        setConvoError(friendlyChatErrorMessage(err));
+        // Stream caduto senza un evento "error" esplicito dal server (es.
+        // tunnel interrotto a metà): non sappiamo con certezza a chi
+        // attribuire il drop, ma possiamo comunque indicare l'ultimo agente
+        // che stava rispondendo. Usiamo un ref (non lo stato React catturato
+        // alla creazione della closure, che qui sarebbe stantio) perché
+        // viene aggiornato in tempo reale a ogni turn_start/turn_end mentre
+        // lo stream procede in modo asincrono.
+        setConvoError({
+          message: friendlyChatErrorMessage(err),
+          agent: convoActiveAgentRef.current,
+          prefixed: false,
+        });
       }
     } finally {
       setIsConvoRunning(false);
       setConvoActiveAgent(null);
+      convoActiveAgentRef.current = null;
       convoAbortRef.current = null;
     }
   }
@@ -522,7 +597,28 @@ export function HorusChat() {
           </div>
 
           {convoError && (
-            <div className="text-sm text-destructive mb-3 px-1">{convoError}</div>
+            <div className="flex items-center justify-between gap-3 text-sm text-destructive mb-3 px-1">
+              <span>
+                {convoError.agent && !convoError.prefixed && (
+                  <span className="font-bold uppercase tracking-wider mr-1">
+                    {convoError.agent === "bowie" ? "Bowie" : "Horus"}:
+                  </span>
+                )}
+                {convoError.message}
+              </span>
+              {convoTranscriptRef.current.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 shrink-0"
+                  onClick={() => void retryConversation()}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Riprova
+                </Button>
+              )}
+            </div>
           )}
 
           <form onSubmit={startConversation} className="flex items-end gap-2 shrink-0">
