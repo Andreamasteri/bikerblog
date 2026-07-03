@@ -82,6 +82,11 @@ export function HorusChat() {
     message: string;
     agent: ConvoAgent | null;
     prefixed: boolean;
+    // Un errore "fatale" non è recuperabile riprovando con la stessa
+    // trascrizione (es. resumeTranscript corrotto rifiutato dal server con
+    // 400): in questo caso non ha senso offrire "Riprova" perché ripeterebbe
+    // esattamente lo stesso errore. L'unica via d'uscita è ricominciare.
+    fatal?: boolean;
   } | null>(null);
 
   // Trascrizione dei soli turni completati (turn_end ricevuto): è quella che
@@ -291,6 +296,29 @@ export function HorusChat() {
         sessionStorage.removeItem(SESSION_KEY);
         setPassword(null);
         setAuthError("Password errata. Riprova.");
+        return;
+      }
+
+      if (res.status === 400) {
+        // Il server ha rifiutato la richiesta prima ancora di aprire lo
+        // stream SSE (es. `resumeTranscript` corrotto/manomesso che non
+        // alterna correttamente horus/bowie — vedi la validazione in
+        // horus.ts). Questo NON è un errore transitorio di rete: se
+        // continuassimo a riproporre la stessa `convoTranscriptRef`
+        // corrotta col pulsante "Riprova" otterremmo di nuovo lo stesso 400
+        // all'infinito, con l'utente bloccato senza capire perché. Azzeriamo
+        // subito la trascrizione salvata così l'unica via d'uscita mostrata è
+        // ricominciare da capo, non un retry che ripeterebbe lo stesso errore.
+        convoTranscriptRef.current = [];
+        convoConversationIdRef.current = null;
+        setConvoError({
+          message:
+            "La conversazione salvata sembra corrotta e non può essere ripresa. " +
+            'Premi "Nuova conversazione" per ricominciare da capo.',
+          agent: null,
+          prefixed: true,
+          fatal: true,
+        });
         return;
       }
 
@@ -627,17 +655,30 @@ export function HorusChat() {
                 )}
                 {convoError.message}
               </span>
-              {convoTranscriptRef.current.length > 0 && (
+              {convoError.fatal ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="gap-2 shrink-0"
-                  onClick={() => void retryConversation()}
+                  onClick={resetConversation}
                 >
                   <RotateCcw className="w-4 h-4" />
-                  Riprova
+                  Nuova conversazione
                 </Button>
+              ) : (
+                convoTranscriptRef.current.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 shrink-0"
+                    onClick={() => void retryConversation()}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Riprova
+                  </Button>
+                )
               )}
             </div>
           )}
