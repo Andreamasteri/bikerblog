@@ -377,10 +377,28 @@ function buildAgentMessages(
   return messages;
 }
 
-router.post(
-  "/horus/bowie-conversation",
-  express.json({ limit: "1mb" }),
-  async (req, res): Promise<void> => {
+export interface BowieConversationDeps {
+  horusChatRaw: typeof horusChatRaw;
+  bowieChatRaw: typeof bowieChatRaw;
+  isBowieConfigured: () => boolean;
+  saveBowieConversation: (topic: string, transcript: ConvoTurn[]) => Promise<void>;
+}
+
+const defaultBowieConversationDeps: BowieConversationDeps = {
+  horusChatRaw,
+  bowieChatRaw,
+  isBowieConfigured,
+  saveBowieConversation,
+};
+
+/**
+ * Estratto in una factory (invece di un handler inline sulla route) così i
+ * test di regressione possono iniettare `chatRaw` finti e un `saveBowieConversation`
+ * finto, riusando lo stesso pattern di `createDirectChatHandler` sopra, senza
+ * dover mockare il modulo `@workspace/horus` o toccare il DB.
+ */
+export function createBowieConversationHandler(deps: BowieConversationDeps = defaultBowieConversationDeps) {
+  return async (req: express.Request, res: express.Response): Promise<void> => {
     if (!requireHorusPassword(req, res)) return;
 
     const { topic, maxTurns, resumeTranscript } = req.body as {
@@ -416,7 +434,7 @@ router.post(
       )
     );
 
-    if (!isBowieConfigured()) {
+    if (!deps.isBowieConfigured()) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache, no-transform");
       res.setHeader("Connection", "keep-alive");
@@ -467,12 +485,12 @@ router.post(
 
         const { content } =
           agent === "horus"
-            ? await horusChatRaw(messages, {
+            ? await deps.horusChatRaw(messages, {
                 skipMemory: true,
                 signal: abortController.signal,
                 onToken: (token) => sendEvent(res, "token", { agent, token }),
               })
-            : await bowieChatRaw(messages, {
+            : await deps.bowieChatRaw(messages, {
                 signal: abortController.signal,
                 onToken: (token) => sendEvent(res, "token", { agent, token }),
               });
@@ -489,7 +507,7 @@ router.post(
 
         if (transcript.length > 0) {
           try {
-            await saveBowieConversation(topic, transcript);
+            await deps.saveBowieConversation(topic, transcript);
           } catch (err) {
             req.log.error({ err }, "failed to persist horus-bowie conversation");
           }
@@ -515,8 +533,10 @@ router.post(
       clearInterval(heartbeat);
       res.end();
     }
-  }
-);
+  };
+}
+
+router.post("/horus/bowie-conversation", express.json({ limit: "1mb" }), createBowieConversationHandler());
 
 async function saveBowieConversation(topic: string, transcript: ConvoTurn[]): Promise<void> {
   await db.insert(horusBowieConversationsTable).values({
