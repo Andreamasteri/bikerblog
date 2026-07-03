@@ -200,6 +200,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **22:39** · Git commit prior to merge <!-- 70389c3 -->
+  - _In parole semplici:_ Commit effettuato prima del merge.
 - **22:36** · Fix Horus/Bowie chat freezing after first message (gateway-timeout fallback) <!-- 24ebf31 -->
   - _In parole semplici:_ Risolto il problema di blocco della chat tra Horus e Bowie dopo il primo messaggio
 - **22:04** · Git commit prior to merge <!-- df1b62a -->
