@@ -19,6 +19,9 @@
  * 6. Genera audio TTS per i post senza audio (nuovi o riscritti)
  *    (podcast:generate — processa solo i post con audio_url IS NULL)
  * 7. Self-check produzione (verifica + riparazione automatica)
+ * 7.5. Reindicizzazione semantica Nadir (POST /reindex) — mantiene l'indice
+ *    allineato ai contenuti pubblicati; silenzioso in caso di successo,
+ *    saltato se non configurato, warn non fatale se irraggiungibile.
  * 9. Connettività Horus/Bowie sul tunnel Cloudflare reale contro PROD_URL
  *    (riusa horus-sse-smoke.ts — Task #104); silenzioso se non configurato,
  *    un fallimento reale finisce nella notifica di fallimento pipeline.
@@ -253,6 +256,62 @@ async function getDiaryPostBodyEn(date: string): Promise<string | null | undefin
     .limit(1);
   if (rows.length === 0) return undefined; // post doesn't exist
   return rows[0]?.bodyEn; // null = not yet translated
+}
+
+// ── Nadir semantic reindex helper ────────────────────────────────────────────
+
+interface NadirReindexResult {
+  status: "ok" | "skipped" | "warn";
+  detail: string;
+}
+
+/**
+ * Chiama POST /reindex su Nadir per ricostruire l'indice semantico dai
+ * contenuti pubblicati. Tollerante come gli altri step opzionali: se
+ * NADIR_URL/NADIR_GATE_TOKEN non sono configurati lo step è "skipped"; se
+ * Nadir è irraggiungibile o risponde con errore è "warn" (non blocca la
+ * pipeline, non genera alert). Il servizio scrive heartbeat di spazi bianchi
+ * durante il lavoro (ignorati da JSON.parse), quindi res.json() gestisce
+ * comunque il body finale anche per reindicizzazioni lunghe.
+ */
+async function reindexNadir(): Promise<NadirReindexResult> {
+  const baseUrl = process.env["NADIR_URL"];
+  const gateToken = process.env["NADIR_GATE_TOKEN"];
+  if (!baseUrl || !gateToken) {
+    return { status: "skipped", detail: "NADIR_URL/NADIR_GATE_TOKEN non configurati" };
+  }
+
+  // 5 min: l'embedding di tutti i documenti può essere lento; il tunnel resta
+  // vivo grazie agli heartbeat scritti da Nadir durante il lavoro.
+  const REINDEX_TIMEOUT_MS = 5 * 60 * 1000;
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/reindex`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Nadir-Gate-Token": gateToken,
+      },
+      body: "{}",
+      signal: AbortSignal.timeout(REINDEX_TIMEOUT_MS),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      result?: { indexed?: number };
+      error?: string;
+    };
+    if (!res.ok || data.error) {
+      return {
+        status: "warn",
+        detail: `Nadir /reindex ha risposto con errore (HTTP ${res.status}): ${data.error ?? "errore sconosciuto"}`,
+      };
+    }
+    const indexed = data.result?.indexed ?? 0;
+    return { status: "ok", detail: `indice ricostruito — ${indexed} documenti` };
+  } catch (err) {
+    return {
+      status: "warn",
+      detail: `Nadir /reindex irraggiungibile: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -910,6 +969,40 @@ let diaryPostCreatedThisRun = false;
       warnings,
     });
   }
+}
+
+// ── Step 7.5: reindicizzazione semantica Nadir ───────────────────────────────
+// Dopo che i contenuti sono stati pubblicati/aggiornati e sincronizzati in
+// produzione (step 3–7), ricostruisce l'indice di Nadir (POST /reindex) così la
+// ricerca semantica resta allineata al blog senza bisogno di un trigger manuale.
+// Silenzioso in caso di successo; saltato se Nadir non è configurato; warn non
+// fatale se irraggiungibile (stessa tolleranza di inbox/changelog: non genera
+// alert e non fa fallire la pipeline).
+
+{
+  const stepStart = Date.now();
+  console.log("[cluster-daily] step 7.5: reindicizzazione semantica Nadir");
+
+  const nadir = await reindexNadir();
+
+  if (nadir.status === "skipped") {
+    console.log(`[cluster-daily] step 7.5: SKIP — ${nadir.detail}`);
+  } else if (nadir.status === "warn") {
+    console.warn(
+      `[cluster-daily] ⚠ step 7.5: ${nadir.detail} — il resto della pipeline non è compromesso`
+    );
+  } else {
+    console.log(`[cluster-daily] step 7.5: ${nadir.detail}`);
+  }
+
+  report.addStep({
+    step: 7.5,
+    name: "Nadir semantic reindex",
+    status: nadir.status,
+    duration_ms: Date.now() - stepStart,
+    errors: [],
+    warnings: nadir.status === "warn" ? [nadir.detail] : [],
+  });
 }
 
 // ── Step 8: riepilogo audit contenuti ────────────────────────────────────────

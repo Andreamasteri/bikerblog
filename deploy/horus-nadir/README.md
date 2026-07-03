@@ -126,6 +126,17 @@ Rilancia `/reindex` quando aggiorni il manuale o vuoi includere nuove
 conversazioni/commenti. L'indice viene salvato su disco (`NADIR_INDEX_FILE`) e
 ricaricato automaticamente al riavvio del servizio.
 
+**Reindicizzazione automatica notturna**: dopo questa prima indicizzazione
+manuale non serve più rilanciare `/reindex` a mano per i contenuti nuovi. La
+pipeline notturna `cluster:daily` (step 7.5) chiama `POST /reindex` ogni sera —
+via `NADIR_URL` + `NADIR_GATE_TOKEN` configurati nel deployment di Replit — così
+l'indice segue automaticamente conversazioni, commenti e post pubblicati. Lo
+step è silenzioso in caso di successo, viene saltato se `NADIR_URL`/
+`NADIR_GATE_TOKEN` non sono configurati ed è un warning non fatale se Nadir è
+irraggiungibile (non blocca la pipeline). Continua comunque a lanciare
+`/reindex` a mano quando modifichi `inbox/nadir-manual.md` e vuoi renderlo
+ricercabile subito senza aspettare la notte.
+
 ## Aggiornare il "manuale"
 
 Il manuale è il file `inbox/nadir-manual.md` di questo repo: un semplice file di
