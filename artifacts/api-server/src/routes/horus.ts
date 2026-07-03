@@ -5,10 +5,14 @@ import { db, horusBowieConversationsTable, type HorusConversationTurn } from "@w
 import {
   horusChatRaw,
   bowieChatRaw,
+  quebrachoChatRaw,
   isBowieConfigured,
+  isQuebrachoConfigured,
   checkHorusHealth,
   checkBowieHealth,
+  checkQuebrachoHealth,
   BOWIE_AGENT_NAME,
+  QUEBRACHO_AGENT_NAME,
   getHorusTools,
   executeHorusTool,
   type HorusMessage,
@@ -334,6 +338,22 @@ const AGENT_DEFINITIONS: AgentDefinition[] = [
     conversationToolsNote: "",
     logLabel: "bowie chat failed",
   },
+  {
+    id: "quebracho",
+    displayName: QUEBRACHO_AGENT_NAME,
+    healthPath: "horus/quebracho-health",
+    chatPath: "horus/quebracho-chat",
+    checkHealth: checkQuebrachoHealth,
+    chatRaw: quebrachoChatRaw,
+    isConfigured: isQuebrachoConfigured,
+    notConfiguredMessage: `${QUEBRACHO_AGENT_NAME} non è configurato su questo ambiente — manca QUEBRACHO_OLLAMA_MODEL. Aggiungilo dalla scheda Secrets per abilitare la conversazione con Quebracho.`,
+    conversationNotConfiguredMessage:
+      `${QUEBRACHO_AGENT_NAME} non è configurato su questo ambiente — manca QUEBRACHO_OLLAMA_MODEL. ` +
+      "Aggiungilo dalla scheda Secrets per abilitare la conversazione a tre.",
+    conversationChatOptions: {},
+    conversationToolsNote: "",
+    logLabel: "quebracho chat failed",
+  },
 ];
 
 for (const def of AGENT_DEFINITIONS) {
@@ -499,10 +519,12 @@ function buildConvoAgentRegistry(deps: BowieConversationDeps): ConvoAgentConfig[
   const chatRawById: Record<string, typeof horusChatRaw> = {
     horus: deps.horusChatRaw,
     bowie: deps.bowieChatRaw,
+    quebracho: deps.quebrachoChatRaw,
   };
   const isConfiguredById: Record<string, () => boolean> = {
     horus: () => true,
     bowie: deps.isBowieConfigured,
+    quebracho: deps.isQuebrachoConfigured,
   };
   return AGENT_DEFINITIONS.map((def) => ({
     id: def.id,
@@ -538,6 +560,8 @@ export interface BowieConversationDeps {
   horusChatRaw: typeof horusChatRaw;
   bowieChatRaw: typeof bowieChatRaw;
   isBowieConfigured: () => boolean;
+  quebrachoChatRaw: typeof quebrachoChatRaw;
+  isQuebrachoConfigured: () => boolean;
   saveBowieConversation: (
     topic: string,
     transcript: ConvoTurn[],
@@ -556,6 +580,8 @@ const defaultBowieConversationDeps: BowieConversationDeps = {
   horusChatRaw,
   bowieChatRaw,
   isBowieConfigured,
+  quebrachoChatRaw,
+  isQuebrachoConfigured,
   saveBowieConversation,
 };
 

@@ -100,6 +100,8 @@ function makeDeps(overrides: Partial<BowieConversationDeps>): BowieConversationD
     horusChatRaw: makeScriptedChatRaw([{ content: "horus-default" }]),
     bowieChatRaw: makeScriptedChatRaw([{ content: "bowie-default" }]),
     isBowieConfigured: () => true,
+    quebrachoChatRaw: makeScriptedChatRaw([{ content: "quebracho-default" }]),
+    isQuebrachoConfigured: () => true,
     saveBowieConversation: async (topic, transcript, options) => {
       const id = options.conversationId ?? nextId++;
       savedConversations.push({ topic, transcript, status: options.status, conversationId: id });
@@ -244,8 +246,9 @@ test("bowie-conversation attributes a mid-turn error to the agent that was speak
 
 test("bowie-conversation resumes turn alternation from resumeTranscript instead of restarting from Horus", async () => {
   // Il client ripassa una trascrizione di 2 turni già completati (Horus poi
-  // Bowie): il prossimo turno atteso è di nuovo Horus (turno index 2, pari),
-  // seguito da Bowie (turno index 3).
+  // Bowie): con il registry di produzione a tre agenti (horus, bowie,
+  // quebracho) il prossimo turno atteso è Quebracho (index 2 % 3), seguito
+  // da Horus (index 3 % 3) — non un riavvio da Horus all'indice 0.
   const resumeTranscript = [
     { agent: "horus", content: "Prima battuta di Horus." },
     { agent: "bowie", content: "Prima replica di Bowie." },
@@ -253,7 +256,8 @@ test("bowie-conversation resumes turn alternation from resumeTranscript instead 
 
   const deps = makeDeps({
     horusChatRaw: makeScriptedChatRaw([{ content: "Seconda battuta di Horus." }]),
-    bowieChatRaw: makeScriptedChatRaw([{ content: "Seconda replica di Bowie." }]),
+    bowieChatRaw: makeScriptedChatRaw([{ content: "non dovrebbe essere chiamato in questo turno" }]),
+    quebrachoChatRaw: makeScriptedChatRaw([{ content: "Prima replica di Quebracho." }]),
   });
   const server = await startTestServer(deps);
 
@@ -267,14 +271,14 @@ test("bowie-conversation resumes turn alternation from resumeTranscript instead 
     const turnStarts = events.filter((e) => e.event === "turn_start").map((e) => (e.data as { agent: string }).agent);
     assert.deepEqual(
       turnStarts,
-      ["horus", "bowie"],
-      "resuming after 2 completed turns must continue alternation (horus, bowie), not restart from horus at index 0"
+      ["quebracho", "horus"],
+      "resuming after 2 completed turns must continue the rotation (quebracho, horus), not restart from horus at index 0"
     );
 
     const turnEnds = events.filter((e) => e.event === "turn_end").map((e) => e.data);
     assert.deepEqual(turnEnds, [
+      { agent: "quebracho", content: "Prima replica di Quebracho." },
       { agent: "horus", content: "Seconda battuta di Horus." },
-      { agent: "bowie", content: "Seconda replica di Bowie." },
     ]);
 
     assert.ok(events.some((e) => e.event === "done"), "conversation should complete successfully after resuming");
@@ -325,8 +329,9 @@ test("bowie-conversation rejects a resumeTranscript with a broken alternation in
  */
 test("bowie-conversation stops after exactly maxTurns turns and emits done", async () => {
   const deps = makeDeps({
-    horusChatRaw: makeScriptedChatRaw([{ content: "horus-1" }, { content: "horus-2" }]),
+    horusChatRaw: makeScriptedChatRaw([{ content: "horus-1" }]),
     bowieChatRaw: makeScriptedChatRaw([{ content: "bowie-1" }]),
+    quebrachoChatRaw: makeScriptedChatRaw([{ content: "quebracho-1" }]),
   });
   const server = await startTestServer(deps);
 
@@ -336,8 +341,8 @@ test("bowie-conversation stops after exactly maxTurns turns and emits done", asy
     const turnStarts = events.filter((e) => e.event === "turn_start").map((e) => (e.data as { agent: string }).agent);
     const turnEnds = events.filter((e) => e.event === "turn_end").map((e) => (e.data as { agent: string }).agent);
 
-    assert.deepEqual(turnStarts, ["horus", "bowie", "horus"], "expected exactly 3 alternating turn_start events");
-    assert.deepEqual(turnEnds, ["horus", "bowie", "horus"], "expected exactly 3 alternating turn_end events");
+    assert.deepEqual(turnStarts, ["horus", "bowie", "quebracho"], "expected exactly 3 rotating turn_start events");
+    assert.deepEqual(turnEnds, ["horus", "bowie", "quebracho"], "expected exactly 3 rotating turn_end events");
 
     const doneIndex = events.findIndex((e) => e.event === "done");
     assert.ok(doneIndex !== -1, "expected a done event after the 3rd turn");
@@ -352,12 +357,14 @@ test("bowie-conversation stops after exactly maxTurns turns and emits done", asy
 });
 
 test("bowie-conversation clamps maxTurns to MAX_ALLOWED_TURNS (20) instead of running unbounded", async () => {
-  // 25 richiesto ma il server deve fermarsi a 20 turni totali (10 coppie horus/bowie).
-  const horusReplies = Array.from({ length: 10 }, (_, i) => ({ content: `horus-${i}` }));
-  const bowieReplies = Array.from({ length: 10 }, (_, i) => ({ content: `bowie-${i}` }));
+  // 25 richiesto ma il server deve fermarsi a 20 turni totali (rotazione a tre: horus/bowie/quebracho).
+  const horusReplies = Array.from({ length: 7 }, (_, i) => ({ content: `horus-${i}` }));
+  const bowieReplies = Array.from({ length: 7 }, (_, i) => ({ content: `bowie-${i}` }));
+  const quebrachoReplies = Array.from({ length: 7 }, (_, i) => ({ content: `quebracho-${i}` }));
   const deps = makeDeps({
     horusChatRaw: makeScriptedChatRaw(horusReplies),
     bowieChatRaw: makeScriptedChatRaw(bowieReplies),
+    quebrachoChatRaw: makeScriptedChatRaw(quebrachoReplies),
   });
   const server = await startTestServer(deps);
 
@@ -384,7 +391,8 @@ test("bowie-conversation clamps maxTurns to MAX_ALLOWED_TURNS (20) instead of ru
 test("bowie-conversation stops the loop and emits no further events when the client actually disconnects mid-turn", async () => {
   const horus = makeSlowChatRaw();
   const bowie = makeUncalledChatRaw("bowie");
-  const deps = makeDeps({ horusChatRaw: horus.chatRaw, bowieChatRaw: bowie.chatRaw });
+  const quebracho = makeUncalledChatRaw("quebracho");
+  const deps = makeDeps({ horusChatRaw: horus.chatRaw, bowieChatRaw: bowie.chatRaw, quebrachoChatRaw: quebracho.chatRaw });
   const server = await startTestServer(deps);
 
   try {
@@ -440,23 +448,30 @@ test("bowie-conversation stops the loop and emits no further events when the cli
       0,
       "the loop must not proceed to Bowie's turn after Horus's turn is aborted mid-flight by a disconnect"
     );
+    assert.equal(
+      quebracho.callCount,
+      0,
+      "the loop must not proceed to Quebracho's turn after Horus's turn is aborted mid-flight by a disconnect"
+    );
   } finally {
     await server.close();
   }
 });
 
 test("bowie-conversation resuming near MAX_ALLOWED_TURNS extends the bound by exactly one more turn, then stops", async () => {
-  // 19 turni già completati (alternanza horus/bowie a partire da horus).
+  // 19 turni già completati (rotazione a tre: horus, bowie, quebracho a partire da horus).
   // transcript.length + 1 = 20 = MAX_ALLOWED_TURNS, quindi deve fare esattamente
-  // un altro turno (index 19 -> bowie) e poi fermarsi, anche con maxTurns basso.
-  const resumeTranscript: Array<{ agent: ConvoAgent; content: string }> = Array.from({ length: 19 }, (_, i) => ({
-    agent: i % 2 === 0 ? "horus" : "bowie",
+  // un altro turno (index 19 % 3 = 1 -> bowie) e poi fermarsi, anche con maxTurns basso.
+  const agentRotation = ["horus", "bowie", "quebracho"] as const;
+  const resumeTranscript = Array.from({ length: 19 }, (_, i) => ({
+    agent: agentRotation[i % 3],
     content: `turn-${i}`,
   }));
 
   const deps = makeDeps({
     horusChatRaw: makeScriptedChatRaw([{ content: "should-not-be-called" }]),
     bowieChatRaw: makeScriptedChatRaw([{ content: "final-bowie-turn" }]),
+    quebrachoChatRaw: makeScriptedChatRaw([{ content: "should-not-be-called" }]),
   });
   const server = await startTestServer(deps);
 

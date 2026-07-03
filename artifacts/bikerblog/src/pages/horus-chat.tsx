@@ -84,6 +84,13 @@ const AGENT_PRESENTATIONS: Record<string, AgentPresentation> = {
     bubbleClassName: "bg-accent/20 border border-accent/40",
     align: "right",
   },
+  quebracho: {
+    label: "Quebracho",
+    icon: <Bot className="w-4 h-4" />,
+    avatarClassName: "bg-primary text-primary-foreground",
+    bubbleClassName: "bg-primary/10 border border-primary/30",
+    align: "left",
+  },
 };
 
 function capitalize(s: string): string {
@@ -317,6 +324,7 @@ export function HorusChat() {
 
   const horusModelLabel = modelLabelForAgent("horus") ?? "bikerlink:latest";
   const bowieModelLabel = modelLabelForAgent("bowie");
+  const quebrachoModelLabel = modelLabelForAgent("quebracho");
 
   // Se il registry stesso non è caricabile (es. richiesta a `/horus/agents`
   // fallita), `useAgentHealth` resterebbe indefinitamente in "checking" (mai
@@ -685,7 +693,7 @@ export function HorusChat() {
                   : mode === "conversation"
                     ? `Conversazione Horus (${horusModelLabel}) ↔ Bowie${
                         bowieModelLabel ? ` (${bowieModelLabel})` : ""
-                      }`
+                      } ↔ Quebracho${quebrachoModelLabel ? ` (${quebrachoModelLabel})` : ""}`
                     : "Cronologia conversazioni"}
             </p>
           </div>
@@ -742,7 +750,7 @@ export function HorusChat() {
           className="gap-2"
         >
           <Cpu className="w-4 h-4" />
-          Horus ↔ Bowie
+          Horus ↔ Bowie ↔ Quebracho
         </Button>
         <Button
           type="button"
@@ -856,7 +864,7 @@ export function HorusChat() {
             <div className="p-6 space-y-6">
               {convoMessages.length === 0 && !isConvoRunning && (
                 <div className="text-center text-muted-foreground text-sm py-16">
-                  Proponi un argomento e guarda Horus e Bowie discuterne a turni.
+                  Proponi un argomento e guarda Horus, Bowie e Quebracho discuterne a turni.
                 </div>
               )}
               {convoMessages.map((m) => {
@@ -938,7 +946,7 @@ export function HorusChat() {
             <Input
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="Argomento della discussione tra Horus e Bowie..."
+              placeholder="Argomento della discussione tra Horus, Bowie e Quebracho..."
               disabled={isConvoRunning}
               className="flex-1"
             />
@@ -1019,7 +1027,7 @@ export function HorusChat() {
             )}
             {!isHistoryLoading && !historyError && historyItems.length === 0 && (
               <div className="text-center text-muted-foreground text-sm py-16">
-                Nessuna conversazione tra Horus e Bowie salvata finora.
+                Nessuna conversazione tra Horus, Bowie e Quebracho salvata finora.
               </div>
             )}
             {!isHistoryLoading && !historyError && historyItems.length > 0 && filteredHistoryItems.length === 0 && (

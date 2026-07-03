@@ -482,6 +482,49 @@ export function bowieChatRaw(
   return bowieClient.chatRaw(messages, options);
 }
 
+export const QUEBRACHO_AGENT_NAME = "Quebracho";
+
+/**
+ * Client di Quebracho, il terzo interlocutore della conversazione osservabile
+ * (dal cane dell'utente, uno dei "fondatori" del progetto — vedi
+ * replit.md). Stessa architettura parametrica di Bowie: riusa di default il
+ * tunnel/credenziali di Horus, a meno che non vengano configurate env var
+ * dedicate:
+ *   QUEBRACHO_OLLAMA_MODEL            — richiesto per abilitarlo
+ *   QUEBRACHO_OLLAMA_URL              — opzionale, default HORUS_OLLAMA_URL
+ *   QUEBRACHO_CF_ACCESS_CLIENT_ID     — opzionale, default CF_ACCESS_CLIENT_ID
+ *   QUEBRACHO_CF_ACCESS_CLIENT_SECRET — opzionale, default CF_ACCESS_CLIENT_SECRET
+ * Non allega la memoria persistente di Horus per default: è un agente
+ * distinto con la propria identità, non un alter ego di Horus.
+ */
+const quebrachoClient = createOllamaAgentClient({
+  agentName: QUEBRACHO_AGENT_NAME,
+  ollamaUrl: process.env.QUEBRACHO_OLLAMA_URL || process.env.HORUS_OLLAMA_URL,
+  cfAccessClientId: process.env.QUEBRACHO_CF_ACCESS_CLIENT_ID || process.env.CF_ACCESS_CLIENT_ID,
+  cfAccessClientSecret:
+    process.env.QUEBRACHO_CF_ACCESS_CLIENT_SECRET || process.env.CF_ACCESS_CLIENT_SECRET,
+  model: process.env.QUEBRACHO_OLLAMA_MODEL ?? "",
+  useHorusMemoryByDefault: false,
+});
+
+/** True se Quebracho è configurato (QUEBRACHO_OLLAMA_MODEL impostato e un URL disponibile). */
+export function isQuebrachoConfigured(): boolean {
+  return quebrachoClient.isConfigured();
+}
+
+/** Controllo di raggiungibilità leggero per Quebracho, vedi `OllamaAgentHealth`. */
+export function checkQuebrachoHealth(): Promise<OllamaAgentHealth> {
+  return quebrachoClient.checkHealth();
+}
+
+/** Invia una conversazione a Quebracho e restituisce testo + eventuali tool_calls. */
+export function quebrachoChatRaw(
+  messages: HorusMessage[],
+  options: HorusChatOptions = {}
+): Promise<HorusRawResult> {
+  return quebrachoClient.chatRaw(messages, options);
+}
+
 /**
  * Estrae il primo blocco JSON da un testo, tollerando eventuali fence markdown
  * o testo esplicativo intorno (i modelli locali sono meno disciplinati di Claude

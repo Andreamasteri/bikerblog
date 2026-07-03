@@ -1,4 +1,10 @@
-import { HORUS_MODEL, BOWIE_AGENT_NAME, isBowieConfigured } from "@workspace/horus";
+import {
+  HORUS_MODEL,
+  BOWIE_AGENT_NAME,
+  isBowieConfigured,
+  QUEBRACHO_AGENT_NAME,
+  isQuebrachoConfigured,
+} from "@workspace/horus";
 import app from "./app";
 import { logger } from "./lib/logger";
 
@@ -25,10 +31,14 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
 
   const bowieModel = process.env["BOWIE_OLLAMA_MODEL"];
+  const quebrachoModel = process.env["QUEBRACHO_OLLAMA_MODEL"];
   logger.info(
     {
       horus: `Horus (${HORUS_MODEL})`,
       bowie: isBowieConfigured() ? `${BOWIE_AGENT_NAME} (${bowieModel})` : `${BOWIE_AGENT_NAME} non configurato`,
+      quebracho: isQuebrachoConfigured()
+        ? `${QUEBRACHO_AGENT_NAME} (${quebrachoModel})`
+        : `${QUEBRACHO_AGENT_NAME} non configurato`,
     },
     "Configurazione agenti Ollama"
   );
