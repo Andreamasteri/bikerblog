@@ -24,3 +24,4 @@
 - [BikerBlog frontend testing setup](bikerblog-frontend-testing-setup.md) — vitest+RTL setup for artifacts/bikerblog, jsdom scrollTo polyfill, and SSE-mocking pattern for streaming chat components.
 - [Bowie real-model quality check](bowie-real-model-quality-check.md) — llama3.2:3b is coherent/on-topic and turn-taking works; the real risk is CPU latency (~90-120s/turn), not quality.
 - [Horus↔Bowie conversation duration UX](horus-convo-duration-ux.md) — fix pacing complaints with progress/ETA + turn-count tuning, not prompt/model changes; latency is the bottleneck.
+- [Agent-registry-driven health gate](horus-agent-registry-driven-ui.md) — health/chat routes + UI unreachable copy derive from one server-side agent list, not hand-copied endpoints; also: stale lib tsbuildinfo can cause false typecheck errors.

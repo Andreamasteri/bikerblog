@@ -60,6 +60,16 @@ describe("HorusChat - terzo interlocutore generico", () => {
           ]),
         });
       }
+      if (url.includes("horus/agents")) {
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          json: async () => [
+            { id: "horus", displayName: "Horus", healthEndpoint: "api/horus/health" },
+            { id: "bowie", displayName: "Bowie", healthEndpoint: "api/horus/bowie-health" },
+          ],
+        });
+      }
       if (url.includes("health")) {
         return healthOkResponse();
       }

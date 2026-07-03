@@ -75,6 +75,16 @@ describe("HorusChat - conversazione salvata corrotta", () => {
         // volta la rifiuta come corrotta/non ripristinabile con HTTP 400.
         return Promise.resolve({ status: 400, ok: false, body: null });
       }
+      if (url.includes("horus/agents")) {
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          json: async () => [
+            { id: "horus", displayName: "Horus", healthEndpoint: "api/horus/health" },
+            { id: "bowie", displayName: "Bowie", healthEndpoint: "api/horus/bowie-health" },
+          ],
+        });
+      }
       if (url.includes("health")) {
         return healthOkResponse();
       }

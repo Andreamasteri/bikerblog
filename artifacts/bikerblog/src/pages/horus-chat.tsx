@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { AgentChatPanel } from "./agent-chat-panel";
 import { friendlyChatErrorMessage } from "@/lib/friendly-error";
-import { useAgentHealth } from "@/hooks/use-agent-health";
+import { useAgentHealth, useAgentRegistry } from "@/hooks/use-agent-health";
 import { AgentHealthGate } from "@/hooks/agent-health-status";
 
 const SESSION_KEY = "horus-chat-password";
@@ -244,16 +244,30 @@ export function HorusChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, password]);
 
-  // Controllo di raggiungibilità di Horus E Bowie eseguito all'apertura della
-  // tab "Horus ↔ Bowie", prima che l'utente proponga un argomento: la
-  // conversazione osservata usa entrambi gli agenti, ma senza questo check un
-  // problema su uno qualsiasi dei due (non configurato o giù) si scopriva solo
-  // dopo aver premuto Play, quando lo stream falliva a metà turno. In
+  // Elenco degli agenti e dei relativi endpoint di health-check, ottenuto dal
+  // server (`GET /horus/agents`) invece di essere scritto a mano qui: è la
+  // stessa fonte di verità (Task #156) che genera le route lato server, così
+  // aggiungere/rimuovere un agente dal registry non richiede più toccare
+  // anche questo file per far comparire/sparire il suo check.
+  const {
+    agents: agentRegistry,
+    loadError: agentRegistryError,
+    retry: retryAgentRegistry,
+  } = useAgentRegistry(password, handleUnauthorized);
+
+  const healthEndpoints = agentRegistry.map((a) => a.healthEndpoint);
+
+  // Controllo di raggiungibilità di TUTTI gli agenti del registry eseguito
+  // all'apertura della tab "Horus ↔ Bowie", prima che l'utente proponga un
+  // argomento: la conversazione osservata li usa tutti, ma senza questo check
+  // un problema su uno qualsiasi di essi (non configurato o giù) si scopriva
+  // solo dopo aver premuto Play, quando lo stream falliva a metà turno. In
   // precedenza veniva verificato solo Bowie assumendo che Horus (già validato
   // dalla tab "Chat con Horus") fosse sempre raggiungibile — non è
   // necessariamente vero al momento in cui si apre questa tab. Logica di
   // controllo (incluso il supporto multi-endpoint) condivisa con
-  // `AgentChatPanel` tramite `useAgentHealth`.
+  // `AgentChatPanel` tramite `useAgentHealth`. Resta in stato "checking"
+  // finché il registry non è ancora arrivato dal server (`enabled` sotto).
   const {
     health: convoHealth,
     notConfigured: convoNotConfigured,
@@ -261,18 +275,31 @@ export function HorusChat() {
     retry: retryConvoHealth,
     modelsByEndpoint: agentModels,
   } = useAgentHealth(
-    ["api/horus/health", "api/horus/bowie-health"],
+    healthEndpoints,
     password,
     handleUnauthorized,
     // Sempre attivo (non solo in modalità "conversation"): serve anche a
-    // conoscere il nome del modello reale dietro Horus/Bowie da mostrare nel
-    // sottotitolo dell'header in ogni modalità, non solo per il gate della
-    // conversazione osservata.
-    true
+    // conoscere il nome del modello reale dietro ciascun agente da mostrare
+    // nel sottotitolo dell'header in ogni modalità, non solo per il gate
+    // della conversazione osservata. Attivo solo quando il registry è stato
+    // caricato, altrimenti partirebbe con un elenco vuoto di endpoint.
+    agentRegistry.length > 0
   );
 
-  const horusModelLabel = agentModels["api/horus/health"] ?? "bikerlink:latest";
-  const bowieModelLabel = agentModels["api/horus/bowie-health"];
+  function modelLabelForAgent(id: string): string | undefined {
+    const entry = agentRegistry.find((a) => a.id === id);
+    return entry ? agentModels[entry.healthEndpoint] : undefined;
+  }
+
+  const horusModelLabel = modelLabelForAgent("horus") ?? "bikerlink:latest";
+  const bowieModelLabel = modelLabelForAgent("bowie");
+
+  // Se il registry stesso non è caricabile (es. richiesta a `/horus/agents`
+  // fallita), `useAgentHealth` resterebbe indefinitamente in "checking" (mai
+  // abilitato, vedi sopra): senza questo fallback l'utente vedrebbe uno
+  // spinner infinito invece di un errore chiaro con un modo per riprovare.
+  const effectiveConvoHealth = agentRegistryError ? "unreachable" : convoHealth;
+  const effectiveConvoUnreachableMessage = agentRegistryError ?? convoUnreachableMessage;
 
   async function loadHistoryList() {
     if (!password) return;
@@ -374,7 +401,7 @@ export function HorusChat() {
   async function startConversation(e?: FormEvent) {
     e?.preventDefault();
     const text = topic.trim();
-    if (!text || isConvoRunning || !password || convoHealth !== "ok") return;
+    if (!text || isConvoRunning || !password || effectiveConvoHealth !== "ok") return;
 
     convoTranscriptRef.current = [];
     convoConversationIdRef.current = null;
@@ -387,7 +414,7 @@ export function HorusChat() {
   // topic e la trascrizione finora ottenuta restano quelli già mostrati
   // all'utente, si aggiunge solo il turno mancante e quelli successivi.
   async function retryConversation() {
-    if (isConvoRunning || !password || convoHealth !== "ok") return;
+    if (isConvoRunning || !password || effectiveConvoHealth !== "ok") return;
     const text = topic.trim() || lastTopicRef.current;
     if (!text) return;
     // Rimuoviamo dall'interfaccia l'eventuale messaggio incompleto del turno
@@ -730,13 +757,16 @@ export function HorusChat() {
         />
       </div>
 
-      {mode === "conversation" && convoHealth !== "ok" ? (
+      {mode === "conversation" && effectiveConvoHealth !== "ok" ? (
         <AgentHealthGate
-          health={convoHealth}
-          unreachableMessage={convoUnreachableMessage}
-          onRetry={retryConvoHealth}
-          checkingLabel="Verifica della connessione con Bowie in corso…"
-          unreachableFallback="Bowie non è raggiungibile in questo momento."
+          health={effectiveConvoHealth}
+          unreachableMessage={effectiveConvoUnreachableMessage}
+          onRetry={() => {
+            retryAgentRegistry();
+            retryConvoHealth();
+          }}
+          checkingLabel="Verifica della connessione con gli agenti in corso…"
+          unreachableFallback="Uno o più agenti non sono raggiungibili in questo momento."
         />
       ) : mode === "conversation" ? (
         <>

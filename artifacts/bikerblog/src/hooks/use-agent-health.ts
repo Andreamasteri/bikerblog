@@ -139,3 +139,63 @@ export function useAgentHealth(
     modelsByEndpoint,
   };
 }
+
+export interface AgentRegistryEntry {
+  id: string;
+  displayName: string;
+  /** Percorso relativo (senza "/api") del suo endpoint di health check, es. "horus/health". */
+  healthEndpoint: string;
+}
+
+export interface AgentRegistryState {
+  agents: AgentRegistryEntry[];
+  loadError: string | null;
+  retry: () => void;
+}
+
+/**
+ * Carica l'elenco degli agenti conversazionali e dei relativi endpoint di
+ * health-check da `GET /horus/agents` (Task #156), così la UI non ha più un
+ * elenco di endpoint scritto a mano: aggiungere o rimuovere un agente dal
+ * registry lato server basta a far comparire/sparire il suo check qui, senza
+ * toccare questo file.
+ */
+export function useAgentRegistry(password: string | null, onUnauthorized: () => void): AgentRegistryState {
+  const [agents, setAgents] = useState<AgentRegistryEntry[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+
+  useEffect(() => {
+    if (!password) return;
+    let cancelled = false;
+
+    async function loadRegistry() {
+      setLoadError(null);
+      try {
+        const base = import.meta.env.BASE_URL;
+        const res = await fetch(`${base}api/horus/agents`, {
+          headers: { "X-Horus-Password": password! },
+        });
+        if (res.status === 401) {
+          onUnauthorized();
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as AgentRegistryEntry[];
+        if (!cancelled) setAgents(data);
+      } catch {
+        if (!cancelled) {
+          setLoadError("Impossibile caricare l'elenco degli agenti. Controlla la rete e riprova.");
+        }
+      }
+    }
+
+    void loadRegistry();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [password, retryKey]);
+
+  return { agents, loadError, retry: () => setRetryKey((k) => k + 1) };
+}

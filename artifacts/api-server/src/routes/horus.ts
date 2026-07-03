@@ -53,9 +53,6 @@ function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
   };
 }
 
-const CHAT_SYSTEM_PROMPT: HorusMessage = buildDirectChatSystemPrompt("Horus");
-const BOWIE_CHAT_SYSTEM_PROMPT: HorusMessage = buildDirectChatSystemPrompt("Bowie");
-
 const MAX_TOOL_ITERATIONS = 5;
 // Ogni messaggio rimanda l'intera cronologia a Ollama, che la rielabora da
 // zero (nessun riuso del contesto tra richieste HTTP separate). Su hardware
@@ -277,49 +274,110 @@ function createHealthHandler(config: HealthAgentConfig) {
   };
 }
 
-router.get(
-  "/horus/health",
-  createHealthHandler({
-    agentName: "Horus",
+/**
+ * Definizione canonica di un agente conversazionale (Task #156): unica fonte
+ * di verità da cui derivano SIA le route di health-check/chat diretta qui
+ * sotto SIA il registry della conversazione osservata (`buildConvoAgentRegistry`
+ * più in basso). Prima di questo refactor le due liste (route hardcoded qui,
+ * registry della conversazione più sotto) potevano divergere in silenzio —
+ * es. un terzo agente aggiunto a una lista ma non all'altra, o un messaggio
+ * "non raggiungibile" aggiornato in un posto e non nell'altro. `healthPath`/
+ * `chatPath` sono relativi (senza "/api", aggiunto dal client) e vengono
+ * esposti al frontend da `GET /horus/agents` così anche la UI non deve avere
+ * un elenco di endpoint scritto a mano (vedi `useAgentRegistry` nel client).
+ */
+interface AgentDefinition {
+  id: string;
+  displayName: string;
+  healthPath: string;
+  chatPath: string;
+  checkHealth: () => Promise<OllamaAgentHealth>;
+  chatRaw: typeof horusChatRaw;
+  isConfigured: () => boolean;
+  /** Usato per l'health check e per la chat diretta (risposta 503). */
+  notConfiguredMessage: string;
+  /** Usato solo dentro l'evento "error" della conversazione osservata. */
+  conversationNotConfiguredMessage: string;
+  /** Opzioni passate a `chatRaw` per questo agente in conversazione (es. Horus usa skipMemory). */
+  conversationChatOptions: { skipMemory?: boolean };
+  /** Nota aggiunta in coda al system prompt della conversazione (es. Horus: nessun tool in questa modalità). */
+  conversationToolsNote: string;
+  logLabel: string;
+}
+
+const AGENT_DEFINITIONS: AgentDefinition[] = [
+  {
+    id: "horus",
+    displayName: "Horus",
+    healthPath: "horus/health",
+    chatPath: "horus/chat",
     checkHealth: checkHorusHealth,
-    notConfiguredMessage: "Horus non è configurato su questo ambiente.",
-  })
-);
-
-router.get(
-  "/horus/bowie-health",
-  createHealthHandler({
-    agentName: BOWIE_AGENT_NAME,
-    checkHealth: checkBowieHealth,
-    notConfiguredMessage: `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. Aggiungilo dalla scheda Secrets per abilitare la chat diretta con Bowie.`,
-  })
-);
-
-router.post(
-  "/horus/chat",
-  express.json({ limit: "1mb" }),
-  createDirectChatHandler({
-    agentName: "Horus",
-    systemPrompt: CHAT_SYSTEM_PROMPT,
     chatRaw: horusChatRaw,
     isConfigured: () => true,
     notConfiguredMessage: "Horus non è configurato su questo ambiente.",
+    conversationNotConfiguredMessage: "Horus non è configurato su questo ambiente.",
+    conversationChatOptions: { skipMemory: true },
+    conversationToolsNote: " Non hai accesso a strumenti in questa modalità.",
     logLabel: "horus chat failed",
-  })
-);
-
-router.post(
-  "/horus/bowie-chat",
-  express.json({ limit: "1mb" }),
-  createDirectChatHandler({
-    agentName: BOWIE_AGENT_NAME,
-    systemPrompt: BOWIE_CHAT_SYSTEM_PROMPT,
+  },
+  {
+    id: "bowie",
+    displayName: BOWIE_AGENT_NAME,
+    healthPath: "horus/bowie-health",
+    chatPath: "horus/bowie-chat",
+    checkHealth: checkBowieHealth,
     chatRaw: bowieChatRaw,
     isConfigured: isBowieConfigured,
     notConfiguredMessage: `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. Aggiungilo dalla scheda Secrets per abilitare la chat diretta con Bowie.`,
+    conversationNotConfiguredMessage: `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. Aggiungilo dalla scheda Secrets per abilitare la conversazione Horus↔Bowie.`,
+    conversationChatOptions: {},
+    conversationToolsNote: "",
     logLabel: "bowie chat failed",
-  })
-);
+  },
+];
+
+for (const def of AGENT_DEFINITIONS) {
+  router.get(
+    `/${def.healthPath}`,
+    createHealthHandler({
+      agentName: def.displayName,
+      checkHealth: def.checkHealth,
+      notConfiguredMessage: def.notConfiguredMessage,
+    })
+  );
+
+  router.post(
+    `/${def.chatPath}`,
+    express.json({ limit: "1mb" }),
+    createDirectChatHandler({
+      agentName: def.displayName,
+      systemPrompt: buildDirectChatSystemPrompt(def.displayName),
+      chatRaw: def.chatRaw,
+      isConfigured: def.isConfigured,
+      notConfiguredMessage: def.notConfiguredMessage,
+      logLabel: def.logLabel,
+    })
+  );
+}
+
+/**
+ * Elenco degli agenti e dei relativi endpoint di health-check, così il
+ * frontend può costruire il gate di raggiungibilità (chat diretta e
+ * conversazione osservata) senza avere un elenco di path scritto a mano —
+ * vedi `useAgentRegistry` in `horus-chat.tsx`. Protetto dalla stessa password
+ * delle altre route Horus: non è un dato sensibile, ma resta coerente con il
+ * resto della superficie `/horus/*` che richiede sempre autenticazione.
+ */
+router.get("/horus/agents", (req, res) => {
+  if (!requireHorusPassword(req, res)) return;
+  res.json(
+    AGENT_DEFINITIONS.map((def) => ({
+      id: def.id,
+      displayName: def.displayName,
+      healthEndpoint: `api/${def.healthPath}`,
+    }))
+  );
+});
 
 /** Unisce una lista di nomi in italiano: ["A"] → "A"; ["A","B"] → "A e B";
  * ["A","B","C"] → "A, B e C". Serve a generalizzare il prompt a N agenti
@@ -433,28 +491,28 @@ export interface ConvoAgentConfig {
  * agente basta appendere qui una voce (e la relativa `chatRaw` in `deps`).
  */
 function buildConvoAgentRegistry(deps: BowieConversationDeps): ConvoAgentConfig[] {
-  return [
-    {
-      id: "horus",
-      displayName: "Horus",
-      chatRaw: deps.horusChatRaw,
-      chatOptions: { skipMemory: true },
-      toolsNote: " Non hai accesso a strumenti in questa modalità.",
-      isConfigured: () => true,
-      notConfiguredMessage: "Horus non è configurato su questo ambiente.",
-    },
-    {
-      id: "bowie",
-      displayName: BOWIE_AGENT_NAME,
-      chatRaw: deps.bowieChatRaw,
-      chatOptions: {},
-      toolsNote: "",
-      isConfigured: deps.isBowieConfigured,
-      notConfiguredMessage:
-        `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. ` +
-        "Aggiungilo dalla scheda Secrets per abilitare la conversazione Horus↔Bowie.",
-    },
-  ];
+  // `chatRaw`/`isConfigured` restano iniettabili tramite `deps` (usati dai
+  // test per script/mock), ma nome, opzioni, nota tool e messaggio "non
+  // configurato" vengono dalla stessa `AGENT_DEFINITIONS` che genera anche le
+  // route di health-check/chat diretta sopra: un solo posto da aggiornare per
+  // aggiungere un agente o cambiarne il testo.
+  const chatRawById: Record<string, typeof horusChatRaw> = {
+    horus: deps.horusChatRaw,
+    bowie: deps.bowieChatRaw,
+  };
+  const isConfiguredById: Record<string, () => boolean> = {
+    horus: () => true,
+    bowie: deps.isBowieConfigured,
+  };
+  return AGENT_DEFINITIONS.map((def) => ({
+    id: def.id,
+    displayName: def.displayName,
+    chatRaw: chatRawById[def.id] ?? def.chatRaw,
+    chatOptions: def.conversationChatOptions,
+    toolsNote: def.conversationToolsNote,
+    isConfigured: isConfiguredById[def.id] ?? def.isConfigured,
+    notConfiguredMessage: def.conversationNotConfiguredMessage,
+  }));
 }
 
 function buildAgentMessages(
