@@ -141,9 +141,17 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #147** — Alert when Nadir semantic search silently stops working <!-- 8f6b0ed -->
+- **Task #146** — Regression coverage so the nightly Nadir reindex can never crash the pipeline <!-- f034c82 -->
+  - _In parole semplici:_ Abbiamo migliorato il test delle regressioni per evitare interruzioni notturne del pipeline di indicizzazione.
+- **Task #145** — Warn when the search index silently stops updating <!-- 4abd4eb -->
+  - _In parole semplici:_ Avvisa quando l'indice di ricerca si ferma silenziosamente.
 - **Task #144** — Add regression coverage for Nadir export route and search_manual tool <!-- ff5a50b -->
+  - _In parole semplici:_ Abbiamo migliorato il sistema di test per l'esportazione del percorso di Nadir e lo strumento di ricerca manuale.
 - **Task #143** — Keep Nadir's search index fresh automatically every night <!-- 9dec50b -->
   - _In parole semplici:_ Ogni notte l'app aggiorna automaticamente l'indice di ricerca di Nadir per garantire risultati precisi e veloci.
+- **Task #142** — Generalize observable convo agents from Horus/Bowie union to N-agent registry <!-- 2b9caaa -->
+  - _In parole semplici:_ Abbiamo migliorato il sistema di gestione degli agenti conversazionali per supportare più agenti contemporaneamente.
 - **Task #139** — Add automated coverage for corrupted saved-chat restart flow <!-- 19cc6fd -->
   - _In parole semplici:_ Abbiamo migliorato il processo di riavvio della chat salvata in caso di problemi per farlo funzionare automaticamente.
 - **Task #138** — Changelog di sincronizzazione BikerLink (backfill + auto-update con task completati) <!-- dc46e5d -->
@@ -154,9 +162,13 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
   - _In parole semplici:_ Risolto il problema di ripetizione del testo nella trascrizione della superficie corrotta.
 - **Task #135** — Build "Nadir" standalone semantic-search service for Horus/Bowie <!-- 161851a -->
   - _In parole semplici:_ Abbiamo creato un servizio di ricerca semantica in grado di funzionare in modo autonomo per Horus e Bowie
+- **Task #134** — Attivare Bowie con configurazione reale (llama3.2:3b) <!-- 8787680 -->
+  - _In parole semplici:_ Abbiamo migliorato il modello di intelligenza artificiale utilizzato da Bowie per fornire risposte più accurate e coerenti.
 
 **Altre modifiche:**
 
+- **15:52** · Git commit prior to merge <!-- f273a97 -->
+  - _In parole semplici:_ Commit effettuato prima del merge.
 - **15:09** · Git commit prior to merge <!-- 2f6b11a -->
   - _In parole semplici:_ Commit git prima del merge.
 - **13:37** · Add simple Italian translations to commit log entries <!-- 0d597b1 -->
