@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Flame, Lock, RotateCcw, Cpu, Play, Square, History, ArrowLeft } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Flame, Lock, RotateCcw, Cpu, Bot, Play, Square, History, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -20,7 +20,12 @@ const SESSION_KEY = "horus-chat-password";
 const DEFAULT_CONVO_TURNS_HINT = 6;
 const ESTIMATED_SECONDS_PER_TURN_HINT = 105;
 
-type ConvoAgent = "horus" | "bowie";
+// L'id di un agente conversazionale è una stringa generica (allineato al
+// server, vedi horus.ts): la conversazione osservabile è generalizzata a N
+// interlocutori, quindi la UI non deve assumere esattamente "horus"/"bowie".
+// Aggiungere un terzo agente (es. "quebracho") richiede solo una voce in
+// AGENT_PRESENTATIONS qui sotto, non un refactor di questo file.
+type ConvoAgent = string;
 
 interface ConvoMessage {
   id: string;
@@ -31,6 +36,54 @@ interface ConvoMessage {
 interface ConvoTurn {
   agent: ConvoAgent;
   content: string;
+}
+
+interface AgentPresentation {
+  label: string;
+  icon: ReactNode;
+  avatarClassName: string;
+  bubbleClassName: string;
+  /** Lato del bubble/riga: allineamento storico per Horus (sinistra) e Bowie
+   * (destra). Agenti sconosciuti restano a sinistra per default, così un
+   * terzo interlocutore non "rompe" il layout a due colonne esistente. */
+  align: "left" | "right";
+}
+
+// Presentazione nota per gli agenti storici: stile invariato rispetto a
+// prima della generalizzazione. Qualsiasi agente non presente qui (es. un
+// futuro "Quebracho") riceve una presentazione generica calcolata da
+// `getAgentPresentation`, senza bisogno di toccare questo codice.
+const AGENT_PRESENTATIONS: Record<string, AgentPresentation> = {
+  horus: {
+    label: "Horus",
+    icon: <Flame className="w-4 h-4" />,
+    avatarClassName: "bg-foreground text-background",
+    bubbleClassName: "bg-background border border-border",
+    align: "left",
+  },
+  bowie: {
+    label: "Bowie",
+    icon: <Cpu className="w-4 h-4" />,
+    avatarClassName: "bg-accent text-accent-foreground",
+    bubbleClassName: "bg-accent/20 border border-accent/40",
+    align: "right",
+  },
+};
+
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
+}
+
+function getAgentPresentation(agent: ConvoAgent): AgentPresentation {
+  return (
+    AGENT_PRESENTATIONS[agent] ?? {
+      label: capitalize(agent),
+      icon: <Bot className="w-4 h-4" />,
+      avatarClassName: "bg-secondary text-secondary-foreground",
+      bubbleClassName: "bg-muted/30 border border-muted-foreground/30",
+      align: "left",
+    }
+  );
 }
 
 function uid(): string {
@@ -419,7 +472,7 @@ export function HorusChat() {
             continue;
           }
 
-          const agent = payload.agent === "bowie" ? "bowie" : payload.agent === "horus" ? "horus" : null;
+          const agent = typeof payload.agent === "string" && payload.agent.length > 0 ? payload.agent : null;
 
           if (eventName === "turn_start" && agent) {
             setConvoActiveAgent(agent);
@@ -462,7 +515,8 @@ export function HorusChat() {
                 (t): t is ConvoTurn =>
                   typeof t === "object" &&
                   t !== null &&
-                  ((t as ConvoTurn).agent === "horus" || (t as ConvoTurn).agent === "bowie") &&
+                  typeof (t as ConvoTurn).agent === "string" &&
+                  (t as ConvoTurn).agent.length > 0 &&
                   typeof (t as ConvoTurn).content === "string"
               );
             }
@@ -704,42 +758,35 @@ export function HorusChat() {
                   Proponi un argomento e guarda Horus e Bowie discuterne a turni.
                 </div>
               )}
-              {convoMessages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`flex gap-3 ${m.agent === "bowie" ? "flex-row-reverse" : "flex-row"}`}
-                >
-                  <Avatar className="w-8 h-8 shrink-0">
-                    <AvatarFallback
-                      className={
-                        m.agent === "bowie"
-                          ? "bg-accent text-accent-foreground"
-                          : "bg-foreground text-background"
-                      }
-                    >
-                      {m.agent === "bowie" ? <Cpu className="w-4 h-4" /> : <Flame className="w-4 h-4" />}
-                    </AvatarFallback>
-                  </Avatar>
+              {convoMessages.map((m) => {
+                const presentation = getAgentPresentation(m.agent);
+                return (
                   <div
-                    className={`max-w-[80%] flex flex-col gap-1 ${
-                      m.agent === "bowie" ? "items-end" : "items-start"
-                    }`}
+                    key={m.id}
+                    className={`flex gap-3 ${presentation.align === "right" ? "flex-row-reverse" : "flex-row"}`}
                   >
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
-                      {m.agent === "bowie" ? "Bowie" : "Horus"}
-                    </span>
+                    <Avatar className="w-8 h-8 shrink-0">
+                      <AvatarFallback className={presentation.avatarClassName}>
+                        {presentation.icon}
+                      </AvatarFallback>
+                    </Avatar>
                     <div
-                      className={`px-4 py-3 whitespace-pre-wrap text-sm leading-relaxed ${
-                        m.agent === "bowie"
-                          ? "bg-accent/20 border border-accent/40"
-                          : "bg-background border border-border"
+                      className={`max-w-[80%] flex flex-col gap-1 ${
+                        presentation.align === "right" ? "items-end" : "items-start"
                       }`}
                     >
-                      {m.content || <Spinner className="w-4 h-4" />}
+                      <span className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+                        {presentation.label}
+                      </span>
+                      <div
+                        className={`px-4 py-3 whitespace-pre-wrap text-sm leading-relaxed ${presentation.bubbleClassName}`}
+                      >
+                        {m.content || <Spinner className="w-4 h-4" />}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {isConvoRunning && !convoActiveAgent && convoMessages.length === 0 && (
                 <div className="flex justify-center py-8">
                   <Spinner className="w-5 h-5" />
@@ -753,7 +800,7 @@ export function HorusChat() {
               <span>
                 {convoError.agent && !convoError.prefixed && (
                   <span className="font-bold uppercase tracking-wider mr-1">
-                    {convoError.agent === "bowie" ? "Bowie" : "Horus"}:
+                    {getAgentPresentation(convoError.agent).label}:
                   </span>
                 )}
                 {convoError.message}
@@ -817,42 +864,35 @@ export function HorusChat() {
               </p>
               <p className="text-sm font-medium">{viewingConvo.topic}</p>
             </div>
-            {viewingConvo.transcript.map((m, i) => (
-              <div
-                key={i}
-                className={`flex gap-3 ${m.agent === "bowie" ? "flex-row-reverse" : "flex-row"}`}
-              >
-                <Avatar className="w-8 h-8 shrink-0">
-                  <AvatarFallback
-                    className={
-                      m.agent === "bowie"
-                        ? "bg-accent text-accent-foreground"
-                        : "bg-foreground text-background"
-                    }
-                  >
-                    {m.agent === "bowie" ? <Cpu className="w-4 h-4" /> : <Flame className="w-4 h-4" />}
-                  </AvatarFallback>
-                </Avatar>
+            {viewingConvo.transcript.map((m, i) => {
+              const presentation = getAgentPresentation(m.agent);
+              return (
                 <div
-                  className={`max-w-[80%] flex flex-col gap-1 ${
-                    m.agent === "bowie" ? "items-end" : "items-start"
-                  }`}
+                  key={i}
+                  className={`flex gap-3 ${presentation.align === "right" ? "flex-row-reverse" : "flex-row"}`}
                 >
-                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
-                    {m.agent === "bowie" ? "Bowie" : "Horus"}
-                  </span>
+                  <Avatar className="w-8 h-8 shrink-0">
+                    <AvatarFallback className={presentation.avatarClassName}>
+                      {presentation.icon}
+                    </AvatarFallback>
+                  </Avatar>
                   <div
-                    className={`px-4 py-3 whitespace-pre-wrap text-sm leading-relaxed ${
-                      m.agent === "bowie"
-                        ? "bg-accent/20 border border-accent/40"
-                        : "bg-background border border-border"
+                    className={`max-w-[80%] flex flex-col gap-1 ${
+                      presentation.align === "right" ? "items-end" : "items-start"
                     }`}
                   >
-                    {m.content}
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+                      {presentation.label}
+                    </span>
+                    <div
+                      className={`px-4 py-3 whitespace-pre-wrap text-sm leading-relaxed ${presentation.bubbleClassName}`}
+                    >
+                      {m.content}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (
