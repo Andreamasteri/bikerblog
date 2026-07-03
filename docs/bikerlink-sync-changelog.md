@@ -141,7 +141,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #150** — Verify Bowie's real llama3.2:3b model still gives good conversations <!-- 24fd067 -->
+  - _In parole semplici:_ Abbiamo verificato che il modello di llama3.2:3b di Bowie funzioni correttamente per conversazioni di qualità.
 - **Task #147** — Alert when Nadir semantic search silently stops working <!-- 8f6b0ed -->
+  - _In parole semplici:_ Ricevi una notifica quando la ricerca semantica di Nadir si ferma silenziosamente.
 - **Task #146** — Regression coverage so the nightly Nadir reindex can never crash the pipeline <!-- f034c82 -->
   - _In parole semplici:_ Abbiamo migliorato il test delle regressioni per evitare interruzioni notturne del pipeline di indicizzazione.
 - **Task #145** — Warn when the search index silently stops updating <!-- 4abd4eb -->
@@ -167,10 +170,12 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **16:16** · Update system to sync changelog in real-time after every merge <!-- 75b8117 -->
+  - _In parole semplici:_ Abbiamo migliorato il sistema per sincronizzare i cambiamenti in tempo reale dopo ogni fusione.
+- **16:05** · Update changelog to reflect all recent task completions <!-- c2d5f6e -->
+  - _In parole semplici:_ Abbiamo aggiornato il registro delle modifiche per riflettere tutti i compiti recentemente completati.
 - **15:52** · Git commit prior to merge <!-- f273a97 -->
   - _In parole semplici:_ Commit effettuato prima del merge.
-- **15:52** · Saved your changes before starting work <!-- 36336dc -->
-  - _In parole semplici:_ Abbiamo salvato le tue modifiche prima di iniziare il lavoro
 - **15:09** · Git commit prior to merge <!-- 2f6b11a -->
   - _In parole semplici:_ Commit git prima del merge.
 - **13:37** · Add simple Italian translations to commit log entries <!-- 0d597b1 -->
