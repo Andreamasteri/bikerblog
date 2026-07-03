@@ -53,6 +53,7 @@ import { pool } from "@workspace/db";
 import { publishFromClusters } from "./publish-from-clusters.js";
 import { sendPipelineAlert } from "./notify.js";
 import { reindexNadir } from "./reindex-nadir.js";
+import { nadirWarnStreak } from "./nadir-warn-streak.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scriptsCwd = resolve(here, "..");
@@ -940,13 +941,40 @@ let diaryPostCreatedThisRun = false;
     console.log(`[cluster-daily] step 7.5: ${nadir.detail}`);
   }
 
+  const warnings = nadir.status === "warn" ? [nadir.detail] : [];
+
+  // Tolleranza a un guasto transitorio (una notte in "warn" resta silenziosa),
+  // ma se Nadir è irraggiungibile per più notti di fila l'indice di ricerca si
+  // ferma senza che nessuno lo sappia. Conta la serie di "warn" consecutivi
+  // (inclusa la run corrente) leggendo lo storico e, superata la soglia,
+  // promuove il warn a critical warning così scatta sendPipelineAlert.
+  const NADIR_WARN_STREAK_ALERT = 3;
+  if (nadir.status === "warn") {
+    const historyDir = resolve(projectRoot, "inbox", "pipeline-history");
+    const streak = nadirWarnStreak(nadir.status, today, historyDir);
+    if (streak >= NADIR_WARN_STREAK_ALERT) {
+      const msg =
+        `indice semantico Nadir fermo da ${streak} notti consecutive ` +
+        `(soglia ${NADIR_WARN_STREAK_ALERT}) — ultimo errore: ${nadir.detail}`;
+      criticalWarnings.push(`step 7.5 (Nadir semantic reindex): ${msg}`);
+      warnings.push(
+        `serie di ${streak} reindicizzazioni fallite consecutive — allarme inviato`
+      );
+      console.warn(`[cluster-daily] ⚠ step 7.5: ${msg}`);
+    } else {
+      console.log(
+        `[cluster-daily] step 7.5: warn isolato (serie ${streak}/${NADIR_WARN_STREAK_ALERT}) — nessun allarme`
+      );
+    }
+  }
+
   report.addStep({
     step: 7.5,
     name: "Nadir semantic reindex",
     status: nadir.status,
     duration_ms: Date.now() - stepStart,
     errors: [],
-    warnings: nadir.status === "warn" ? [nadir.detail] : [],
+    warnings,
   });
 }
 
