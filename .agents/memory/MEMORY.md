@@ -25,3 +25,4 @@
 - [Bowie real-model quality check](bowie-real-model-quality-check.md) — llama3.2:3b is coherent/on-topic and turn-taking works; the real risk is CPU latency (~90-120s/turn), not quality.
 - [Horus↔Bowie conversation duration UX](horus-convo-duration-ux.md) — fix pacing complaints with progress/ETA + turn-count tuning, not prompt/model changes; latency is the bottleneck.
 - [Agent-registry-driven health gate](horus-agent-registry-driven-ui.md) — health/chat routes + UI unreachable copy derive from one server-side agent list, not hand-copied endpoints; also: stale lib tsbuildinfo can cause false typecheck errors.
+- [Chat file attachments are client-side only](horus-chat-file-attachments.md) — no vision model exists here, so "send/receive files" was implemented as text-extraction-in-browser + response-as-download, no server storage.

@@ -802,6 +802,7 @@ export function HorusChat() {
           agentAvatarClassName="bg-foreground text-background"
           emptyStateText="Scrivi un messaggio per iniziare a chattare con Horus."
           placeholderText="Scrivi a Horus... (Invio per inviare, Shift+Invio per andare a capo)"
+          agentName="horus"
         />
       </div>
 
@@ -816,6 +817,7 @@ export function HorusChat() {
           agentAvatarClassName="bg-accent text-accent-foreground"
           emptyStateText="Scrivi un messaggio per iniziare a chattare con Bowie."
           placeholderText="Scrivi a Bowie... (Invio per inviare, Shift+Invio per andare a capo)"
+          agentName="bowie"
         />
       </div>
 
@@ -830,6 +832,7 @@ export function HorusChat() {
           agentAvatarClassName="bg-primary text-primary-foreground"
           emptyStateText="Scrivi un messaggio per iniziare a chattare con Quebracho."
           placeholderText="Scrivi a Quebracho... (Invio per inviare, Shift+Invio per andare a capo)"
+          agentName="quebracho"
         />
       </div>
 

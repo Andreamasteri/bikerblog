@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { Send, Wrench, User, Square } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Send, Wrench, User, Square, Paperclip, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -28,6 +28,70 @@ function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+// Nessun modello qui è multimodale: possono solo "leggere" testo. Un file
+// viene quindi trattato come testo (e il suo contenuto incluso nel messaggio)
+// solo se il tipo/estensione lo rende ragionevolmente sicuro come testo —
+// altrimenti si allega solo nome/tipo/dimensione, così l'AI sa che è stato
+// inviato un file senza fingere di poterne leggere il contenuto binario.
+const TEXTY_EXTENSIONS = new Set([
+  "txt", "md", "markdown", "csv", "tsv", "json", "xml", "yaml", "yml", "log",
+  "js", "jsx", "ts", "tsx", "py", "java", "c", "cpp", "h", "cs", "go", "rs",
+  "rb", "php", "sh", "bash", "sql", "html", "htm", "css", "ini", "conf", "env",
+  "toml",
+]);
+
+function isLikelyTextFile(file: File): boolean {
+  if (file.type.startsWith("text/")) return true;
+  if (
+    ["application/json", "application/xml", "application/javascript", "application/x-yaml"].includes(
+      file.type
+    )
+  ) {
+    return true;
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return !!ext && TEXTY_EXTENSIONS.has(ext);
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024; // 5 MB, solo per l'upload dal browser
+const MAX_ATTACHMENT_TEXT_CHARS = 6000; // tenuto ben sotto il limite di 1MB del body JSON
+
+interface ChatAttachment {
+  name: string;
+  type: string;
+  size: number;
+  text: string | null;
+  truncated: boolean;
+}
+
+function buildOutgoingContent(text: string, attachment: ChatAttachment | null): string {
+  if (!attachment) return text;
+  const sizeLabel = formatFileSize(attachment.size);
+  const header =
+    attachment.text !== null
+      ? `[File allegato: ${attachment.name} — ${attachment.type || "tipo sconosciuto"}, ${sizeLabel}]\n"""\n${attachment.text}${
+          attachment.truncated ? "\n…(contenuto troncato)" : ""
+        }\n"""`
+      : `[File allegato: ${attachment.name} — ${attachment.type || "tipo sconosciuto"}, ${sizeLabel}. Non è un file di testo: il contenuto binario non può essere letto, solo nome/tipo/dimensione sono noti.]`;
+  return text ? `${header}\n\n${text}` : header;
+}
+
+function downloadAsFile(content: string, filenamePrefix: string): void {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filenamePrefix}-${Date.now()}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export interface AgentChatPanelProps {
   /** Endpoint relativo alla base dell'app (es. "api/horus/chat" o "api/horus/bowie-chat"). */
   endpoint: string;
@@ -39,6 +103,8 @@ export interface AgentChatPanelProps {
   agentAvatarClassName: string;
   emptyStateText: string;
   placeholderText: string;
+  /** Nome dell'agente (es. "horus"), usato solo per il nome del file scaricato. */
+  agentName: string;
 }
 
 /**
@@ -56,18 +122,22 @@ export function AgentChatPanel({
   agentAvatarClassName,
   emptyStateText,
   placeholderText,
+  agentName,
 }: AgentChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState<string | null>(null);
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   const { health, notConfigured: healthNotConfigured, unreachableMessage, retry: retryHealth } =
     useAgentHealth(healthEndpoint, password, onUnauthorized);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -81,15 +151,50 @@ export function AgentChatPanel({
     abortRef.current?.abort();
   }
 
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setAttachmentError(null);
+
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      setAttachmentError(`File troppo grande (max ${formatFileSize(MAX_ATTACHMENT_SIZE)}).`);
+      return;
+    }
+
+    if (isLikelyTextFile(file)) {
+      const raw = await file.text();
+      const truncated = raw.length > MAX_ATTACHMENT_TEXT_CHARS;
+      setAttachment({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        text: truncated ? raw.slice(0, MAX_ATTACHMENT_TEXT_CHARS) : raw,
+        truncated,
+      });
+    } else {
+      setAttachment({ name: file.name, type: file.type, size: file.size, text: null, truncated: false });
+    }
+  }
+
+  function removeAttachment() {
+    setAttachment(null);
+    setAttachmentError(null);
+  }
+
   async function sendMessage(e?: FormEvent) {
     e?.preventDefault();
     const text = input.trim();
-    if (!text || isStreaming || !password) return;
+    if ((!text && !attachment) || isStreaming || !password) return;
 
     setError(null);
     setInput("");
+    const outgoingAttachment = attachment;
+    setAttachment(null);
 
-    const userMsg: ChatMessage = { id: uid(), role: "user", content: text };
+    const outgoing = buildOutgoingContent(text, outgoingAttachment);
+    const userMsg: ChatMessage = { id: uid(), role: "user", content: outgoing };
     const assistantId = uid();
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
 
@@ -107,7 +212,7 @@ export function AgentChatPanel({
           "Content-Type": "application/json",
           "X-Horus-Password": password,
         },
-        body: JSON.stringify({ message: text, history }),
+        body: JSON.stringify({ message: outgoing, history }),
         signal: controller.signal,
       });
 
@@ -291,6 +396,17 @@ export function AgentChatPanel({
                 >
                   {m.content || (m.role === "assistant" && isStreaming ? <Spinner className="w-4 h-4" /> : null)}
                 </div>
+                {m.role === "assistant" && m.content && (
+                  <button
+                    type="button"
+                    onClick={() => downloadAsFile(m.content, agentName)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    title="Scarica questa risposta come file di testo"
+                  >
+                    <Download className="w-3 h-3" />
+                    Scarica come file
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -298,8 +414,39 @@ export function AgentChatPanel({
       </div>
 
       {error && <div className="text-sm text-destructive mb-3 px-1">{error}</div>}
+      {attachmentError && <div className="text-sm text-destructive mb-3 px-1">{attachmentError}</div>}
+
+      {attachment && (
+        <div className="flex items-center gap-2 mb-2 px-3 py-2 border border-border bg-muted/10 text-xs">
+          <Paperclip className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">
+            {attachment.name} · {formatFileSize(attachment.size)}
+            {attachment.text === null && " · contenuto non leggibile dal modello"}
+          </span>
+          <button
+            type="button"
+            onClick={removeAttachment}
+            className="ml-auto text-muted-foreground hover:text-foreground shrink-0"
+            title="Rimuovi allegato"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <form onSubmit={sendMessage} className="flex items-end gap-2 shrink-0">
+        <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="shrink-0"
+          disabled={isStreaming}
+          onClick={() => fileInputRef.current?.click()}
+          title="Allega un file"
+        >
+          <Paperclip className="w-4 h-4" />
+        </Button>
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -320,7 +467,7 @@ export function AgentChatPanel({
             <Square className="w-4 h-4" />
           </Button>
         ) : (
-          <Button type="submit" size="icon" disabled={!input.trim()} className="shrink-0">
+          <Button type="submit" size="icon" disabled={!input.trim() && !attachment} className="shrink-0">
             <Send className="w-4 h-4" />
           </Button>
         )}
