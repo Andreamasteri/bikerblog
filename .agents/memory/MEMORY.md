@@ -12,3 +12,6 @@
 - [DB migrations vs push](db-migrations-vs-push.md) — `drizzle-kit push` (dev) doesn't create migration files; `generate` is currently broken here — new migrations must be added by hand alongside schema.ts changes.
 - [Bash background process lifetime](bash-background-process-lifetime.md) — `&`/nohup/setsid processes die between bash tool calls; start server + test in the same call to smoke-test real HTTP endpoints.
 - [Rate limiter IP key](rate-limit-ip-key.md) — per-visitor limiters must key off `req.ip`, not `req.socket.remoteAddress`, or trust-proxy setup silently pools all visitors into one bucket.
+- [Podcast storage architecture](podcast-storage-architecture.md) — private GCS audio streamed via an API route, never a public URL; uploads must go through the api-server (GCS sidecar is workflow-only).
+- [Internal API auth](internal-api-auth.md) — `/_internal/*` derives its bearer token from `SESSION_SECRET` via HMAC instead of a dedicated secret.
+- [Horus tools architecture](horus-tools-architecture.md) — multi-repo `github_read` token fallback pattern, `read_blog`, and capability-gated analysis tools (`sonar_scan` hidden when TC service unavailable).
