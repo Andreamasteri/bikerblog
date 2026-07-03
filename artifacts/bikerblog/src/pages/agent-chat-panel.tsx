@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { friendlyChatErrorMessage } from "@/lib/friendly-error";
 
 type Role = "user" | "assistant";
 
@@ -179,7 +180,7 @@ export function AgentChatPanel({
       }
 
       if (!res.ok || !res.body) {
-        throw new Error(`Richiesta fallita (HTTP ${res.status})`);
+        throw new Error(`HTTP ${res.status}`);
       }
 
       const reader = res.body.getReader();
@@ -266,7 +267,7 @@ export function AgentChatPanel({
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Errore di connessione.");
+      setError(friendlyChatErrorMessage(err));
     } finally {
       setIsStreaming(false);
       abortRef.current = null;

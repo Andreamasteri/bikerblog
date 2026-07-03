@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 import { AgentChatPanel } from "./agent-chat-panel";
+import { friendlyChatErrorMessage } from "@/lib/friendly-error";
 
 const SESSION_KEY = "horus-chat-password";
 
@@ -285,7 +286,7 @@ export function HorusChat() {
       }
 
       if (!res.ok || !res.body) {
-        throw new Error(`Richiesta fallita (HTTP ${res.status})`);
+        throw new Error(`HTTP ${res.status}`);
       }
 
       const reader = res.body.getReader();
@@ -348,7 +349,7 @@ export function HorusChat() {
       if (err instanceof DOMException && err.name === "AbortError") {
         // interruzione manuale, non è un errore da mostrare
       } else {
-        setConvoError(err instanceof Error ? err.message : "Errore di connessione con Horus/Bowie.");
+        setConvoError(friendlyChatErrorMessage(err));
       }
     } finally {
       setIsConvoRunning(false);
