@@ -141,6 +141,12 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #163** — Add a "Chat con Quebracho" direct-chat tab <!-- d5ab446 -->
+  - _In parole semplici:_ Abbiamo aggiunto una nuova opzione di chat diretta con il nostro assistente virtuale Quebracho.
+- **Task #162** — Add regression test for GET /horus/agents registry endpoint <!-- 25d27e6 -->
+  - _In parole semplici:_ Abbiamo aggiunto un test di regressione per il endpoint di registro degli agenti GET /horus/agents
+- **Task #161** — Show which agent is reachable when only one of several goes down <!-- 4c1fccd -->
+  - _In parole semplici:_ L'app indica quale agente è raggiungibile quando uno solo di diversi va offline.
 - **Task #160** — Remember preferred conversation length preset (Horus/Bowie) <!-- 8da3d1a -->
   - _In parole semplici:_ L'app BikerLink ricorda la lunghezza preferita delle conversazioni orarie (Horus/Bowie).
 - **Task #158** — Let users pick a shorter Horus↔Bowie conversation before starting it <!-- c62a700 -->
@@ -180,6 +186,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **18:24** · Git commit prior to merge <!-- fec61bc -->
+  - _In parole semplici:_ Commit effettuato prima del merge.
 - **18:06** · Derive agent health-gate config from a single registry <!-- d971b78 -->
   - _In parole semplici:_ Abbiamo migliorato il modo in cui l'app gestisce le informazioni di salute dell'agente
 - **18:06** · Git commit prior to merge <!-- 2818ec4 -->
