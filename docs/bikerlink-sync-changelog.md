@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #168** — Protect the chat-timeout safeguard's coverage at its source <!-- d963bd1 -->
+  - _In parole semplici:_ Abbiamo migliorato il sistema di protezione del timeout delle chat per garantire una maggiore stabilità e affidabilità.
 - **Task #166** — Stop CLI chat freezing on the same tunnel timeout as web chat <!-- 1221fd2 -->
   - _In parole semplici:_ Risolto il problema di blocco della chat CLI durante lo stesso timeout del tunnel come nella chat web.
 - **Task #165** — Fix Horus/Bowie web chat freeze from the 2nd message <!-- e4a0522 -->
@@ -192,6 +194,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **21:45** · Git commit prior to merge <!-- 8141dd2 -->
+  - _In parole semplici:_ Commit Git prima del merge.
 - **21:42** · Git commit prior to merge <!-- 71be900 -->
   - _In parole semplici:_ Commit Git prima del merge.
 - **21:00** · Adjust response limits to prevent chat timeouts on slower hardware <!-- 0fc1b99 -->
