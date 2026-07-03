@@ -30,3 +30,13 @@ calling.
 **`all-minilm` must stay visible** in logs/health/README (log prefix
 `[Nadir/all-minilm]`, `/health` returns `embedModel`). This was an explicit task
 requirement, not incidental.
+
+**Reindex success ≠ search reachability — check both separately.** A
+successful `/reindex` (pipeline step 7.5) says nothing about whether `/search`
+is still up hours later; Nadir can die in between and `search_manual` will
+just hand agents a silent "friendly error" string with no operator signal.
+The pipeline has a second, later step that calls `/search` directly with a
+throwaway query and — unlike the reindex step, which is tolerant/no-alert —
+routes a failure into `criticalWarnings` so `sendPipelineAlert` actually
+fires. Reuse this "two independent checks, different alert policy" shape for
+any other service with a build/write phase and a separate serve/read phase.

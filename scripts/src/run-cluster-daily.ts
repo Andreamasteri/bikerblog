@@ -1035,6 +1035,58 @@ let diaryPostCreatedThisRun = false;
   }
 }
 
+// ── Step 9.5: Nadir search reachability (Task #147) ──────────────────────────
+// Complementa lo step 7.5 (reindex): quello prova che l'indicizzazione va a
+// buon fine, questo prova che /search — l'endpoint DAVVERO usato da
+// `search_manual` durante le conversazioni con Horus/Bowie — risponde ancora.
+// Se Nadir muore dopo un reindex riuscito (o non ha mai risposto a /search
+// pur avendo NADIR_URL/NADIR_GATE_TOKEN configurati), gli agenti perdono la
+// ricerca semantica senza che nessun operatore se ne accorga: questo step
+// chiude quel buco instradando un fallimento verso lo stesso alert usato per
+// Horus/Bowie. Silenzioso se Nadir non è configurato; silenzioso in caso di
+// successo.
+
+{
+  const stepStart = Date.now();
+  console.log("[cluster-daily] step 9.5: raggiungibilità ricerca semantica Nadir");
+
+  const { checkNadirSearch } = await import("./nadir-search-smoke.js");
+  const nadirSearch = await checkNadirSearch();
+
+  if (nadirSearch.status === "skipped") {
+    console.log(`[cluster-daily] step 9.5: SKIP — ${nadirSearch.detail}`);
+    report.addStep({
+      step: 9.5,
+      name: "Nadir search reachability check",
+      status: "skipped",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [],
+    });
+  } else if (nadirSearch.status === "warn") {
+    criticalWarnings.push(`step 9.5 (Nadir search reachability): ${nadirSearch.detail}`);
+    console.warn(`[cluster-daily] ⚠ step 9.5: ${nadirSearch.detail}`);
+    report.addStep({
+      step: 9.5,
+      name: "Nadir search reachability check",
+      status: "warn",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [nadirSearch.detail],
+    });
+  } else {
+    console.log(`[cluster-daily] step 9.5: ${nadirSearch.detail}`);
+    report.addStep({
+      step: 9.5,
+      name: "Nadir search reachability check",
+      status: "ok",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [],
+    });
+  }
+}
+
 // ── Step 10: aggiorna il changelog di sincronizzazione BikerLink ─────────────
 // Rigenera la sezione automatica di docs/bikerlink-sync-changelog.md dai commit
 // git successivi al backfill iniziale. Deterministico e idempotente: se non ci

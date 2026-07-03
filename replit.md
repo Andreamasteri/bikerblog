@@ -64,8 +64,9 @@ Il comando esegue gli step in sequenza (tutti idempotenti):
 5. Traduce i post senza contenuto EN in inglese (salta i già tradotti) — richiede Horus (vedi sotto)
 6. Genera audio TTS (edge-tts) per i post nuovi o riscritti senza `audio_url` — richiede `SESSION_SECRET` (per il token interno) e `edge-tts` installato (installato automaticamente via `postinstall` in `scripts/package.json`)
 7. Reindicizza Nadir (step 7.5): chiama `POST /reindex` via `NADIR_URL` + `NADIR_GATE_TOKEN` così l'indice di ricerca semantica resta allineato ai contenuti pubblicati senza trigger manuale. Silenzioso in caso di successo, saltato se Nadir non è configurato, warn non fatale se irraggiungibile (non blocca la pipeline, non genera alert)
+8. Verifica raggiungibilità ricerca Nadir (step 9.5): colpisce DAVVERO `POST /search` su Nadir (stesso endpoint usato da `search_manual`) con una query di prova, dopo il check SSE di Horus/Bowie. A differenza dello step 7.5 (che tollera un'indicizzazione fallita senza alert), un fallimento qui finisce tra i `criticalWarnings` e attiva `sendPipelineAlert` — se Nadir muore dopo un reindex riuscito, gli agenti perdono la ricerca semantica senza segnale altrimenti. Silenzioso se Nadir non è configurato, silenzioso in caso di successo. Logica in `scripts/src/nadir-search-smoke.ts` (`checkNadirSearch`).
 
-8. Aggiorna `docs/bikerlink-sync-changelog.md` (step 10): rigenera la sezione automatica dai commit git e dai task completati (vedi `changelog:sync` sopra) — serve a BikerLink (progetto gemello) per allinearsi
+9. Aggiorna `docs/bikerlink-sync-changelog.md` (step 10): rigenera la sezione automatica dai commit git e dai task completati (vedi `changelog:sync` sopra) — serve a BikerLink (progetto gemello) per allinearsi
 
 Env opzionali per lo step 1: `INBOX_URL`, `INBOX_TOKEN`, `INBOX_SOURCE` (default: `bikerlink`).
 
