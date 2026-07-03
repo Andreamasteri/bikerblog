@@ -5,7 +5,7 @@ import { test } from "node:test";
 import express from "express";
 import pinoHttp from "pino-http";
 import type { HorusMessage, HorusRawResult, HorusChatOptions } from "@workspace/horus";
-import { createBowieConversationHandler, type BowieConversationDeps } from "./horus.js";
+import { createBowieConversationHandler, type BowieConversationDeps, type ConvoAgentConfig } from "./horus.js";
 
 /**
  * Regressione per il flusso "retry dopo dropout" di /horus/bowie-conversation
@@ -474,6 +474,160 @@ test("bowie-conversation resuming near MAX_ALLOWED_TURNS extends the bound by ex
     assert.deepEqual(turnEnds, [{ agent: "bowie", content: "final-bowie-turn" }]);
 
     assert.ok(events.some((e) => e.event === "done"), "conversation must still reach done after hitting the bound");
+  } finally {
+    await server.close();
+  }
+});
+
+/**
+ * Regressione per Task #142 (generalizzazione a N interlocutori): il
+ * turn-taking non deve più essere vincolato a esattamente due agenti. Con un
+ * registry di TRE agenti l'alternanza deve girare per parità modulo N
+ * (agent0 → agent1 → agent2 → agent0 …), l'apertura deve valere solo per il
+ * primo turno e la ripresa da `resumeTranscript` deve continuare dal punto
+ * giusto della rotazione a tre. Se un refactor futuro reintroducesse un
+ * `i % 2` nascosto, questo test lo intercetterebbe.
+ */
+function makeThreeAgentRegistry(chatRaws: {
+  agent0: BowieConversationDeps["horusChatRaw"];
+  agent1: BowieConversationDeps["horusChatRaw"];
+  agent2: BowieConversationDeps["horusChatRaw"];
+}): (deps: BowieConversationDeps) => ConvoAgentConfig[] {
+  return () => [
+    {
+      id: "agent0",
+      displayName: "Agent0",
+      chatRaw: chatRaws.agent0,
+      chatOptions: {},
+      toolsNote: "",
+      isConfigured: () => true,
+      notConfiguredMessage: "agent0 not configured",
+    },
+    {
+      id: "agent1",
+      displayName: "Agent1",
+      chatRaw: chatRaws.agent1,
+      chatOptions: {},
+      toolsNote: "",
+      isConfigured: () => true,
+      notConfiguredMessage: "agent1 not configured",
+    },
+    {
+      id: "agent2",
+      displayName: "Agent2",
+      chatRaw: chatRaws.agent2,
+      chatOptions: {},
+      toolsNote: "",
+      isConfigured: () => true,
+      notConfiguredMessage: "agent2 not configured",
+    },
+  ];
+}
+
+test("conversation turn-taking generalizes to three agents (rotates by parity mod N)", async () => {
+  const deps = makeDeps({
+    buildAgentRegistry: makeThreeAgentRegistry({
+      agent0: makeScriptedChatRaw([{ content: "a0-1" }, { content: "a0-2" }]),
+      agent1: makeScriptedChatRaw([{ content: "a1-1" }, { content: "a1-2" }]),
+      agent2: makeScriptedChatRaw([{ content: "a2-1" }, { content: "a2-2" }]),
+    }),
+  });
+  const server = await startTestServer(deps);
+
+  try {
+    const events = await postConversation(server.url, { topic: "moto elettriche", maxTurns: 6 });
+
+    const turnStarts = events.filter((e) => e.event === "turn_start").map((e) => (e.data as { agent: string }).agent);
+    assert.deepEqual(
+      turnStarts,
+      ["agent0", "agent1", "agent2", "agent0", "agent1", "agent2"],
+      "three-agent conversation must rotate agent0 → agent1 → agent2 → agent0 …, not alternate between two"
+    );
+
+    const turnEnds = events.filter((e) => e.event === "turn_end").map((e) => e.data);
+    assert.deepEqual(turnEnds, [
+      { agent: "agent0", content: "a0-1" },
+      { agent: "agent1", content: "a1-1" },
+      { agent: "agent2", content: "a2-1" },
+      { agent: "agent0", content: "a0-2" },
+      { agent: "agent1", content: "a1-2" },
+      { agent: "agent2", content: "a2-2" },
+    ]);
+
+    assert.ok(events.some((e) => e.event === "done"), "three-agent conversation should complete with done");
+  } finally {
+    await server.close();
+  }
+});
+
+test("three-agent conversation resumes rotation from resumeTranscript at the right agent", async () => {
+  // Quattro turni già completati: agent0, agent1, agent2, agent0. Il prossimo
+  // turno atteso è agent1 (index 4 → 4 % 3 = 1), poi agent2.
+  const resumeTranscript = [
+    { agent: "agent0", content: "t0" },
+    { agent: "agent1", content: "t1" },
+    { agent: "agent2", content: "t2" },
+    { agent: "agent0", content: "t3" },
+  ];
+
+  const deps = makeDeps({
+    buildAgentRegistry: makeThreeAgentRegistry({
+      agent0: makeScriptedChatRaw([{ content: "should-not-run" }]),
+      agent1: makeScriptedChatRaw([{ content: "a1-resumed" }]),
+      agent2: makeScriptedChatRaw([{ content: "a2-resumed" }]),
+    }),
+  });
+  const server = await startTestServer(deps);
+
+  try {
+    const events = await postConversation(server.url, {
+      topic: "moto elettriche",
+      maxTurns: 6,
+      resumeTranscript,
+    });
+
+    const turnStarts = events.filter((e) => e.event === "turn_start").map((e) => (e.data as { agent: string }).agent);
+    assert.deepEqual(
+      turnStarts,
+      ["agent1", "agent2"],
+      "resuming 4 turns into a three-agent rotation must continue at agent1, then agent2"
+    );
+
+    assert.ok(events.some((e) => e.event === "done"), "resumed three-agent conversation should complete with done");
+  } finally {
+    await server.close();
+  }
+});
+
+test("three-agent conversation rejects a resumeTranscript that breaks the mod-N rotation", async () => {
+  // Rotazione corrotta: agent0, agent0 (dovrebbe essere agent1 al secondo turno).
+  const malformed = [
+    { agent: "agent0", content: "t0" },
+    { agent: "agent0", content: "t1" },
+  ];
+
+  const deps = makeDeps({
+    buildAgentRegistry: makeThreeAgentRegistry({
+      agent0: makeScriptedChatRaw([{ content: "never" }]),
+      agent1: makeScriptedChatRaw([{ content: "never" }]),
+      agent2: makeScriptedChatRaw([{ content: "never" }]),
+    }),
+  });
+  const server = await startTestServer(deps);
+
+  try {
+    const response = await postConversationRaw(server.url, {
+      topic: "moto elettriche",
+      maxTurns: 6,
+      resumeTranscript: malformed,
+    });
+
+    assert.equal(response.statusCode, 400, `expected a 400 rejection, got ${response.statusCode}: ${response.body}`);
+    const parsed = JSON.parse(response.body) as { error?: string };
+    assert.ok(
+      typeof parsed.error === "string" && parsed.error.includes("agent0"),
+      "rejection should name the expected first agent of the rotation"
+    );
   } finally {
     await server.close();
   }

@@ -1,7 +1,12 @@
 import { pgTable, serial, text, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 export interface HorusConversationTurn {
-  agent: "horus" | "bowie";
+  // Identificativo dell'agente che ha prodotto il turno. Volutamente un
+  // `string` generico e non un'unione fissa "horus" | "bowie": la
+  // conversazione osservabile è generalizzata a N interlocutori, quindi
+  // aggiungere un terzo agente in futuro non deve richiedere una modifica di
+  // questo tipo persistito.
+  agent: string;
   content: string;
 }
 

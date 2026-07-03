@@ -321,42 +321,128 @@ router.post(
   })
 );
 
+/** Unisce una lista di nomi in italiano: ["A"] → "A"; ["A","B"] → "A e B";
+ * ["A","B","C"] → "A, B e C". Serve a generalizzare il prompt a N agenti
+ * mantenendo però un output identico al caso a due agenti. */
+function joinNamesIt(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0]!;
+  return `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]!}`;
+}
+
+function italianCountWord(n: number): string {
+  if (n === 2) return "due";
+  if (n === 3) return "tre";
+  return String(n);
+}
+
 /**
- * Costruisce il system prompt per la conversazione osservabile Horus↔Bowie.
- * `isOpening` distingue il caso del primo turno (nessuno dei due ha ancora
- * detto nulla) da quello di una risposta: prima del fix, il prompt diceva
- * sempre "rispondi a ciò che l'altro ha appena detto" anche al primo turno,
- * quando il transcript è ancora vuoto — questo induceva il modello ad
- * allucinare una battuta dell'altra IA mai realmente pronunciata, invece di
- * aprire la discussione sull'argomento proposto dall'utente.
+ * Costruisce il system prompt per la conversazione osservabile a N agenti
+ * (oggi Horus↔Bowie). `previousSpeakerName === null` distingue il caso del
+ * primo turno (nessun altro ha ancora detto nulla) da quello di una risposta:
+ * prima del fix, il prompt diceva sempre "rispondi a ciò che l'altro ha
+ * appena detto" anche al primo turno, quando il transcript è ancora vuoto —
+ * questo induceva il modello ad allucinare una battuta di un'altra IA mai
+ * realmente pronunciata, invece di aprire la discussione sull'argomento
+ * proposto dall'utente.
+ *
+ * Il testo è generalizzato per un numero arbitrario di interlocutori ma resta
+ * byte-identico al comportamento storico quando gli agenti sono esattamente
+ * due (un solo "altro" agente).
  */
-function buildConvoSystemPrompt(self: "horus" | "bowie", isOpening: boolean): HorusMessage {
-  const selfName = self === "horus" ? "Horus" : "Bowie";
-  const otherName = self === "horus" ? "Bowie" : "Horus";
+function buildConvoSystemPrompt(opts: {
+  selfName: string;
+  otherNames: string[];
+  previousSpeakerName: string | null;
+  toolsNote: string;
+}): HorusMessage {
+  const { selfName, otherNames, previousSpeakerName, toolsNote } = opts;
+  const totalAgents = otherNames.length + 1;
+  const otherList = joinNamesIt(otherNames);
+  const othersDescriptor =
+    otherNames.length <= 1
+      ? "un'altra IA installata sullo stesso ThinkCentre"
+      : "altre IA installate sullo stesso ThinkCentre";
+  // Con un solo "altro" agente usiamo il suo nome (output identico al caso a
+  // due agenti); con più agenti ripieghiamo su una formula collettiva.
+  const openingOthers = otherNames.length === 1 ? otherNames[0]! : "gli altri partecipanti";
   const intro =
-    `Stai partecipando a una conversazione osservabile tra due IA, tu (${selfName}) e ${otherName}, ` +
-    "un'altra IA installata sullo stesso ThinkCentre. Un utente umano ha proposto un argomento iniziale e vuole " +
+    `Stai partecipando a una conversazione osservabile tra ${italianCountWord(totalAgents)} IA, tu (${selfName}) e ${otherList}, ` +
+    `${othersDescriptor}. Un utente umano ha proposto un argomento iniziale e vuole ` +
     "guardarvi discuterne a turni.";
-  const body = isOpening
-    ? `Sei tu ad aprire la discussione: ${otherName} non ha ancora detto nulla. Presenta la tua opinione o ` +
-      "prospettiva sull'argomento proposto dall'utente, in modo naturale e conciso (pochi paragrafi al massimo), " +
-      `ponendo le basi per il confronto con ${otherName}. Non inventare né riassumere battute di ${otherName} che ` +
-      "non sono ancora avvenute."
-    : `Rispondi in modo naturale e conciso (pochi paragrafi al massimo) a ciò che ${otherName} ha appena detto, ` +
-      `portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello ` +
-      `che ha detto ${otherName}, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.`;
-  const toolsNote = self === "horus" ? " Non hai accesso a strumenti in questa modalità." : "";
+  const body =
+    previousSpeakerName === null
+      ? `Sei tu ad aprire la discussione: ${openingOthers} non ha ancora detto nulla. Presenta la tua opinione o ` +
+        "prospettiva sull'argomento proposto dall'utente, in modo naturale e conciso (pochi paragrafi al massimo), " +
+        `ponendo le basi per il confronto con ${openingOthers}. Non inventare né riassumere battute di ${openingOthers} che ` +
+        "non sono ancora avvenute."
+      : `Rispondi in modo naturale e conciso (pochi paragrafi al massimo) a ciò che ${previousSpeakerName} ha appena detto, ` +
+        `portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello ` +
+        `che ha detto ${previousSpeakerName}, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.`;
   return { role: "system", content: `${intro} ${body}${toolsNote}` };
 }
 
 const DEFAULT_MAX_TURNS = 8;
 const MAX_ALLOWED_TURNS = 20;
 
-type ConvoAgent = "horus" | "bowie";
+// L'identificativo di un agente conversazionale è un `string` generico, non
+// più un'unione fissa a due valori: la conversazione osservabile è
+// generalizzata a N interlocutori (vedi il registry più in basso).
+type ConvoAgent = string;
 
 interface ConvoTurn {
   agent: ConvoAgent;
   content: string;
+}
+
+/**
+ * Definizione statica di un agente conversazionale. Aggiungere un terzo
+ * interlocutore in futuro (es. "Quebracho") richiede solo di aggiungere una
+ * voce a questo registry — non un refactor della logica di turn-taking.
+ */
+export interface ConvoAgentConfig {
+  id: string;
+  displayName: string;
+  chatRaw: typeof horusChatRaw;
+  /** Opzioni passate a `chatRaw` per questo agente (es. Horus usa skipMemory). */
+  chatOptions: { skipMemory?: boolean };
+  /** Nota aggiunta in coda al system prompt (es. Horus: nessun tool in questa modalità). */
+  toolsNote: string;
+  isConfigured: () => boolean;
+  /** Messaggio mostrato quando questo agente non è configurato. */
+  notConfiguredMessage: string;
+}
+
+/**
+ * Costruisce il registry ordinato degli agenti della conversazione a partire
+ * dalle dipendenze iniettabili. L'ordine determina l'alternanza dei turni
+ * (turno `i` → `agents[i % agents.length]`), quindi Horus resta il primo a
+ * parlare (turno 0) come nel comportamento storico. Per aggiungere un terzo
+ * agente basta appendere qui una voce (e la relativa `chatRaw` in `deps`).
+ */
+function buildConvoAgentRegistry(deps: BowieConversationDeps): ConvoAgentConfig[] {
+  return [
+    {
+      id: "horus",
+      displayName: "Horus",
+      chatRaw: deps.horusChatRaw,
+      chatOptions: { skipMemory: true },
+      toolsNote: " Non hai accesso a strumenti in questa modalità.",
+      isConfigured: () => true,
+      notConfiguredMessage: "Horus non è configurato su questo ambiente.",
+    },
+    {
+      id: "bowie",
+      displayName: BOWIE_AGENT_NAME,
+      chatRaw: deps.bowieChatRaw,
+      chatOptions: {},
+      toolsNote: "",
+      isConfigured: deps.isBowieConfigured,
+      notConfiguredMessage:
+        `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. ` +
+        "Aggiungilo dalla scheda Secrets per abilitare la conversazione Horus↔Bowie.",
+    },
+  ];
 }
 
 function buildAgentMessages(
@@ -387,6 +473,13 @@ export interface BowieConversationDeps {
     transcript: ConvoTurn[],
     options: { status: "complete" | "interrupted"; conversationId?: number }
   ) => Promise<number>;
+  /**
+   * Override del registry degli agenti conversazionali. In produzione resta
+   * `buildConvoAgentRegistry` (Horus + Bowie); i test lo sovrascrivono per
+   * verificare che il turn-taking sia davvero generalizzato a N agenti senza
+   * modifiche alla logica dell'handler.
+   */
+  buildAgentRegistry?: (deps: BowieConversationDeps) => ConvoAgentConfig[];
 }
 
 const defaultBowieConversationDeps: BowieConversationDeps = {
@@ -418,34 +511,43 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
       return;
     }
 
+    // Registry ordinato degli agenti della conversazione. L'ordine definisce
+    // l'alternanza dei turni: turno `i` → `agents[i % agents.length]`. Con due
+    // agenti (Horus, Bowie) questo equivale esattamente all'alternanza storica
+    // che partiva da Horus.
+    const agents = (deps.buildAgentRegistry ?? buildConvoAgentRegistry)(deps);
+    const agentIds = new Set(agents.map((a) => a.id));
+
     // Se il client ci ripassa la trascrizione già ottenuta (dopo un errore o
     // uno stallo a metà conversazione), riprendiamo da lì invece di ripartire
     // da zero: l'utente non deve perdere i turni già completati per un
-    // singolo drop-out di uno dei due agenti.
+    // singolo drop-out di uno degli agenti.
     //
     // Il prossimo turno viene attribuito solo in base a `transcript.length %
-    // 2` (vedi sotto), quindi una trascrizione manomessa o corrotta che non
-    // alterni davvero horus/bowie a partire da horus farebbe silenziosamente
-    // "scivolare" l'attribuzione dei turni successivi. Validiamo la forma
-    // prima di fidarci della lunghezza: se non è una corretta alternanza
-    // horus→bowie→horus…, rifiutiamo la richiesta con 400 invece di
-    // proseguire su un presupposto corrotto.
+    // agents.length` (vedi sotto), quindi una trascrizione manomessa o
+    // corrotta che non rispetti davvero l'alternanza del registry a partire
+    // dal primo agente farebbe silenziosamente "scivolare" l'attribuzione dei
+    // turni successivi. Validiamo la forma prima di fidarci della lunghezza:
+    // se non è la corretta alternanza (agents[0]→agents[1]→…→agents[0]…),
+    // rifiutiamo la richiesta con 400 invece di proseguire su un presupposto
+    // corrotto.
     const rawResumeTranscript: ConvoTurn[] = Array.isArray(resumeTranscript)
       ? resumeTranscript.filter(
           (t): t is ConvoTurn =>
             typeof t === "object" &&
             t !== null &&
-            (t.agent === "horus" || t.agent === "bowie") &&
-            typeof t.content === "string"
+            typeof (t as ConvoTurn).agent === "string" &&
+            agentIds.has((t as ConvoTurn).agent) &&
+            typeof (t as ConvoTurn).content === "string"
         )
       : [];
 
     const isValidAlternation = (turns: ConvoTurn[]): boolean =>
-      turns.every((t, i) => t.agent === (i % 2 === 0 ? "horus" : "bowie"));
+      turns.every((t, i) => t.agent === agents[i % agents.length]!.id);
 
     if (Array.isArray(resumeTranscript) && resumeTranscript.length > 0 && !isValidAlternation(rawResumeTranscript)) {
       res.status(400).json({
-        error: "resumeTranscript is malformed: turns must strictly alternate starting with horus",
+        error: `resumeTranscript is malformed: turns must strictly alternate starting with ${agents[0]!.id}`,
       });
       return;
     }
@@ -460,15 +562,18 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
       )
     );
 
-    if (!deps.isBowieConfigured()) {
+    // Basta un solo agente non configurato per non poter tenere la
+    // conversazione: segnaliamo il primo che manca con il suo messaggio
+    // dedicato. Con Horus (sempre configurato) + Bowie questo equivale a
+    // controllare che Bowie sia configurato, come prima.
+    const unconfiguredAgent = agents.find((a) => !a.isConfigured());
+    if (unconfiguredAgent) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache, no-transform");
       res.setHeader("Connection", "keep-alive");
       res.flushHeaders?.();
       sendEvent(res, "error", {
-        message:
-          `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. ` +
-          "Aggiungilo dalla scheda Secrets per abilitare la conversazione Horus↔Bowie.",
+        message: unconfiguredAgent.notConfiguredMessage,
       });
       res.end();
       return;
@@ -489,10 +594,11 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
     const abortController = new AbortController();
     res.on("close", () => abortController.abort());
 
-    // L'agente del prossimo turno si alterna sempre partendo da Horus al
-    // turno 0, quindi se riprendiamo da una trascrizione esistente dobbiamo
-    // continuare l'alternanza da dove si era fermata, non ripartire da Horus.
-    let failingAgent: ConvoAgent | null = null;
+    // L'agente del prossimo turno si alterna secondo l'ordine del registry
+    // partendo dal primo (Horus) al turno 0, quindi se riprendiamo da una
+    // trascrizione esistente dobbiamo continuare l'alternanza da dove si era
+    // fermata, non ripartire dal primo agente.
+    let failingAgent: ConvoAgentConfig | null = null;
 
     // Se il client ci ripassa l'id di una conversazione già salvata come
     // "interrupted" (da un drop-out precedente), aggiorniamo quella riga
@@ -512,28 +618,39 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
       for (let i = transcript.length; i < totalTurns; i++) {
         if (abortController.signal.aborted) break;
 
-        const agent: ConvoAgent = i % 2 === 0 ? "horus" : "bowie";
-        failingAgent = agent;
+        const agentConfig = agents[i % agents.length]!;
+        const agent = agentConfig.id;
+        failingAgent = agentConfig;
         sendEvent(res, "turn_start", { agent });
 
+        // Nomi degli altri interlocutori e chi ha parlato per ultimo:
+        // servono al system prompt per l'apertura vs. la risposta. Con due
+        // agenti l'unico "altro" coincide sempre con chi ha appena parlato,
+        // quindi l'output resta identico al comportamento storico.
+        const otherNames = agents.filter((a) => a.id !== agent).map((a) => a.displayName);
+        const lastTurn = transcript[transcript.length - 1];
+        const previousSpeakerName =
+          lastTurn === undefined
+            ? null
+            : (agents.find((a) => a.id === lastTurn.agent)?.displayName ?? lastTurn.agent);
+
         const messages = buildAgentMessages(
-          buildConvoSystemPrompt(agent, transcript.length === 0),
+          buildConvoSystemPrompt({
+            selfName: agentConfig.displayName,
+            otherNames,
+            previousSpeakerName,
+            toolsNote: agentConfig.toolsNote,
+          }),
           topic,
           transcript,
           agent
         );
 
-        const { content } =
-          agent === "horus"
-            ? await deps.horusChatRaw(messages, {
-                skipMemory: true,
-                signal: abortController.signal,
-                onToken: (token) => sendEvent(res, "token", { agent, token }),
-              })
-            : await deps.bowieChatRaw(messages, {
-                signal: abortController.signal,
-                onToken: (token) => sendEvent(res, "token", { agent, token }),
-              });
+        const { content } = await agentConfig.chatRaw(messages, {
+          ...agentConfig.chatOptions,
+          signal: abortController.signal,
+          onToken: (token) => sendEvent(res, "token", { agent, token }),
+        });
 
         if (abortController.signal.aborted) break;
 
@@ -556,8 +673,8 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
       }
     } catch (err) {
       if (!abortController.signal.aborted) {
-        req.log.error({ err, agent: failingAgent }, "horus-bowie conversation failed");
-        const agentName = failingAgent === "bowie" ? BOWIE_AGENT_NAME : failingAgent === "horus" ? "Horus" : null;
+        req.log.error({ err, agent: failingAgent?.id ?? null }, "horus-bowie conversation failed");
+        const agentName = failingAgent?.displayName ?? null;
         const baseMessage =
           err instanceof Error ? err.message : "Errore imprevisto durante la conversazione Horus↔Bowie.";
 
@@ -586,7 +703,7 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
         // stessa riga se l'utente preme "Riprova" e la conversazione arriva
         // in fondo.
         sendEvent(res, "error", {
-          agent: failingAgent,
+          agent: failingAgent?.id ?? null,
           message: agentName ? `${agentName}: ${baseMessage}` : baseMessage,
           transcript,
           conversationId: savedConversationId ?? null,

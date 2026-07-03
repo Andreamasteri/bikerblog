@@ -115,6 +115,20 @@ corrispondono a un task portato a termine.
   indicizzare (manuale, conversazioni, commenti), protetto dallo stesso token
   interno già usato dalle altre automazioni.
 
+### 3 luglio 2026 · La conversazione tra IA ora può ospitare più di due voci
+
+- **La conversazione osservabile Horus↔Bowie è stata resa "generica".** Prima
+  il codice sapeva parlare solo di due agenti fissi (Horus e Bowie) e l'ordine
+  dei turni era scritto attorno a quel numero preciso. Ora c'è un semplice
+  elenco di partecipanti: per aggiungere in futuro un terzo interlocutore (per
+  esempio "Quebracho", che vivrà lato BikerLink) basterà aggiungere una riga a
+  quell'elenco, senza riscrivere la logica dei turni. È solo una
+  ristrutturazione interna: per Horus e Bowie tutto continua a funzionare
+  esattamente come prima (chi apre la discussione, come si alternano, come si
+  riprende dopo un'interruzione). Sono stati aggiunti anche test che simulano
+  una conversazione a tre voci per garantire che questa apertura funzioni
+  davvero.
+
 ---
 
 ## Aggiornamenti automatici
