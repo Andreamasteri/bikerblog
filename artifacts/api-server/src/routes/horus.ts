@@ -505,6 +505,13 @@ router.get("/horus/agents", (req, res) => {
       id: def.id,
       displayName: def.displayName,
       healthEndpoint: `api/${def.healthPath}`,
+      // Il client usa questo flag per decidere chi partecipa DAVVERO alla
+      // conversazione a turni (vedi `buildConvoAgentRegistry` sopra, che
+      // applica lo stesso filtro lato server): un agente non configurato
+      // (es. Quebracho senza QUEBRACHO_OLLAMA_MODEL) non deve comparire nel
+      // pannello "conversazione simultanea" né nei suoi testi, ma resta
+      // comunque elencato qui per la sua tab di chat diretta.
+      isConfigured: def.isConfigured(),
     }))
   );
 });
@@ -620,6 +627,12 @@ export interface ConvoAgentConfig {
  * (turno `i` → `agents[i % agents.length]`), quindi Horus resta il primo a
  * parlare (turno 0) come nel comportamento storico. Per aggiungere un terzo
  * agente basta appendere qui una voce (e la relativa `chatRaw` in `deps`).
+ *
+ * Include SOLO gli agenti effettivamente configurati: un agente presente in
+ * `AGENT_DEFINITIONS` ma non ancora configurato (es. Quebracho senza
+ * `QUEBRACHO_OLLAMA_MODEL`) non deve far fallire l'intera conversazione né
+ * bloccare Horus↔Bowie — semplicemente non partecipa finché non viene
+ * configurato, senza bisogno di alcuna modifica al codice.
  */
 function buildConvoAgentRegistry(deps: BowieConversationDeps): ConvoAgentConfig[] {
   // `chatRaw`/`isConfigured` restano iniettabili tramite `deps` (usati dai
@@ -645,7 +658,7 @@ function buildConvoAgentRegistry(deps: BowieConversationDeps): ConvoAgentConfig[
     toolsNote: def.conversationToolsNote,
     isConfigured: isConfiguredById[def.id] ?? def.isConfigured,
     notConfiguredMessage: def.conversationNotConfiguredMessage,
-  }));
+  })).filter((agent) => agent.isConfigured());
 }
 
 function buildAgentMessages(
@@ -723,6 +736,27 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
     // agenti (Horus, Bowie) questo equivale esattamente all'alternanza storica
     // che partiva da Horus.
     const agents = (deps.buildAgentRegistry ?? buildConvoAgentRegistry)(deps);
+
+    // Con il registry di default già filtrato agli agenti configurati (vedi
+    // `buildConvoAgentRegistry`), qui restano solo casi limite: es. Bowie
+    // non configurato lascia il solo Horus, con cui non si può tenere una
+    // conversazione a turni. Falliamo esplicitamente invece di andare avanti
+    // con un "dialogo" a un solo interlocutore.
+    if (agents.length < 2) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders?.();
+      sendEvent(res, "error", {
+        message:
+          agents.length === 1
+            ? `Serve almeno un secondo agente configurato oltre a ${agents[0]!.displayName} per avviare una conversazione. ${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL.`
+            : "Nessun agente è configurato su questo ambiente.",
+      });
+      res.end();
+      return;
+    }
+
     const agentIds = new Set(agents.map((a) => a.id));
 
     // Se il client ci ripassa la trascrizione già ottenuta (dopo un errore o

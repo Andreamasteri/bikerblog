@@ -22,6 +22,7 @@
 - [Multi-agent opening-turn prompt](horus-convo-opening-turn.md) — turn-taking prompts need a distinct "you're opening" variant or the first speaker hallucinates a reply to nothing.
 - [Horus↔Bowie turn attribution + resume](horus-convo-turn-attribution-retry.md) — index parity decides agent, transcript is the resume payload; keep this shape for any future multi-agent turn-taking surface.
 - [BikerBlog frontend testing setup](bikerblog-frontend-testing-setup.md) — vitest+RTL setup for artifacts/bikerblog, jsdom scrollTo polyfill, and SSE-mocking pattern for streaming chat components.
+- [Group conversation agent filtering](group-conversation-agent-filtering.md) — Horus/Bowie/Quebracho group chat filters to `isConfigured()` agents on both server and client; an unconfigured agent must not break the others' panel.
 - [Bowie real-model quality check](bowie-real-model-quality-check.md) — llama3.2:3b is coherent/on-topic and turn-taking works; the real risk is CPU latency (~90-120s/turn), not quality.
 - [Horus↔Bowie conversation duration UX](horus-convo-duration-ux.md) — fix pacing complaints with progress/ETA + turn-count tuning, not prompt/model changes; latency is the bottleneck.
 - [Agent-registry-driven health gate](horus-agent-registry-driven-ui.md) — health/chat routes + UI unreachable copy derive from one server-side agent list, not hand-copied endpoints; also: stale lib tsbuildinfo can cause false typecheck errors.

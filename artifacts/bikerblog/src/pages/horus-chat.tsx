@@ -97,6 +97,16 @@ function capitalize(s: string): string {
   return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
 }
 
+/** Unisce una lista di nomi in italiano: ["A"] → "A"; ["A","B"] → "A e B";
+ * ["A","B","C"] → "A, B e C". Specchio di `joinNamesIt` lato server (horus.ts),
+ * usato qui per generare i testi del pannello di conversazione a partire
+ * dagli agenti DAVVERO configurati invece di nomi scritti a mano. */
+function joinNamesIt(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0]!;
+  return `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]!}`;
+}
+
 function getAgentPresentation(agent: ConvoAgent): AgentPresentation {
   return (
     AGENT_PRESENTATIONS[agent] ?? {
@@ -287,12 +297,22 @@ export function HorusChat() {
     retry: retryAgentRegistry,
   } = useAgentRegistry(password, handleUnauthorized);
 
+  // Chi partecipa DAVVERO alla conversazione simultanea: un agente presente
+  // nel registry (per la sua tab di chat diretta) ma non configurato su
+  // questo ambiente — es. Quebracho senza QUEBRACHO_OLLAMA_MODEL — non deve
+  // bloccare né comparire nel pannello "Horus ↔ Bowie", esattamente come sul
+  // server (`buildConvoAgentRegistry` applica lo stesso filtro). Così il
+  // pannello resta utilizzabile con solo Horus+Bowie oggi e include
+  // automaticamente un terzo agente il giorno in cui verrà configurato,
+  // senza toccare questo file.
+  const convoParticipants = agentRegistry.filter((a) => a.isConfigured);
+
   // Ogni endpoint porta il `displayName` dell'agente (Task #161): senza
   // questo, `useAgentHealth` non saprebbe nominare quale agente specifico è
   // giù quando il fallimento è a livello di rete/HTTP (nessun corpo JSON da
   // cui ricavare il nome), e mostrerebbe un avviso generico indistinguibile
   // dagli altri anche con un solo agente su N effettivamente irraggiungibile.
-  const healthEndpoints = agentRegistry.map((a) => ({ endpoint: a.healthEndpoint, displayName: a.displayName }));
+  const healthEndpoints = convoParticipants.map((a) => ({ endpoint: a.healthEndpoint, displayName: a.displayName }));
 
   // Controllo di raggiungibilità di TUTTI gli agenti del registry eseguito
   // all'apertura della tab "Horus ↔ Bowie", prima che l'utente proponga un
@@ -331,6 +351,17 @@ export function HorusChat() {
   const horusModelLabel = modelLabelForAgent("horus") ?? "bikerlink:latest";
   const bowieModelLabel = modelLabelForAgent("bowie");
   const quebrachoModelLabel = modelLabelForAgent("quebracho");
+
+  // Nomi ed etichette (con modello, quando noto) di chi partecipa DAVVERO
+  // alla conversazione simultanea, usati per costruire i testi del pannello
+  // (header, pulsante, placeholder, stati vuoti) invece di scrivere a mano
+  // "Horus ↔ Bowie ↔ Quebracho": se Quebracho non è configurato, semplicemente
+  // non compare finché non lo diventa.
+  const convoParticipantNames = convoParticipants.map((a) => a.displayName);
+  const convoParticipantLabels = convoParticipants.map((a) => {
+    const model = a.id === "horus" ? horusModelLabel : modelLabelForAgent(a.id);
+    return model ? `${a.displayName} (${model})` : a.displayName;
+  });
 
   // Se il registry stesso non è caricabile (es. richiesta a `/horus/agents`
   // fallita), `useAgentHealth` resterebbe indefinitamente in "checking" (mai
@@ -703,9 +734,7 @@ export function HorusChat() {
                   : mode === "quebracho-chat"
                     ? `Chat diretta con Quebracho${quebrachoModelLabel ? ` (${quebrachoModelLabel})` : ""}`
                     : mode === "conversation"
-                      ? `Conversazione Horus (${horusModelLabel}) ↔ Bowie${
-                          bowieModelLabel ? ` (${bowieModelLabel})` : ""
-                        } ↔ Quebracho${quebrachoModelLabel ? ` (${quebrachoModelLabel})` : ""}`
+                      ? `Conversazione ${convoParticipantLabels.join(" ↔ ")}`
                       : "Cronologia conversazioni"}
             </p>
           </div>
@@ -788,7 +817,7 @@ export function HorusChat() {
           className="gap-2"
         >
           <Cpu className="w-4 h-4" />
-          Horus ↔ Bowie ↔ Quebracho
+          {convoParticipantNames.join(" ↔ ")}
         </Button>
       </div>
 
@@ -910,7 +939,7 @@ export function HorusChat() {
             <div className="p-6 space-y-6">
               {convoMessages.length === 0 && !isConvoRunning && (
                 <div className="text-center text-muted-foreground text-sm py-16">
-                  Proponi un argomento e guarda Horus, Bowie e Quebracho discuterne a turni.
+                  Proponi un argomento e guarda {joinNamesIt(convoParticipantNames)} discuterne a turni.
                 </div>
               )}
               {convoMessages.map((m) => {
@@ -992,7 +1021,7 @@ export function HorusChat() {
             <Input
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="Argomento della discussione tra Horus, Bowie e Quebracho..."
+              placeholder={`Argomento della discussione tra ${joinNamesIt(convoParticipantNames)}...`}
               disabled={isConvoRunning}
               className="flex-1"
             />
@@ -1073,7 +1102,7 @@ export function HorusChat() {
             )}
             {!isHistoryLoading && !historyError && historyItems.length === 0 && (
               <div className="text-center text-muted-foreground text-sm py-16">
-                Nessuna conversazione tra Horus, Bowie e Quebracho salvata finora.
+                Nessuna conversazione tra {joinNamesIt(convoParticipantNames)} salvata finora.
               </div>
             )}
             {!isHistoryLoading && !historyError && historyItems.length > 0 && filteredHistoryItems.length === 0 && (

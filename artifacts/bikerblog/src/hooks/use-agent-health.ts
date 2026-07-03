@@ -198,6 +198,13 @@ export interface AgentRegistryEntry {
   displayName: string;
   /** Percorso relativo (senza "/api") del suo endpoint di health check, es. "horus/health". */
   healthEndpoint: string;
+  /**
+   * Se falso, l'agente esiste nel registry (per la sua tab di chat diretta)
+   * ma non è configurato su questo ambiente — non deve partecipare al
+   * pannello "conversazione simultanea", che sul server applica lo stesso
+   * filtro (vedi `buildConvoAgentRegistry` in horus.ts).
+   */
+  isConfigured: boolean;
 }
 
 export interface AgentRegistryState {
