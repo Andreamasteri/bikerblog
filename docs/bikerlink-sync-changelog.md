@@ -128,16 +128,17 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 **Task completati:**
 
 - **Task #139** — Add automated coverage for corrupted saved-chat restart flow <!-- 19cc6fd -->
-  - _In parole semplici:_ Abbiamo migliorato il sistema di chat per evitare interruzioni durante le conversazioni salvate.
 - **Task #138** — Changelog di sincronizzazione BikerLink (backfill + auto-update con task completati) <!-- dc46e5d -->
-  - _In parole semplici:_ BikerLink ora sincronizza automaticamente i dati dei tuoi viaggi e aggiorna le informazioni in background.
+  - _In parole semplici:_ BikerLink ora sincronizza automaticamente i tuoi dati e aggiorna le attività concluse.
 - **Task #137** — Confirm closing the browser mid-discussion stops Horus/Bowie generation <!-- b12a9ba -->
-  - _In parole semplici:_ Chiudi il browser durante una discussione per fermare la generazione di Horus/Bowie.
+  - _In parole semplici:_ Abbiamo risolto il problema che impediva di chiudere il browser durante una discussione in corso tra Horus e Bowie.
 - **Task #136** — Surface corrupted resumeTranscript as one clear, non-looping error <!-- 5504788 -->
-  - _In parole semplici:_ Correzione del bug che causava il ripristino continuo della superficie
+  - _In parole semplici:_ Risolto il problema di ripetizione del testo nella trascrizione della superficie corrotta.
+- **Task #135** — Build "Nadir" standalone semantic-search service for Horus/Bowie <!-- 161851a -->
+  - _In parole semplici:_ Abbiamo creato un servizio di ricerca semantica in grado di funzionare in modo autonomo per Horus e Bowie
 
 **Altre modifiche:**
 
 - **13:37** · Add simple Italian translations to commit log entries <!-- 0d597b1 -->
-  - _In parole semplici:_ Aggiunte traduzioni semplici in italiano ai messaggi di commit
+  - _In parole semplici:_ Aggiunto supporto per le traduzioni in italiano nei messaggi di commit
 <!-- AUTO-CHANGELOG:END -->
