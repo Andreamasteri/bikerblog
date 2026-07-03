@@ -421,7 +421,15 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
     // uno stallo a metà conversazione), riprendiamo da lì invece di ripartire
     // da zero: l'utente non deve perdere i turni già completati per un
     // singolo drop-out di uno dei due agenti.
-    const transcript: ConvoTurn[] = Array.isArray(resumeTranscript)
+    //
+    // Il prossimo turno viene attribuito solo in base a `transcript.length %
+    // 2` (vedi sotto), quindi una trascrizione manomessa o corrotta che non
+    // alterni davvero horus/bowie a partire da horus farebbe silenziosamente
+    // "scivolare" l'attribuzione dei turni successivi. Validiamo la forma
+    // prima di fidarci della lunghezza: se non è una corretta alternanza
+    // horus→bowie→horus…, rifiutiamo la richiesta con 400 invece di
+    // proseguire su un presupposto corrotto.
+    const rawResumeTranscript: ConvoTurn[] = Array.isArray(resumeTranscript)
       ? resumeTranscript.filter(
           (t): t is ConvoTurn =>
             typeof t === "object" &&
@@ -430,6 +438,18 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
             typeof t.content === "string"
         )
       : [];
+
+    const isValidAlternation = (turns: ConvoTurn[]): boolean =>
+      turns.every((t, i) => t.agent === (i % 2 === 0 ? "horus" : "bowie"));
+
+    if (Array.isArray(resumeTranscript) && resumeTranscript.length > 0 && !isValidAlternation(rawResumeTranscript)) {
+      res.status(400).json({
+        error: "resumeTranscript is malformed: turns must strictly alternate starting with horus",
+      });
+      return;
+    }
+
+    const transcript: ConvoTurn[] = rawResumeTranscript;
 
     const totalTurns = Math.min(
       MAX_ALLOWED_TURNS,

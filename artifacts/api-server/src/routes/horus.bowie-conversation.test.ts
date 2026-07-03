@@ -129,6 +129,31 @@ async function postConversation(
   return events;
 }
 
+async function postConversationRaw(
+  url: string,
+  body: Record<string, unknown>
+): Promise<{ statusCode: number; body: string }> {
+  return await new Promise((resolve, reject) => {
+    const req = http.request(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Horus-Password": process.env["HORUS_CHAT_PASSWORD"]!,
+        },
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => (raw += chunk.toString("utf8")));
+        res.on("end", () => resolve({ statusCode: res.statusCode ?? 0, body: raw }));
+      }
+    );
+    req.on("error", reject);
+    req.end(JSON.stringify(body));
+  });
+}
+
 test("bowie-conversation attributes a mid-turn error to the agent that was speaking and includes the transcript so far", async () => {
   // Turno 0 (Horus) risponde normalmente, turno 1 (Bowie) esplode a metà.
   const deps = makeDeps({
@@ -202,6 +227,39 @@ test("bowie-conversation resumes turn alternation from resumeTranscript instead 
     ]);
 
     assert.ok(events.some((e) => e.event === "done"), "conversation should complete successfully after resuming");
+  } finally {
+    await server.close();
+  }
+});
+
+test("bowie-conversation rejects a resumeTranscript with a broken alternation instead of scrambling turn attribution", async () => {
+  // Trascrizione manomessa/corrotta: due turni "horus" di fila. Se il server
+  // si fidasse solo di `transcript.length % 2`, continuerebbe silenziosamente
+  // ad alternare da lì (bowie, poi horus...) su un presupposto già sbagliato.
+  const malformedResumeTranscript = [
+    { agent: "horus", content: "Prima battuta di Horus." },
+    { agent: "horus", content: "Seconda battuta, ma di nuovo Horus." },
+  ];
+
+  const deps = makeDeps({
+    horusChatRaw: makeScriptedChatRaw([{ content: "non dovrebbe mai essere chiamato" }]),
+    bowieChatRaw: makeScriptedChatRaw([{ content: "non dovrebbe mai essere chiamato" }]),
+  });
+  const server = await startTestServer(deps);
+
+  try {
+    const response = await postConversationRaw(server.url, {
+      topic: "moto elettriche",
+      maxTurns: 4,
+      resumeTranscript: malformedResumeTranscript,
+    });
+
+    assert.equal(response.statusCode, 400, `expected a 400 rejection, got ${response.statusCode}: ${response.body}`);
+    const parsed = JSON.parse(response.body) as { error?: string };
+    assert.ok(
+      typeof parsed.error === "string" && parsed.error.length > 0,
+      "response body should explain why the resume was rejected"
+    );
   } finally {
     await server.close();
   }
