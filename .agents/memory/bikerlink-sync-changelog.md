@@ -28,6 +28,26 @@ should parse commits (or a static JSON snapshot), not assume the project-tasks A
 reachable. Bowie/Nadir tasks are guaranteed to appear either way: with a `Task #NNN`
 tag they land in "Task completati", otherwise still in "Altre modifiche".
 
+## Simple-Italian rewording is additive + cached
+**Rule:** each auto entry keeps the original technical commit text and adds a
+separate "_In parole semplici:_" line in plain Italian (via `horusChat`). The
+Italian is never a replacement for the technical text — it is a sub-bullet under
+it. The rewordings are cached in `inbox/changelog-italian-cache.json` keyed by a
+stable key (`c:<shortHash>` for commit-backed entries, `external-#NNN` for
+external-only tasks); Horus is called only for keys missing from the cache.
+
+**Why:** the user explicitly asked to *add* simple Italian without deleting the
+English/technical commit text ("aggiungi ma non eliminare"). AI output is
+non-deterministic, which would break the byte-identical idempotency guarantee, so
+the cache pins each entry's Italian once generated. If Horus is unconfigured or
+fails, `rewordToSimpleItalian` returns null and the entry shows technical text
+only — the pipeline never blocks and no entry goes missing.
+
+**How to apply:** the pure render (`buildAutoSection`) takes an optional
+`italianByKey` map; the impure `main()` loads the cache, calls
+`ensureItalianForEntries` (fills only missing keys), saves the cache (skipped on
+`--dry-run`), then renders. Tests stay deterministic by passing an explicit map.
+
 ## Idempotency + testing
 Pure functions (`buildEntries`, `buildAutoSection`, `replaceAutoSection`, `humanize`,
 `extractTaskNumber`) are exported and `main()` is guarded by an `import.meta.url`

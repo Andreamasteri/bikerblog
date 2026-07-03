@@ -37,12 +37,20 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { horusChat, isHorusConfigured } from "@workspace/horus";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..", "..");
 const changelogPath = resolve(projectRoot, "docs", "bikerlink-sync-changelog.md");
 /** Optional task source (same ArchivedTask[] shape used by cluster-tasks). */
 const externalTasksPath = resolve(projectRoot, "inbox", "completed-tasks.json");
+/**
+ * Cache delle riformulazioni in italiano semplice, per chiave stabile (short
+ * hash del commit, oppure `external-#NNN` per i task esterni). Serve a mantenere
+ * l'output deterministico/idempotente: una volta generata la frase in italiano
+ * per un commit, le esecuzioni successive la riusano senza richiamare Horus.
+ */
+const italianCachePath = resolve(projectRoot, "inbox", "changelog-italian-cache.json");
 
 export const START_MARKER = "<!-- AUTO-CHANGELOG:START -->";
 export const END_MARKER = "<!-- AUTO-CHANGELOG:END -->";
@@ -145,6 +153,42 @@ export function humanize(subject: string): string {
   if (trailing) s = s.slice(0, trailing.index).trim();
   if (s.length > 0) s = s[0]!.toUpperCase() + s.slice(1);
   return s;
+}
+
+/** Stable cache key for a completed-task entry (commit hash, or external ref). */
+export function keyForTask(t: CompletedTask): string {
+  return t.shortHash ? `c:${t.shortHash}` : `external-#${t.taskNumber}`;
+}
+
+/** Stable cache key for a non-task ("other") commit entry. */
+export function keyForOther(c: Commit): string {
+  return `c:${c.shortHash}`;
+}
+
+/**
+ * Riscrive un testo tecnico (spesso in inglese) in una frase breve in italiano
+ * semplice, senza gergo non spiegato. Restituisce null se Horus non è
+ * configurato o se la chiamata fallisce — in quel caso la voce mostra solo il
+ * testo tecnico originale, senza bloccare la pipeline.
+ */
+export async function rewordToSimpleItalian(text: string): Promise<string | null> {
+  if (!isHorusConfigured()) return null;
+  const prompt = `Riscrivi questa voce di changelog tecnico in UNA frase breve in italiano semplice, comprensibile a chi non è programmatore. Non usare gergo tecnico senza spiegarlo. Non aggiungere dettagli non presenti. Rispondi SOLO con la frase, senza virgolette, senza prefissi, senza spiegazioni.
+
+Testo: ${text}`;
+  try {
+    const raw = await horusChat([{ role: "user", content: prompt }], { maxTokens: 256 });
+    const line = raw
+      .replace(/^```(?:\w+)?\s*\n?/i, "")
+      .replace(/\n?```\s*$/, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)[0];
+    if (!line) return null;
+    return line.replace(/^["'«»]+|["'«»]+$/g, "").trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 const ITALIAN_MONTHS = [
@@ -264,7 +308,26 @@ export function buildEntries(
   return { tasks, others };
 }
 
-export function buildAutoSection(commits: Commit[], externalTasks: CompletedTask[]): string {
+/**
+ * Riga in italiano semplice da mostrare sotto una voce, se disponibile in
+ * cache. Torna stringa vuota se non c'è (la voce resta col solo testo tecnico).
+ */
+function italianSubLine(key: string, italianByKey: Map<string, string>): string {
+  const it = italianByKey.get(key);
+  return it ? `\n  - _In parole semplici:_ ${it}` : "";
+}
+
+/**
+ * @param italianByKey - mappa opzionale chiave→frase in italiano semplice
+ *   (vedi keyForTask/keyForOther). Se una chiave non è presente, la voce mostra
+ *   solo il testo tecnico originale. Con mappa vuota il comportamento è identico
+ *   a prima: solo testo tecnico.
+ */
+export function buildAutoSection(
+  commits: Commit[],
+  externalTasks: CompletedTask[],
+  italianByKey: Map<string, string> = new Map()
+): string {
   const { tasks, others } = buildEntries(commits, externalTasks);
   if (tasks.length === 0 && others.length === 0) return EMPTY_AUTO_SECTION;
 
@@ -283,7 +346,7 @@ export function buildAutoSection(commits: Commit[], externalTasks: CompletedTask
     if (dayTasks.length > 0) {
       const lines = dayTasks.map((t) => {
         const marker = t.shortHash ? ` <!-- ${t.shortHash} -->` : " <!-- external -->";
-        return `- **Task #${t.taskNumber}** — ${t.title}${marker}`;
+        return `- **Task #${t.taskNumber}** — ${t.title}${marker}${italianSubLine(keyForTask(t), italianByKey)}`;
       });
       parts.push(`**Task completati:**\n\n${lines.join("\n")}`);
     }
@@ -291,7 +354,7 @@ export function buildAutoSection(commits: Commit[], externalTasks: CompletedTask
     if (dayOthers.length > 0) {
       const lines = dayOthers.map((c) => {
         const time = c.isoDate.slice(11, 16);
-        return `- **${time}** · ${humanize(c.subject)} <!-- ${c.shortHash} -->`;
+        return `- **${time}** · ${humanize(c.subject)} <!-- ${c.shortHash} -->${italianSubLine(keyForOther(c), italianByKey)}`;
       });
       parts.push(`**Altre modifiche:**\n\n${lines.join("\n")}`);
     }
@@ -299,6 +362,65 @@ export function buildAutoSection(commits: Commit[], externalTasks: CompletedTask
     blocks.push(parts.join("\n\n"));
   }
   return blocks.join("\n\n");
+}
+
+/** Carica la cache italiano→frase da disco. File mancante/invalido → mappa vuota. */
+export function loadItalianCache(path: string): Map<string, string> {
+  if (!existsSync(path)) return new Map();
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const out = new Map<string, string>();
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === "string" && v.trim()) out.set(k, v);
+      }
+      return out;
+    }
+  } catch {
+    /* ignora: cache corrotta → si rigenera */
+  }
+  return new Map();
+}
+
+/** Salva la cache su disco in forma stabile (chiavi ordinate) per idempotenza. */
+export function saveItalianCache(path: string, cache: Map<string, string>): void {
+  const obj: Record<string, string> = {};
+  for (const k of Array.from(cache.keys()).sort()) obj[k] = cache.get(k)!;
+  writeFileSync(path, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
+}
+
+/**
+ * Garantisce che ogni voce abbia una frase in italiano semplice in cache,
+ * generandola con Horus solo per le chiavi mancanti (le altre restano
+ * invariate → idempotenza). Se Horus non è configurato/non risponde, le voci
+ * senza cache restano col solo testo tecnico. Ritorna true se la cache è
+ * cambiata (va riscritta su disco).
+ */
+export async function ensureItalianForEntries(
+  tasks: CompletedTask[],
+  others: Commit[],
+  cache: Map<string, string>
+): Promise<boolean> {
+  let changed = false;
+  for (const t of tasks) {
+    const key = keyForTask(t);
+    if (cache.has(key)) continue;
+    const it = await rewordToSimpleItalian(t.title);
+    if (it) {
+      cache.set(key, it);
+      changed = true;
+    }
+  }
+  for (const c of others) {
+    const key = keyForOther(c);
+    if (cache.has(key)) continue;
+    const it = await rewordToSimpleItalian(humanize(c.subject));
+    if (it) {
+      cache.set(key, it);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 /** Replaces the content between the two markers. Throws on missing markers. */
@@ -313,7 +435,7 @@ export function replaceAutoSection(original: string, autoSection: string): strin
   return `${before}\n${autoSection}\n${after}`;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const dryRun = process.argv.includes("--dry-run");
 
   if (!existsSync(changelogPath)) {
@@ -326,7 +448,22 @@ function main(): void {
   const original = readFileSync(changelogPath, "utf8");
   const commits = collectCommits();
   const externalTasks = loadExternalCompletedTasks(externalTasksPath);
-  const autoSection = buildAutoSection(commits, externalTasks);
+  const { tasks, others } = buildEntries(commits, externalTasks);
+
+  // Riformulazione in italiano semplice: aggiunta ACCANTO al testo tecnico, mai
+  // al suo posto. Deterministica grazie alla cache: si chiama Horus solo per le
+  // voci nuove. Se Horus non è configurato/non risponde, si mostra solo il testo
+  // tecnico (nessun blocco, nessuna voce mancante).
+  // In --dry-run non si chiama Horus: si usano solo le frasi già in cache, così
+  // l'anteprima è deterministica e a costo zero. Le voci nuove mostrano solo il
+  // testo tecnico finché una run reale non popola la cache.
+  const italianCache = loadItalianCache(italianCachePath);
+  if (!dryRun) {
+    const cacheChanged = await ensureItalianForEntries(tasks, others, italianCache);
+    if (cacheChanged) saveItalianCache(italianCachePath, italianCache);
+  }
+
+  const autoSection = buildAutoSection(commits, externalTasks, italianCache);
 
   let updated: string;
   try {
@@ -337,8 +474,6 @@ function main(): void {
     );
     process.exit(1);
   }
-
-  const { tasks } = buildEntries(commits, externalTasks);
 
   if (updated === original) {
     console.log(
@@ -365,5 +500,8 @@ function main(): void {
 // Esegui main() solo quando il file è lanciato direttamente (non quando è
 // importato da un test).
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
+  main().catch((err) => {
+    console.error(`[changelog:sync] errore inatteso: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  });
 }
