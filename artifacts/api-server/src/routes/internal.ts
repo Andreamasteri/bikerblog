@@ -9,9 +9,9 @@ import {
   postsTable,
   commentsTable,
   horusBowieConversationsTable,
-  type HorusConversationTurn,
 } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { createNadirExportHandler } from "./nadir-export.js";
 
 const router: IRouter = Router();
 
@@ -268,85 +268,44 @@ const NADIR_EXPORT_DEFAULT_CONVERSATIONS = 50;
 const NADIR_EXPORT_MAX_COMMENTS = 2000;
 const NADIR_EXPORT_DEFAULT_COMMENTS = 500;
 
-function clampLimit(raw: unknown, fallback: number, max: number): number {
-  const n = typeof raw === "string" ? Number.parseInt(raw, 10) : Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return fallback;
-  return Math.min(Math.floor(n), max);
-}
-
-router.get("/_internal/nadir-export", async (req, res): Promise<void> => {
-  const auth = req.headers.authorization;
-  if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
-    res.status(401).json({ error: "unauthorized" });
-    return;
-  }
-
-  const conversationLimit = clampLimit(
-    req.query["conversations"],
-    NADIR_EXPORT_DEFAULT_CONVERSATIONS,
-    NADIR_EXPORT_MAX_CONVERSATIONS,
-  );
-  const commentLimit = clampLimit(
-    req.query["comments"],
-    NADIR_EXPORT_DEFAULT_COMMENTS,
-    NADIR_EXPORT_MAX_COMMENTS,
-  );
-
-  try {
-    const manual = existsSync(NADIR_MANUAL_PATH)
-      ? readFileSync(NADIR_MANUAL_PATH, "utf-8")
-      : "";
-
-    const conversationRows = await db
-      .select({
-        id: horusBowieConversationsTable.id,
-        topic: horusBowieConversationsTable.topic,
-        transcript: horusBowieConversationsTable.transcript,
-        status: horusBowieConversationsTable.status,
-        createdAt: horusBowieConversationsTable.createdAt,
-      })
-      .from(horusBowieConversationsTable)
-      .orderBy(desc(horusBowieConversationsTable.createdAt))
-      .limit(conversationLimit);
-
-    const conversations = conversationRows.map((row) => ({
-      id: row.id,
-      topic: row.topic,
-      status: row.status,
-      createdAt: row.createdAt,
-      turns: (row.transcript as HorusConversationTurn[]).map((t) => ({
-        agent: t.agent,
-        content: t.content,
-      })),
-    }));
-
-    const commentRows = await db
-      .select({
-        id: commentsTable.id,
-        authorName: commentsTable.authorName,
-        body: commentsTable.body,
-        createdAt: commentsTable.createdAt,
-        likeCount: commentsTable.likeCount,
-        postSlug: postsTable.slug,
-        postTitle: postsTable.title,
-      })
-      .from(commentsTable)
-      .leftJoin(postsTable, eq(commentsTable.postId, postsTable.id))
-      .orderBy(desc(commentsTable.createdAt))
-      .limit(commentLimit);
-
-    res.json({
-      generatedAt: new Date().toISOString(),
-      manual,
-      conversations,
-      comments: commentRows,
-    });
-  } catch (err) {
-    req.log.error({ err }, "nadir-export failed");
-    res
-      .status(500)
-      .json({ error: err instanceof Error ? err.message : String(err) });
-  }
-});
+router.get(
+  "/_internal/nadir-export",
+  createNadirExportHandler({
+    getToken: () => INBOX_TOKEN,
+    readManual: () =>
+      existsSync(NADIR_MANUAL_PATH) ? readFileSync(NADIR_MANUAL_PATH, "utf-8") : "",
+    fetchConversations: (limit) =>
+      db
+        .select({
+          id: horusBowieConversationsTable.id,
+          topic: horusBowieConversationsTable.topic,
+          transcript: horusBowieConversationsTable.transcript,
+          status: horusBowieConversationsTable.status,
+          createdAt: horusBowieConversationsTable.createdAt,
+        })
+        .from(horusBowieConversationsTable)
+        .orderBy(desc(horusBowieConversationsTable.createdAt))
+        .limit(limit),
+    fetchComments: (limit) =>
+      db
+        .select({
+          id: commentsTable.id,
+          authorName: commentsTable.authorName,
+          body: commentsTable.body,
+          createdAt: commentsTable.createdAt,
+          likeCount: commentsTable.likeCount,
+          postSlug: postsTable.slug,
+          postTitle: postsTable.title,
+        })
+        .from(commentsTable)
+        .leftJoin(postsTable, eq(commentsTable.postId, postsTable.id))
+        .orderBy(desc(commentsTable.createdAt))
+        .limit(limit),
+    defaultConversations: NADIR_EXPORT_DEFAULT_CONVERSATIONS,
+    maxConversations: NADIR_EXPORT_MAX_CONVERSATIONS,
+    defaultComments: NADIR_EXPORT_DEFAULT_COMMENTS,
+    maxComments: NADIR_EXPORT_MAX_COMMENTS,
+  }),
+);
 
 export default router;
