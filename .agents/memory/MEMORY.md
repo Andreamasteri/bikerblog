@@ -6,6 +6,7 @@
 - [Bounded history tables](bounded-history-tables.md) — pattern for "save history without bloating the DB": jsonb transcript column + delete-oldest-beyond-N after each insert, sized column via jsonb_array_length instead of fetching full rows for list views.
 - [Pipeline failure alerts](pipeline-failure-alerts.md) — notify module fans out to all configured channels, never throws; every hard-failure path must reach it.
 - [Horus abort/cancel pattern](horus-abort-cancel.md) — how mid-run cancellation is wired across web SSE, CLI Ctrl+C, and the shared tool executor; reuse this shape for any new Horus surface that adds tool calls.
+- [BikerLink sync changelog](bikerlink-sync-changelog.md) — auto changelog derives task completions from git commits (Task #NNN), not the project-task API, which isn't reachable from the cron script.
 - [Content audit / draft status](content-audit-draft-status.md) — posts table has a `status` column ("published"/"draft"); every public-facing post query must filter on it, not just the write path that sets it.
 - [SSE abort regression test](sse-abort-regression-test.md) — testing req vs res "close" timing needs a real http server, not mocks; reusable pattern for any new SSE endpoint.
 - [Drizzle pg error code](drizzle-pg-error-code.md) — Drizzle wraps raw pg errors; unique-violation code lives at `err.cause.code`, not `err.code` — check both when mapping 23505 to a status.

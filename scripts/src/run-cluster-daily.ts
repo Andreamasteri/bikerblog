@@ -997,6 +997,37 @@ let diaryPostCreatedThisRun = false;
   }
 }
 
+// ── Step 10: aggiorna il changelog di sincronizzazione BikerLink ─────────────
+// Rigenera la sezione automatica di docs/bikerlink-sync-changelog.md dai commit
+// git successivi al backfill iniziale. Deterministico e idempotente: se non ci
+// sono commit nuovi, il file resta invariato. Non blocca mai la pipeline.
+
+{
+  const stepStart = Date.now();
+  console.log("[cluster-daily] step 10: aggiornamento changelog sincronizzazione BikerLink");
+
+  const changelogResult = spawnSync("tsx", ["src/update-sync-changelog.ts"], {
+    cwd: scriptsCwd,
+    stdio: "inherit",
+  });
+
+  const warnings: string[] = [];
+  if (changelogResult.status !== 0) {
+    warnings.push(`update-sync-changelog exited with code ${changelogResult.status}`);
+    console.warn(
+      "[cluster-daily] ⚠ update-sync-changelog fallito — il changelog non è stato aggiornato, il resto della pipeline non è compromesso"
+    );
+  }
+  report.addStep({
+    step: 10,
+    name: "BikerLink sync changelog update",
+    status: changelogResult.status === 0 ? "ok" : "warn",
+    duration_ms: Date.now() - stepStart,
+    errors: [],
+    warnings,
+  });
+}
+
 // ── Scrivi il report ─────────────────────────────────────────────────────────
 
 const reportData = report.write();

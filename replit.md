@@ -14,6 +14,8 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/scripts run fetch:archived-tasks -- --url <url> --token <tok>` — stessa importazione ma da endpoint live BikerLink
 - `pnpm --filter @workspace/scripts run cluster:tasks -- --state MERGED --by day` — raggruppa i task per giornata → `inbox/clusters-merged-by-day.md` (candidati post)
 - `pnpm --filter @workspace/scripts run cluster:daily` — cron entry point completo in 8 step: (1) aggiorna inbox chat se INBOX_URL è impostato, (2) genera cluster, (3) pubblica post cluster nel DB, (3.5) auto-fetch attività BikerLink da DB live (OTA + restart → diary-notes automatiche), (4) genera il post diaristico del giorno corrente (idempotente), (5) traduce i post senza EN in inglese (idempotente), (6) genera audio TTS per i post senza audio, (7) self-check produzione (verifica + ripara automaticamente dev→prod), (9) connettività Horus/Bowie sul tunnel Cloudflare reale contro PROD_URL (vedi sotto)
+- `pnpm --filter @workspace/scripts run changelog:sync` — rigenera la sezione automatica di `docs/bikerlink-sync-changelog.md` da due sorgenti: (a) i commit git successivi al backfill iniziale e (b) i **task completati** — rilevati dai commit "Task #NNN" (deduplicati per numero di task, vince il commit più recente) e, se presente, da una sorgente task esterna opzionale `inbox/completed-tasks.json` (stesso schema `ArchivedTask[]` degli altri script). Ogni giorno mostra due sotto-elenchi: "Task completati" e "Altre modifiche". I task Bowie/Nadir compaiono sempre: se il commit ha un tag "Task #NNN" finiscono in "Task completati", altrimenti in "Altre modifiche". Deterministico e idempotente. Flag: `--dry-run`. Eseguito automaticamente dallo step 10 della pipeline notturna. Serve a tenere BikerLink (progetto gemello) allineato su cosa è cambiato qui.
+- `pnpm --filter @workspace/scripts run test` — regression test (fixture-based, `node --test`) per `changelog:sync`: verifica estrazione dei task ref, dedup dei task su più commit, fold-in della sorgente esterna, raggruppamento per giorno e idempotenza (vedi `scripts/src/update-sync-changelog.test.ts`).
 - `pnpm --filter @workspace/scripts run pipeline:status` — **eseguire all'inizio di ogni sessione** per leggere il report dell'ultima run notturna (`inbox/pipeline-last-run.json`). Mostra step eseguiti, post pubblicati, traduzioni, audio generati, errori e warning. Exit code != 0 se la run è fallita.
 - `pnpm --filter @workspace/scripts run pipeline:notify-test` — invia un alert di prova per verificare la configurazione dei canali di notifica (vedi "Notifica di fallimento pipeline" sotto).
 - `pnpm --filter @workspace/scripts run self-check` — verifica che ogni post pubblicato negli ultimi 7 giorni sia presente in produzione con `body_en`, `audio_url` e contenuto aggiornato (rileva stale tramite excerpt diff). Se rileva gap, fa push automatico via `/_internal/seed-posts` usando `SEED_TOKEN`. Env opzionali: `PROD_URL` (default `https://bikerlink-blog.replit.app`), `SELF_CHECK_DAYS` (default 7).
@@ -62,6 +64,8 @@ Il comando esegue 6 step in sequenza (tutti idempotenti):
 5. Traduce i post senza contenuto EN in inglese (salta i già tradotti) — richiede Horus (vedi sotto)
 6. Genera audio TTS (edge-tts) per i post nuovi o riscritti senza `audio_url` — richiede `SESSION_SECRET` (per il token interno) e `edge-tts` installato (installato automaticamente via `postinstall` in `scripts/package.json`)
 
+7. Aggiorna `docs/bikerlink-sync-changelog.md` (step 10): rigenera la sezione automatica dai commit git e dai task completati (vedi `changelog:sync` sopra) — serve a BikerLink (progetto gemello) per allinearsi
+
 Env opzionali per lo step 1: `INBOX_URL`, `INBOX_TOKEN`, `INBOX_SOURCE` (default: `bikerlink`).
 
 ## Stack
@@ -79,6 +83,7 @@ Env opzionali per lo step 1: `INBOX_URL`, `INBOX_TOKEN`, `INBOX_SOURCE` (default
 - API contract: `lib/api-spec/openapi.yaml` (regenerate with `pnpm --filter @workspace/api-spec run codegen`)
 - API routes: `artifacts/api-server/src/routes/{posts,comments,meta,podcast,internal}.ts`
 - Frontend: `artifacts/bikerblog/src/`
+- **Changelog di sincronizzazione BikerLink**: `docs/bikerlink-sync-changelog.md` — intro + backfill scritti a mano; la sezione tra i marcatori `<!-- AUTO-CHANGELOG:START/END -->` è rigenerata dallo script `changelog:sync` (non modificarla a mano).
 - **Inbox** (external context dropped here for the agent to read):
   `inbox/` — files like `inbox/<source>-chat-latest.md`. Fetched via
   `pnpm --filter @workspace/scripts run inbox:fetch --source <name> --url <url> --token <token>`
