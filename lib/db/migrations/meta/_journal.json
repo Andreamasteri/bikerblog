@@ -36,6 +36,13 @@
       "when": 1751587200000,
       "tag": "0004_add_comment_likes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1751673600000,
+      "tag": "0005_add_horus_bowie_conversation_status",
+      "breakpoints": true
     }
   ]
 }

@@ -381,7 +381,11 @@ export interface BowieConversationDeps {
   horusChatRaw: typeof horusChatRaw;
   bowieChatRaw: typeof bowieChatRaw;
   isBowieConfigured: () => boolean;
-  saveBowieConversation: (topic: string, transcript: ConvoTurn[]) => Promise<void>;
+  saveBowieConversation: (
+    topic: string,
+    transcript: ConvoTurn[],
+    options: { status: "complete" | "interrupted"; conversationId?: number }
+  ) => Promise<number>;
 }
 
 const defaultBowieConversationDeps: BowieConversationDeps = {
@@ -401,10 +405,11 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
   return async (req: express.Request, res: express.Response): Promise<void> => {
     if (!requireHorusPassword(req, res)) return;
 
-    const { topic, maxTurns, resumeTranscript } = req.body as {
+    const { topic, maxTurns, resumeTranscript, resumeConversationId } = req.body as {
       topic?: unknown;
       maxTurns?: unknown;
       resumeTranscript?: unknown;
+      resumeConversationId?: unknown;
     };
 
     if (typeof topic !== "string" || !topic.trim()) {
@@ -468,6 +473,20 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
     // continuare l'alternanza da dove si era fermata, non ripartire da Horus.
     let failingAgent: ConvoAgent | null = null;
 
+    // Se il client ci ripassa l'id di una conversazione già salvata come
+    // "interrupted" (da un drop-out precedente), aggiorniamo quella riga
+    // invece di crearne una nuova ad ogni retry.
+    const conversationId: number | undefined =
+      typeof resumeConversationId === "number" &&
+      Number.isInteger(resumeConversationId) &&
+      resumeConversationId > 0
+        ? resumeConversationId
+        : undefined;
+    // Diventa true non appena abbiamo tentato un salvataggio (riuscito o
+    // meno) lungo un percorso esplicito (fine normale o errore gestito), per
+    // evitare che il `finally` tenti un secondo salvataggio ridondante.
+    let persisted = false;
+
     try {
       for (let i = transcript.length; i < totalTurns; i++) {
         if (abortController.signal.aborted) break;
@@ -506,8 +525,9 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
         sendEvent(res, "done", {});
 
         if (transcript.length > 0) {
+          persisted = true;
           try {
-            await deps.saveBowieConversation(topic, transcript);
+            await deps.saveBowieConversation(topic, transcript, { status: "complete", conversationId });
           } catch (err) {
             req.log.error({ err }, "failed to persist horus-bowie conversation");
           }
@@ -519,17 +539,52 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
         const agentName = failingAgent === "bowie" ? BOWIE_AGENT_NAME : failingAgent === "horus" ? "Horus" : null;
         const baseMessage =
           err instanceof Error ? err.message : "Errore imprevisto durante la conversazione Horus↔Bowie.";
+
+        // Salviamo subito la trascrizione parziale come "interrupted", senza
+        // aspettare che l'utente prema "Riprova": se chiude la tab o naviga
+        // altrove prima di farlo, i turni già completati non vanno persi lo
+        // stesso e restano recuperabili dalla Cronologia.
+        let savedConversationId = conversationId;
+        if (transcript.length > 0) {
+          persisted = true;
+          try {
+            savedConversationId = await deps.saveBowieConversation(topic, transcript, {
+              status: "interrupted",
+              conversationId,
+            });
+          } catch (persistErr) {
+            req.log.error({ err: persistErr }, "failed to persist interrupted horus-bowie conversation");
+          }
+        }
+
         // Attribuiamo l'errore all'agente che stava rispondendo in quel
         // momento (non genericamente "la conversazione"): il client usa
         // `agent` per mostrare a colpo d'occhio chi si è disconnesso e per
-        // riprendere la discussione da lì, non da zero.
+        // riprendere la discussione da lì, non da zero. `conversationId`
+        // permette al client di aggiornare (invece di duplicare) questa
+        // stessa riga se l'utente preme "Riprova" e la conversazione arriva
+        // in fondo.
         sendEvent(res, "error", {
           agent: failingAgent,
           message: agentName ? `${agentName}: ${baseMessage}` : baseMessage,
           transcript,
+          conversationId: savedConversationId ?? null,
         });
       }
     } finally {
+      // Copre il caso di un vero drop di connessione (l'utente chiude la tab
+      // o il tunnel cade a metà turno) senza che nessun evento "error" sia
+      // mai stato inviabile al client: senza questo, i turni già completati
+      // andrebbero persi in silenzio perché il ramo catch/then sopra non
+      // viene raggiunto (il ciclo si limita a interrompersi controllando
+      // `abortController.signal.aborted`, non lancia un'eccezione).
+      if (!persisted && transcript.length > 0) {
+        try {
+          await deps.saveBowieConversation(topic, transcript, { status: "interrupted", conversationId });
+        } catch (err) {
+          req.log.error({ err }, "failed to persist dropped horus-bowie conversation");
+        }
+      }
       clearInterval(heartbeat);
       res.end();
     }
@@ -538,14 +593,39 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
 
 router.post("/horus/bowie-conversation", express.json({ limit: "1mb" }), createBowieConversationHandler());
 
-async function saveBowieConversation(topic: string, transcript: ConvoTurn[]): Promise<void> {
-  await db.insert(horusBowieConversationsTable).values({
-    topic,
-    transcript: transcript satisfies HorusConversationTurn[],
-  });
+async function saveBowieConversation(
+  topic: string,
+  transcript: ConvoTurn[],
+  options: { status: "complete" | "interrupted"; conversationId?: number }
+): Promise<number> {
+  if (options.conversationId) {
+    const [updated] = await db
+      .update(horusBowieConversationsTable)
+      .set({
+        topic,
+        transcript: transcript satisfies HorusConversationTurn[],
+        status: options.status,
+      })
+      .where(eq(horusBowieConversationsTable.id, options.conversationId))
+      .returning({ id: horusBowieConversationsTable.id });
+    if (updated) return updated.id;
+    // La riga interrotta non esiste più (es. superata la retention di
+    // MAX_STORED_CONVERSATIONS nel frattempo): la ricreiamo da zero invece
+    // di perdere la trascrizione.
+  }
 
-  // Manteniamo la tabella leggera: dopo ogni inserimento cancelliamo tutto
-  // ciò che eccede il numero massimo di conversazioni conservate.
+  const [inserted] = await db
+    .insert(horusBowieConversationsTable)
+    .values({
+      topic,
+      transcript: transcript satisfies HorusConversationTurn[],
+      status: options.status,
+    })
+    .returning({ id: horusBowieConversationsTable.id });
+
+  // Manteniamo la tabella leggera: dopo ogni inserimento (non ad ogni
+  // aggiornamento, che non fa crescere la tabella) cancelliamo tutto ciò che
+  // eccede il numero massimo di conversazioni conservate.
   const overflow = await db
     .select({ id: horusBowieConversationsTable.id })
     .from(horusBowieConversationsTable)
@@ -558,6 +638,8 @@ async function saveBowieConversation(topic: string, transcript: ConvoTurn[]): Pr
       .delete(horusBowieConversationsTable)
       .where(and(lt(horusBowieConversationsTable.id, cutoffId + 1)));
   }
+
+  return inserted!.id;
 }
 
 router.get("/horus/bowie-conversations", async (req, res): Promise<void> => {
@@ -569,6 +651,7 @@ router.get("/horus/bowie-conversations", async (req, res): Promise<void> => {
       topic: horusBowieConversationsTable.topic,
       turnCount: sql<number>`jsonb_array_length(${horusBowieConversationsTable.transcript})`,
       createdAt: horusBowieConversationsTable.createdAt,
+      status: horusBowieConversationsTable.status,
     })
     .from(horusBowieConversationsTable)
     .orderBy(desc(horusBowieConversationsTable.createdAt));
@@ -579,6 +662,7 @@ router.get("/horus/bowie-conversations", async (req, res): Promise<void> => {
       topic: row.topic,
       turnCount: Number(row.turnCount),
       createdAt: row.createdAt.toISOString(),
+      status: row.status,
     }))
   );
 });
@@ -607,6 +691,7 @@ router.get("/horus/bowie-conversations/:id", async (req, res): Promise<void> => 
     topic: row.topic,
     transcript: row.transcript,
     createdAt: row.createdAt.toISOString(),
+    status: row.status,
   });
 });
 

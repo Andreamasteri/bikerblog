@@ -30,11 +30,14 @@ function uid(): string {
 
 type Mode = "chat" | "bowie-chat" | "conversation" | "history";
 
+type ConvoStatus = "complete" | "interrupted";
+
 interface ConvoHistoryItem {
   id: number;
   topic: string;
   turnCount: number;
   createdAt: string;
+  status: ConvoStatus;
 }
 
 interface ConvoHistoryDetail {
@@ -42,6 +45,7 @@ interface ConvoHistoryDetail {
   topic: string;
   createdAt: string;
   transcript: { agent: ConvoAgent; content: string }[];
+  status: ConvoStatus;
 }
 
 function formatConvoDate(iso: string): string {
@@ -84,6 +88,10 @@ export function HorusChat() {
   // riproponiamo al server per riprendere la conversazione dopo un errore o
   // uno stallo a metà turno, senza perdere ciò che era già stato detto.
   const convoTranscriptRef = useRef<ConvoTurn[]>([]);
+  // Id della riga salvata come "interrupted" quando l'ultimo tentativo si è
+  // interrotto a metà: se l'utente preme "Riprova" la passiamo al server per
+  // aggiornare quella riga invece di crearne una nuova ad ogni retry.
+  const convoConversationIdRef = useRef<number | null>(null);
   const lastTopicRef = useRef("");
   // Rispecchia convoActiveAgent ma letto dentro il catch/finally di
   // runConversation, dove lo stato React catturato alla creazione della
@@ -224,6 +232,7 @@ export function HorusChat() {
     setConvoError(null);
     setIsConvoRunning(false);
     convoTranscriptRef.current = [];
+    convoConversationIdRef.current = null;
   }
 
   async function startConversation(e?: FormEvent) {
@@ -232,8 +241,9 @@ export function HorusChat() {
     if (!text || isConvoRunning || !password || convoHealth !== "ok") return;
 
     convoTranscriptRef.current = [];
+    convoConversationIdRef.current = null;
     setConvoMessages([]);
-    await runConversation(text, []);
+    await runConversation(text, [], null);
   }
 
   // Riprende la conversazione dopo un drop-out di uno dei due agenti,
@@ -247,10 +257,14 @@ export function HorusChat() {
     // Rimuoviamo dall'interfaccia l'eventuale messaggio incompleto del turno
     // che è fallito a metà (mai arrivato il suo turn_end).
     setConvoMessages((prev) => prev.slice(0, convoTranscriptRef.current.length));
-    await runConversation(text, convoTranscriptRef.current);
+    await runConversation(text, convoTranscriptRef.current, convoConversationIdRef.current);
   }
 
-  async function runConversation(text: string, resumeTranscript: ConvoTurn[]) {
+  async function runConversation(
+    text: string,
+    resumeTranscript: ConvoTurn[],
+    resumeConversationId: number | null
+  ) {
     if (!password) return;
     lastTopicRef.current = text;
     setConvoError(null);
@@ -269,7 +283,7 @@ export function HorusChat() {
           "Content-Type": "application/json",
           "X-Horus-Password": password,
         },
-        body: JSON.stringify({ topic: text, resumeTranscript }),
+        body: JSON.stringify({ topic: text, resumeTranscript, resumeConversationId }),
         signal: controller.signal,
       });
 
@@ -349,6 +363,13 @@ export function HorusChat() {
                   ((t as ConvoTurn).agent === "horus" || (t as ConvoTurn).agent === "bowie") &&
                   typeof (t as ConvoTurn).content === "string"
               );
+            }
+            // Id della riga salvata lato server per questo drop-out: la
+            // teniamo per il prossimo retry, così aggiorna la stessa riga
+            // invece di crearne una nuova, e per non perdere la trascrizione
+            // se l'utente chiude la tab senza riprovare.
+            if (typeof payload.conversationId === "number") {
+              convoConversationIdRef.current = payload.conversationId;
             }
             // Il server include già il nome dell'agente nel messaggio
             // (vedi horus.ts), quindi qui non duplichiamo il prefisso in UI.
@@ -646,6 +667,9 @@ export function HorusChat() {
             <div className="pb-4 border-b border-border">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold mb-1">
                 {formatConvoDate(viewingConvo.createdAt)}
+                {viewingConvo.status === "interrupted" && (
+                  <span className="ml-2 text-amber-600 dark:text-amber-500">· Interrotta</span>
+                )}
               </p>
               <p className="text-sm font-medium">{viewingConvo.topic}</p>
             </div>
@@ -732,6 +756,11 @@ export function HorusChat() {
                     <p className="text-sm font-medium truncate">{item.topic}</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {formatConvoDate(item.createdAt)} · {item.turnCount} turni
+                      {item.status === "interrupted" && (
+                        <span className="ml-2 text-amber-600 dark:text-amber-500 font-bold uppercase tracking-wider">
+                          Interrotta
+                        </span>
+                      )}
                     </p>
                   </div>
                   {isViewingLoading ? (

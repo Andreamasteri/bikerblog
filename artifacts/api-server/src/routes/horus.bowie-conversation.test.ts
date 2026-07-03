@@ -38,13 +38,21 @@ function makeScriptedChatRaw(
 }
 
 function makeDeps(overrides: Partial<BowieConversationDeps>): BowieConversationDeps {
-  const savedConversations: Array<{ topic: string; transcript: unknown }> = [];
+  const savedConversations: Array<{
+    topic: string;
+    transcript: unknown;
+    status: "complete" | "interrupted";
+    conversationId?: number;
+  }> = [];
+  let nextId = 1;
   return {
     horusChatRaw: makeScriptedChatRaw([{ content: "horus-default" }]),
     bowieChatRaw: makeScriptedChatRaw([{ content: "bowie-default" }]),
     isBowieConfigured: () => true,
-    saveBowieConversation: async (topic, transcript) => {
-      savedConversations.push({ topic, transcript });
+    saveBowieConversation: async (topic, transcript, options) => {
+      const id = options.conversationId ?? nextId++;
+      savedConversations.push({ topic, transcript, status: options.status, conversationId: id });
+      return id;
     },
     ...overrides,
   };
