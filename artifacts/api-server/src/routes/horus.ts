@@ -75,11 +75,12 @@ function truncateReply(content: string): string {
 // Ogni messaggio rimanda l'intera cronologia a Ollama, che la rielabora da
 // zero (nessun riuso del contesto tra richieste HTTP separate). Su hardware
 // CPU questo tempo di "prompt processing" cresce con la lunghezza della
-// conversazione, quindi teniamo la finestra inviata cortissima (1 messaggio
-// precedente) per mantenere le risposte veloci: le conversazioni restano
-// comunque salvate per intero nello storico/log, quindi non si perde nulla,
-// solo non viene rimandato a Ollama ad ogni turno.
-const MAX_HISTORY_MESSAGES = 1;
+// conversazione: 1 solo messaggio precedente rendeva le AI "senza memoria"
+// (non ricordavano nulla di prima), quindi la finestra è stata riportata a 5
+// messaggi precedenti come compromesso tra continuità della conversazione e
+// velocità di risposta. Le conversazioni restano comunque salvate per intero
+// nello storico/log a prescindere da questo limite.
+const MAX_HISTORY_MESSAGES = 5;
 
 interface ChatRequestMessage {
   role: "user" | "assistant";
