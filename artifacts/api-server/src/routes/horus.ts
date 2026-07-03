@@ -14,6 +14,7 @@ import {
   getHorusTools,
   executeHorusTool,
   capToolResult,
+  MAX_TOOL_RESULT_CHARS,
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
   type HorusMessage,
@@ -103,10 +104,56 @@ const MAX_TOOL_ITERATIONS = 3;
 // prefill resta sotto la soglia e i messaggi consecutivi che usano tool non si
 // bloccano più. Il modello viene avvisato esplicitamente del taglio e può
 // richiamare il tool in modo più mirato se gli serve il resto.
-// `capToolResult` vive ora in `@workspace/horus` (importato sopra) così web chat
-// e CLI condividono un'unica implementazione e non possono divergere. Lo
-// ri-esportiamo per non rompere gli import esistenti (es. i test di regressione).
+// `capToolResult` e `MAX_TOOL_RESULT_CHARS` vivono ora in `@workspace/horus`
+// (importati sopra) così web chat e CLI condividono un'unica implementazione e
+// non possono divergere. Ri-esportiamo `capToolResult` per non rompere gli
+// import esistenti (es. i test di regressione). La versione condivisa accetta
+// un `maxChars` opzionale, usato qui sotto per applicare un budget TOTALE per
+// turno oltre al cap del singolo risultato.
 export { capToolResult };
+
+// Cappare ogni SINGOLO risultato a `MAX_TOOL_RESULT_CHARS` non basta: un turno
+// può eseguire fino a `MAX_TOOL_ITERATIONS` iterazioni, ognuna con uno o più
+// tool, e OGNI risultato cappato resta nel prompt (`conversation`) per tutte le
+// iterazioni successive. Nel caso peggiore (3 iterazioni, tool grandi) si
+// accumulano ~12000 caratteri di soli risultati di tool nel prompt, e su
+// hardware CPU quel prefill silenzioso può comunque avvicinarsi al tetto di
+// ~100s del tunnel Cloudflare → HTTP 524. Teniamo quindi anche un budget TOTALE
+// per turno: man mano che i risultati si accumulano, il cap effettivo del
+// risultato successivo si restringe fino a esaurire il budget, così la somma di
+// tutto il testo dei tool reinserito nel prompt resta limitata a prescindere da
+// quanti tool vengano chiamati. Valore scelto ~2× il cap singolo: lascia spazio
+// per un paio di risultati pieni ma mantiene il prefill cumulativo ben sotto la
+// soglia del tunnel anche nei turni multi-tool.
+const MAX_TOTAL_TOOL_RESULT_CHARS = 8000;
+
+// Sotto questa soglia il cap residuo è troppo piccolo per contenere del
+// contenuto utile oltre alla nota di troncamento: meglio restituire solo una
+// nota di "budget esaurito" invece di uno spezzone illeggibile di poche righe.
+const MIN_USEFUL_TOOL_RESULT_CHARS = 400;
+
+/** Applica il budget TOTALE di risultati-tool del turno a un singolo risultato.
+ * Data la quota già consumata (`usedChars`), restituisce il testo da reinserire
+ * nel prompt e i caratteri consumati. Quando il budget residuo è troppo piccolo
+ * per del contenuto utile, restituisce solo una nota che invita il modello a
+ * concludere con quanto già raccolto (evita di gonfiare il prefill oltre il
+ * tetto del tunnel Cloudflare nei turni con molti tool). */
+export function budgetedToolResult(
+  result: string,
+  usedChars: number
+): { content: string; charsUsed: number } {
+  const remaining = MAX_TOTAL_TOOL_RESULT_CHARS - usedChars;
+  if (remaining < MIN_USEFUL_TOOL_RESULT_CHARS) {
+    const note =
+      `[... risultato omesso: raggiunto il limite complessivo di ${MAX_TOTAL_TOOL_RESULT_CHARS} ` +
+      `caratteri di risultati-tool per questo turno (serve a restare sotto il limite di tempo del ` +
+      `tunnel). Rispondi con le informazioni già raccolte, oppure fai una nuova richiesta più mirata.]`;
+    return { content: note, charsUsed: note.length };
+  }
+  const cap = Math.min(MAX_TOOL_RESULT_CHARS, remaining);
+  const content = capToolResult(result, cap);
+  return { content, charsUsed: content.length };
+}
 
 /** Taglia una risposta al limite di caratteri applicabile (esteso se in
  * questo turno sono stati usati dei tool), spezzando su uno spazio quando
@@ -295,6 +342,10 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
       const tools = await getHorusTools();
       let usedTools = false;
       let finalReply = "";
+      // Budget TOTALE di testo dei risultati-tool reinserito nel prompt in
+      // questo turno (vedi MAX_TOTAL_TOOL_RESULT_CHARS): si accumula tra tutte
+      // le iterazioni e i tool, non si resetta a ogni iterazione.
+      let toolResultCharsUsed = 0;
 
       for (
         let iteration = 0;
@@ -344,7 +395,9 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
           if (abortController.signal.aborted) break;
 
           sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-          conversation.push({ role: "tool", name: toolName, content: capToolResult(result) });
+          const budgeted = budgetedToolResult(result, toolResultCharsUsed);
+          toolResultCharsUsed += budgeted.charsUsed;
+          conversation.push({ role: "tool", name: toolName, content: budgeted.content });
         }
       }
 

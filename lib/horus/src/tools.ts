@@ -1337,15 +1337,17 @@ export const MAX_TOOL_RESULT_CHARS = 4000;
 
 /** Taglia un risultato di tool troppo grande prima di reinserirlo nel prompt
  * dell'iterazione successiva, spezzando su un a-capo quando possibile e
- * segnalando il taglio al modello. Vedi `MAX_TOOL_RESULT_CHARS` per il perché
- * (tetto di prefill del tunnel Cloudflare). Condiviso tra web chat e CLI. */
-export function capToolResult(result: string): string {
-  if (result.length <= MAX_TOOL_RESULT_CHARS) return result;
-  const cut = result.slice(0, MAX_TOOL_RESULT_CHARS);
+ * segnalando il taglio al modello. `maxChars` permette di stringere il cap
+ * quando un budget totale del turno (gestito dal chiamante) si sta esaurendo;
+ * di default usa `MAX_TOOL_RESULT_CHARS`. Vedi `MAX_TOOL_RESULT_CHARS` per il
+ * perché (tetto di prefill del tunnel Cloudflare). Condiviso tra web chat e CLI. */
+export function capToolResult(result: string, maxChars: number = MAX_TOOL_RESULT_CHARS): string {
+  if (result.length <= maxChars) return result;
+  const cut = result.slice(0, maxChars);
   const lastNewline = cut.lastIndexOf("\n");
-  const safeCut = lastNewline > MAX_TOOL_RESULT_CHARS * 0.6 ? cut.slice(0, lastNewline) : cut;
+  const safeCut = lastNewline > maxChars * 0.6 ? cut.slice(0, lastNewline) : cut;
   return (
-    `${safeCut.trimEnd()}\n\n[... risultato troncato a ${MAX_TOOL_RESULT_CHARS} caratteri ` +
+    `${safeCut.trimEnd()}\n\n[... risultato troncato a ${maxChars} caratteri ` +
     `per restare sotto il limite di tempo del tunnel: richiama il tool in modo più specifico ` +
     `(es. un percorso o una query più mirata) se ti serve il resto.]`
   );
