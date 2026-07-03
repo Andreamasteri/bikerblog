@@ -94,59 +94,79 @@ export function HorusChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, password]);
 
-  // Controllo di raggiungibilità di Bowie eseguito all'apertura della tab
-  // "Horus ↔ Bowie", prima che l'utente proponga un argomento: la conversazione
-  // osservata riusa lo stesso Bowie della chat diretta, ma senza questo check
-  // il problema (Bowie non configurato o giù) si scopriva solo dopo aver
-  // premuto Play, quando lo stream falliva subito. Horus non viene verificato
-  // qui perché la conversazione gira nello stesso processo dell'api-server e
-  // usa lo stesso client già verificato dalla tab "Chat con Horus".
+  // Controllo di raggiungibilità di Horus E Bowie eseguito all'apertura della
+  // tab "Horus ↔ Bowie", prima che l'utente proponga un argomento: la
+  // conversazione osservata usa entrambi gli agenti, ma senza questo check un
+  // problema su uno qualsiasi dei due (non configurato o giù) si scopriva solo
+  // dopo aver premuto Play, quando lo stream falliva a metà turno. In
+  // precedenza veniva verificato solo Bowie assumendo che Horus (già validato
+  // dalla tab "Chat con Horus") fosse sempre raggiungibile — non è
+  // necessariamente vero al momento in cui si apre questa tab.
   useEffect(() => {
     if (mode !== "conversation" || !password) return;
     let cancelled = false;
 
-    async function checkBowieHealth() {
+    type HealthResult = {
+      status?: "ok" | "not_configured" | "unreachable";
+      message?: string;
+    };
+
+    async function fetchHealth(endpoint: string): Promise<{ res: Response; data: HealthResult } | "unauthorized"> {
+      const base = import.meta.env.BASE_URL;
+      const res = await fetch(`${base}${endpoint}`, {
+        headers: { "X-Horus-Password": password! },
+      });
+      if (res.status === 401) return "unauthorized";
+      if (!res.ok) return { res, data: {} };
+      const data = (await res.json()) as HealthResult;
+      return { res, data };
+    }
+
+    async function checkHealth() {
       setConvoHealth("checking");
       setConvoNotConfigured(null);
       setConvoUnreachableMessage(null);
       try {
-        const base = import.meta.env.BASE_URL;
-        const res = await fetch(`${base}api/horus/bowie-health`, {
-          headers: { "X-Horus-Password": password! },
-        });
+        const [horusResult, bowieResult] = await Promise.all([
+          fetchHealth("api/horus/health"),
+          fetchHealth("api/horus/bowie-health"),
+        ]);
         if (cancelled) return;
 
-        if (res.status === 401) {
+        if (horusResult === "unauthorized" || bowieResult === "unauthorized") {
           sessionStorage.removeItem(SESSION_KEY);
           setPassword(null);
           setAuthError("Password errata. Riprova.");
           return;
         }
 
-        if (!res.ok) {
+        if (!horusResult.res.ok || !bowieResult.res.ok) {
           setConvoUnreachableMessage("Impossibile verificare lo stato della connessione. Riprova tra poco.");
           setConvoHealth("unreachable");
           return;
         }
 
-        const data = (await res.json()) as {
-          status?: "ok" | "not_configured" | "unreachable";
-          message?: string;
-        };
+        const unreachableMessages = [horusResult.data, bowieResult.data]
+          .filter((d) => d.status === "unreachable")
+          .map((d) => d.message)
+          .filter((m): m is string => Boolean(m));
 
-        if (data.status === "not_configured") {
-          setConvoNotConfigured(
-            data.message ?? "Bowie non è configurato su questo ambiente."
-          );
-          setConvoHealth("ok");
-        } else if (data.status === "unreachable") {
-          setConvoUnreachableMessage(
-            data.message ?? "Bowie non è raggiungibile in questo momento."
-          );
+        if (unreachableMessages.length > 0) {
+          setConvoUnreachableMessage(unreachableMessages.join(" "));
           setConvoHealth("unreachable");
-        } else {
-          setConvoHealth("ok");
+          return;
         }
+
+        const notConfiguredMessages = [horusResult.data, bowieResult.data]
+          .filter((d) => d.status === "not_configured")
+          .map((d) => d.message)
+          .filter((m): m is string => Boolean(m));
+
+        if (notConfiguredMessages.length > 0) {
+          setConvoNotConfigured(notConfiguredMessages.join(" "));
+        }
+
+        setConvoHealth("ok");
       } catch {
         if (!cancelled) {
           setConvoUnreachableMessage("Impossibile verificare la connessione. Controlla la rete e riprova.");
@@ -155,7 +175,7 @@ export function HorusChat() {
       }
     }
 
-    void checkBowieHealth();
+    void checkHealth();
     return () => {
       cancelled = true;
     };
