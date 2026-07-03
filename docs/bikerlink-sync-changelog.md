@@ -142,6 +142,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 **Task completati:**
 
 - **Task #164** — Catch a regression where two agents down at once hide one of the names <!-- ea4ce1e -->
+  - _In parole semplici:_ Abbiamo risolto un problema in cui due agenti offline contemporaneamente facevano scomparire uno dei nomi.
 - **Task #163** — Add a "Chat con Quebracho" direct-chat tab <!-- d5ab446 -->
   - _In parole semplici:_ Abbiamo aggiunto una nuova opzione di chat diretta con il nostro assistente virtuale Quebracho.
 - **Task #162** — Add regression test for GET /horus/agents registry endpoint <!-- 25d27e6 -->
@@ -187,6 +188,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:24** · Update AI assistants to provide brief, direct responses <!-- 394972a -->
+  - _In parole semplici:_ Abbiamo migliorato i nostri assistenti virtuali per fornire risposte brevi e dirette.
+- **19:09** · Add notes about completed tasks and merge commits to the changelog <!-- 386df50 -->
+  - _In parole semplici:_ Aggiunto la possibilità di annotare i compiti completati e di unire i commit al changelog
 - **18:29** · Git commit prior to merge <!-- a3d1cef -->
   - _In parole semplici:_ Commit effettuato prima del merge.
 - **18:24** · Git commit prior to merge <!-- fec61bc -->
