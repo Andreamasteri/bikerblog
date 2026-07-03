@@ -141,7 +141,9 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #158** — Let users pick a shorter Horus↔Bowie conversation before starting it <!-- 8c4baad -->
 - **Task #157** — Keep long Horus<->Bowie conversations from dragging on <!-- d2594fe -->
+  - _In parole semplici:_ Abbiamo migliorato il sistema di chat tra utenti per rendere le conversazioni più rapide e fluide.
 - **Task #154** — Generalize the observed-conversation UI to N agents <!-- 792a759 -->
   - _In parole semplici:_ Abbiamo migliorato l'interfaccia utente per gestire conversazioni con più agenti contemporaneamente.
 - **Task #150** — Verify Bowie's real llama3.2:3b model still gives good conversations <!-- 24fd067 -->

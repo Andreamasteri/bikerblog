@@ -27,6 +27,17 @@ const ESTIMATED_SECONDS_PER_TURN_HINT = 105;
 // AGENT_PRESENTATIONS qui sotto, non un refactor di questo file.
 type ConvoAgent = string;
 
+// Preset di lunghezza conversazione mostrati all'utente prima di premere
+// Play (Task #158). Il server (`createBowieConversationHandler` in
+// horus.ts) già supportava `maxTurns` fino a `MAX_ALLOWED_TURNS` (20), ma il
+// frontend non lo inviava mai: la conversazione partiva sempre con
+// `DEFAULT_MAX_TURNS` (6). "Normale" resta allineato a quel default.
+const CONVO_TURN_PRESETS: { key: "fast" | "normal" | "long"; label: string; turns: number }[] = [
+  { key: "fast", label: "Veloce", turns: 3 },
+  { key: "normal", label: "Normale", turns: DEFAULT_CONVO_TURNS_HINT },
+  { key: "long", label: "Lunga", turns: 12 },
+];
+
 interface ConvoMessage {
   id: string;
   agent: ConvoAgent;
@@ -147,6 +158,12 @@ export function HorusChat() {
   const [bowieChatKey, setBowieChatKey] = useState(0);
 
   const [topic, setTopic] = useState("");
+  // Preset scelto dall'utente prima di avviare la conversazione (Task #158).
+  // Resta lo stesso anche durante un "Riprova" dopo un drop-out, così la
+  // lunghezza totale non cambia a metà conversazione.
+  const [selectedTurnsPreset, setSelectedTurnsPreset] = useState<(typeof CONVO_TURN_PRESETS)[number]>(
+    CONVO_TURN_PRESETS[1]
+  );
   const [convoMessages, setConvoMessages] = useState<ConvoMessage[]>([]);
   const [convoActiveAgent, setConvoActiveAgent] = useState<ConvoAgent | null>(null);
   const [isConvoRunning, setIsConvoRunning] = useState(false);
@@ -351,6 +368,7 @@ export function HorusChat() {
     setConvoProgress(null);
     setConvoElapsedSeconds(0);
     convoStartedAtRef.current = null;
+    setSelectedTurnsPreset(CONVO_TURN_PRESETS[1]);
   }
 
   async function startConversation(e?: FormEvent) {
@@ -361,7 +379,7 @@ export function HorusChat() {
     convoTranscriptRef.current = [];
     convoConversationIdRef.current = null;
     setConvoMessages([]);
-    await runConversation(text, [], null);
+    await runConversation(text, [], null, selectedTurnsPreset.turns);
   }
 
   // Riprende la conversazione dopo un drop-out di uno dei due agenti,
@@ -375,13 +393,14 @@ export function HorusChat() {
     // Rimuoviamo dall'interfaccia l'eventuale messaggio incompleto del turno
     // che è fallito a metà (mai arrivato il suo turn_end).
     setConvoMessages((prev) => prev.slice(0, convoTranscriptRef.current.length));
-    await runConversation(text, convoTranscriptRef.current, convoConversationIdRef.current);
+    await runConversation(text, convoTranscriptRef.current, convoConversationIdRef.current, selectedTurnsPreset.turns);
   }
 
   async function runConversation(
     text: string,
     resumeTranscript: ConvoTurn[],
-    resumeConversationId: number | null
+    resumeConversationId: number | null,
+    maxTurns: number
   ) {
     if (!password) return;
     lastTopicRef.current = text;
@@ -404,7 +423,7 @@ export function HorusChat() {
           "Content-Type": "application/json",
           "X-Horus-Password": password,
         },
-        body: JSON.stringify({ topic: text, resumeTranscript, resumeConversationId }),
+        body: JSON.stringify({ topic: text, resumeTranscript, resumeConversationId, maxTurns }),
         signal: controller.signal,
       });
 
@@ -746,10 +765,32 @@ export function HorusChat() {
             </div>
           )}
           {!isConvoRunning && convoMessages.length === 0 && (
-            <p className="text-xs text-muted-foreground mb-3 px-1">
-              Ogni turno richiede in genere 1-2 minuti: una conversazione tipica dura circa{" "}
-              {formatDurationShort(DEFAULT_CONVO_TURNS_HINT * ESTIMATED_SECONDS_PER_TURN_HINT)}.
-            </p>
+            <div className="mb-3 px-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+                  Durata
+                </span>
+                <div className="flex gap-1">
+                  {CONVO_TURN_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.key}
+                      type="button"
+                      variant={selectedTurnsPreset.key === preset.key ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 px-3 text-xs"
+                      onClick={() => setSelectedTurnsPreset(preset)}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedTurnsPreset.turns} turni · ogni turno richiede in genere 1-2 minuti, quindi
+                dura circa{" "}
+                {formatDurationShort(selectedTurnsPreset.turns * ESTIMATED_SECONDS_PER_TURN_HINT)}.
+              </p>
+            </div>
           )}
           <div ref={convoScrollRef} className="flex-1 border border-border bg-muted/5 mb-4 overflow-y-auto">
             <div className="p-6 space-y-6">
