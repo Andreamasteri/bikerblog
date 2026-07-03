@@ -26,6 +26,7 @@ import {
   appendHorusMemory,
   getHorusTools,
   executeHorusTool,
+  capToolResult,
   type HorusMessage,
 } from "@workspace/horus";
 
@@ -216,7 +217,11 @@ async function main(): Promise<void> {
           }
 
           stdout.write("fatto\n");
-          history.push({ role: "tool", name: toolName, content: result });
+          // Cappa il risultato prima di reinserirlo nel prompt dell'iterazione
+          // successiva: un risultato grande farebbe crescere il prefill oltre il
+          // tetto di tempo del tunnel Cloudflare (~100-125s) → HTTP 524 → freeze,
+          // esattamente come accadeva nella web chat. Helper condiviso con essa.
+          history.push({ role: "tool", name: toolName, content: capToolResult(result) });
         }
         if (!requestController.signal.aborted) stdout.write("horus> ");
       }

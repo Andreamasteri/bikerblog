@@ -26,4 +26,4 @@ export {
   type OllamaAgentHealth,
 } from "./client.js";
 
-export { HORUS_TOOLS, getHorusTools, executeHorusTool } from "./tools.js";
+export { HORUS_TOOLS, getHorusTools, executeHorusTool, capToolResult, MAX_TOOL_RESULT_CHARS } from "./tools.js";

@@ -1325,3 +1325,28 @@ export async function executeHorusTool(
     return `Errore nell'esecuzione del tool "${name}": ${err instanceof Error ? err.message : String(err)}`;
   }
 }
+
+// Un turno di chat con tool reinserisce il risultato del tool nel prompt
+// dell'iterazione successiva. Se il risultato è grande, il prefill cresce e la
+// generazione può superare il tetto di tempo del tunnel Cloudflare (~100-125s),
+// che chiude la connessione con un HTTP 524. Cappiamo quindi ogni risultato
+// prima di reinserirlo nella conversazione, così i turni consecutivi che usano
+// tool non si bloccano più. Il modello viene avvisato esplicitamente del taglio
+// e può richiamare il tool in modo più mirato se gli serve il resto.
+export const MAX_TOOL_RESULT_CHARS = 4000;
+
+/** Taglia un risultato di tool troppo grande prima di reinserirlo nel prompt
+ * dell'iterazione successiva, spezzando su un a-capo quando possibile e
+ * segnalando il taglio al modello. Vedi `MAX_TOOL_RESULT_CHARS` per il perché
+ * (tetto di prefill del tunnel Cloudflare). Condiviso tra web chat e CLI. */
+export function capToolResult(result: string): string {
+  if (result.length <= MAX_TOOL_RESULT_CHARS) return result;
+  const cut = result.slice(0, MAX_TOOL_RESULT_CHARS);
+  const lastNewline = cut.lastIndexOf("\n");
+  const safeCut = lastNewline > MAX_TOOL_RESULT_CHARS * 0.6 ? cut.slice(0, lastNewline) : cut;
+  return (
+    `${safeCut.trimEnd()}\n\n[... risultato troncato a ${MAX_TOOL_RESULT_CHARS} caratteri ` +
+    `per restare sotto il limite di tempo del tunnel: richiama il tool in modo più specifico ` +
+    `(es. un percorso o una query più mirata) se ti serve il resto.]`
+  );
+}

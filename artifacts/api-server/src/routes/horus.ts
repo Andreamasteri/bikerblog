@@ -13,6 +13,7 @@ import {
   checkQuebrachoHealth,
   getHorusTools,
   executeHorusTool,
+  capToolResult,
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
   type HorusMessage,
@@ -102,23 +103,10 @@ const MAX_TOOL_ITERATIONS = 3;
 // prefill resta sotto la soglia e i messaggi consecutivi che usano tool non si
 // bloccano più. Il modello viene avvisato esplicitamente del taglio e può
 // richiamare il tool in modo più mirato se gli serve il resto.
-const MAX_TOOL_RESULT_CHARS = 4000;
-
-/** Taglia un risultato di tool troppo grande prima di reinserirlo nel prompt
- * dell'iterazione successiva, spezzando su un a-capo quando possibile e
- * segnalando il taglio al modello. Vedi `MAX_TOOL_RESULT_CHARS` per il perché
- * (tetto di prefill del tunnel Cloudflare). */
-export function capToolResult(result: string): string {
-  if (result.length <= MAX_TOOL_RESULT_CHARS) return result;
-  const cut = result.slice(0, MAX_TOOL_RESULT_CHARS);
-  const lastNewline = cut.lastIndexOf("\n");
-  const safeCut = lastNewline > MAX_TOOL_RESULT_CHARS * 0.6 ? cut.slice(0, lastNewline) : cut;
-  return (
-    `${safeCut.trimEnd()}\n\n[... risultato troncato a ${MAX_TOOL_RESULT_CHARS} caratteri ` +
-    `per restare sotto il limite di tempo del tunnel: richiama il tool in modo più specifico ` +
-    `(es. un percorso o una query più mirata) se ti serve il resto.]`
-  );
-}
+// `capToolResult` vive ora in `@workspace/horus` (importato sopra) così web chat
+// e CLI condividono un'unica implementazione e non possono divergere. Lo
+// ri-esportiamo per non rompere gli import esistenti (es. i test di regressione).
+export { capToolResult };
 
 /** Taglia una risposta al limite di caratteri applicabile (esteso se in
  * questo turno sono stati usati dei tool), spezzando su uno spazio quando
