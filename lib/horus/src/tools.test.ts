@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { executeHorusTool } from "./tools.js";
+import { executeHorusTool, getHorusTools } from "./tools.js";
 
 /**
  * Copertura di regressione per `sonar_scan` e per l'inoltro di `extraContext`
@@ -109,4 +109,202 @@ test("architect rejects an invalid mode without calling the analysis service", a
 
   assert.match(result, /sconosciuta/i);
   assert.equal(calls.length, 0);
+});
+
+test("typecheck_repo rejects an invalid repo name without calling the analysis service", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "should not be reached" });
+
+  const result = await executeHorusTool("typecheck_repo", { repo: "not-a-real-repo" });
+
+  assert.match(result, /sconosciuto/i);
+  assert.equal(calls.length, 0);
+});
+
+test("typecheck_repo calls /typecheck with the repo body", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "no type errors" });
+
+  const result = await executeHorusTool("typecheck_repo", { repo: "bikerblog" });
+
+  assert.equal(result, "no type errors");
+  assert.equal(calls.length, 1);
+  const call = calls[0]!;
+  assert.match(call.url, /\/typecheck$/);
+  assert.equal(call.init?.method, "POST");
+  const body = JSON.parse(String(call.init?.body));
+  assert.deepEqual(body, { repo: "bikerblog" });
+});
+
+test("lint_repo rejects an invalid repo name without calling the analysis service", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "should not be reached" });
+
+  const result = await executeHorusTool("lint_repo", { repo: "not-a-real-repo" });
+
+  assert.match(result, /sconosciuto/i);
+  assert.equal(calls.length, 0);
+});
+
+test("lint_repo calls /lint with the repo body", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "no lint issues" });
+
+  const result = await executeHorusTool("lint_repo", { repo: "bikerweb" });
+
+  assert.equal(result, "no lint issues");
+  assert.equal(calls.length, 1);
+  const call = calls[0]!;
+  assert.match(call.url, /\/lint$/);
+  const body = JSON.parse(String(call.init?.body));
+  assert.deepEqual(body, { repo: "bikerweb" });
+});
+
+test("search_code rejects an invalid repo name without calling the analysis service", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "should not be reached" });
+
+  const result = await executeHorusTool("search_code", { repo: "not-a-real-repo", query: "foo" });
+
+  assert.match(result, /sconosciuto/i);
+  assert.equal(calls.length, 0);
+});
+
+test("search_code rejects an empty query without calling the analysis service", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "should not be reached" });
+
+  const result = await executeHorusTool("search_code", { repo: "bikerlink", query: "   " });
+
+  assert.match(result, /mancante/i);
+  assert.equal(calls.length, 0);
+});
+
+test("search_code calls /search with the repo and query body", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "3 matches found" });
+
+  const result = await executeHorusTool("search_code", { repo: "bikerlink", query: "TODO" });
+
+  assert.equal(result, "3 matches found");
+  assert.equal(calls.length, 1);
+  const call = calls[0]!;
+  assert.match(call.url, /\/search$/);
+  const body = JSON.parse(String(call.init?.body));
+  assert.deepEqual(body, { repo: "bikerlink", query: "TODO" });
+});
+
+test("git_log rejects an invalid repo name without calling the analysis service", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "should not be reached" });
+
+  const result = await executeHorusTool("git_log", { repo: "not-a-real-repo" });
+
+  assert.match(result, /sconosciuto/i);
+  assert.equal(calls.length, 0);
+});
+
+test("git_log calls /git-log with the repo and limit body", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "5 recent commits" });
+
+  const result = await executeHorusTool("git_log", { repo: "bikerlink", limit: 5 });
+
+  assert.equal(result, "5 recent commits");
+  assert.equal(calls.length, 1);
+  const call = calls[0]!;
+  assert.match(call.url, /\/git-log$/);
+  const body = JSON.parse(String(call.init?.body));
+  assert.deepEqual(body, { repo: "bikerlink", limit: 5 });
+});
+
+test("git_log omits limit when not provided", async (t) => {
+  const calls = mockAnalysisFetch(t, { result: "10 recent commits" });
+
+  const result = await executeHorusTool("git_log", { repo: "bikerlink" });
+
+  assert.equal(result, "10 recent commits");
+  const body = JSON.parse(String(calls[0]!.init?.body));
+  assert.deepEqual(body, { repo: "bikerlink" });
+});
+
+/**
+ * Copertura per il capability-gating di `getHorusTools()`: la disponibilità
+ * di `sonar_scan` è cache-ata per 60s (SONAR_CAPABILITY_CACHE_MS), quindi
+ * ogni test qui sotto avanza l'orologio mockato di oltre 60s rispetto al
+ * precedente per evitare di leggere un valore di cache lasciato da un test
+ * precedente nello stesso processo.
+ */
+
+const ANALYSIS_ONLY_TOOL_NAMES = ["typecheck_repo", "lint_repo", "search_code", "git_log", "architect"];
+const BASE_TOOL_NAMES = ["web_search", "github_read", "remember_note", "read_blog"];
+
+test("getHorusTools returns only the base tools when the analysis service env vars are unset", async (t) => {
+  const originalUrl = process.env["HORUS_ANALYSIS_URL"];
+  const originalToken = process.env["ANALYSIS_GATE_TOKEN"];
+  delete process.env["HORUS_ANALYSIS_URL"];
+  delete process.env["ANALYSIS_GATE_TOKEN"];
+  t.after(() => {
+    process.env["HORUS_ANALYSIS_URL"] = originalUrl;
+    process.env["ANALYSIS_GATE_TOKEN"] = originalToken;
+  });
+  const calls = mockAnalysisFetch(t, { result: "should not be reached" });
+
+  const tools = await getHorusTools();
+  const names = tools.map((tool) => tool.function.name);
+
+  assert.deepEqual(names, BASE_TOOL_NAMES);
+  assert.equal(calls.length, 0);
+});
+
+test("getHorusTools includes sonar_scan when capabilities reports sonarAvailable: true", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  t.after(() => t.mock.timers.reset());
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () =>
+      new Response(JSON.stringify({ sonarAvailable: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+  );
+
+  const tools = await getHorusTools();
+  const names = tools.map((tool) => tool.function.name);
+
+  for (const name of [...BASE_TOOL_NAMES, ...ANALYSIS_ONLY_TOOL_NAMES, "sonar_scan"]) {
+    assert.ok(names.includes(name), `expected "${name}" to be included, got: ${names.join(", ")}`);
+  }
+});
+
+test("getHorusTools omits sonar_scan (but keeps the rest) when capabilities reports sonarAvailable: false", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_100_000 });
+  t.after(() => t.mock.timers.reset());
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () =>
+      new Response(JSON.stringify({ sonarAvailable: false }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+  );
+
+  const tools = await getHorusTools();
+  const names = tools.map((tool) => tool.function.name);
+
+  assert.ok(!names.includes("sonar_scan"), `expected "sonar_scan" to be omitted, got: ${names.join(", ")}`);
+  for (const name of [...BASE_TOOL_NAMES, ...ANALYSIS_ONLY_TOOL_NAMES]) {
+    assert.ok(names.includes(name), `expected "${name}" to be included, got: ${names.join(", ")}`);
+  }
+});
+
+test("getHorusTools omits sonar_scan (but keeps the rest) when the capabilities check fails or times out", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_200_000 });
+  t.after(() => t.mock.timers.reset());
+  // Simula sia un errore di rete sia un abort per timeout: entrambi finiscono
+  // nello stesso ramo `catch` di isSonarAvailable() in tools.ts.
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new DOMException("The operation was aborted", "TimeoutError");
+  });
+
+  const tools = await getHorusTools();
+  const names = tools.map((tool) => tool.function.name);
+
+  assert.ok(!names.includes("sonar_scan"), `expected "sonar_scan" to be omitted, got: ${names.join(", ")}`);
+  for (const name of [...BASE_TOOL_NAMES, ...ANALYSIS_ONLY_TOOL_NAMES]) {
+    assert.ok(names.includes(name), `expected "${name}" to be included, got: ${names.join(", ")}`);
+  }
 });
