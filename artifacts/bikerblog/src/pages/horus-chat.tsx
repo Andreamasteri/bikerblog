@@ -11,6 +11,15 @@ import { AgentHealthGate } from "@/hooks/agent-health-status";
 
 const SESSION_KEY = "horus-chat-password";
 
+// Deve restare in sync con `DEFAULT_MAX_TURNS` in
+// `artifacts/api-server/src/routes/horus.ts` — usato solo per il messaggio
+// "durata tipica" mostrato PRIMA di avviare una conversazione, quando non
+// abbiamo ancora ricevuto il vero `totalTurns` dal server (Task #157). Una
+// volta che la conversazione parte, il vero valore arriva via SSE e questa
+// costante non viene più usata.
+const DEFAULT_CONVO_TURNS_HINT = 6;
+const ESTIMATED_SECONDS_PER_TURN_HINT = 105;
+
 type ConvoAgent = "horus" | "bowie";
 
 interface ConvoMessage {
@@ -48,6 +57,16 @@ interface ConvoHistoryDetail {
   status: ConvoStatus;
 }
 
+// Formatta secondi come "Xm Ys" (o solo "Ys" sotto il minuto), usata sia per
+// il cronometro dei trascorsi sia per la stima dei rimanenti (Task #157).
+function formatDurationShort(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.round(totalSeconds));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes === 0) return `${rest}s`;
+  return `${minutes}m ${rest.toString().padStart(2, "0")}s`;
+}
+
 function formatConvoDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString("it-IT", {
@@ -78,6 +97,22 @@ export function HorusChat() {
   const [convoMessages, setConvoMessages] = useState<ConvoMessage[]>([]);
   const [convoActiveAgent, setConvoActiveAgent] = useState<ConvoAgent | null>(null);
   const [isConvoRunning, setIsConvoRunning] = useState(false);
+  // Progresso/stima durata (Task #157): ogni turno di Bowie/Horus sul
+  // tunnel CPU condiviso richiede realisticamente 90-120s (vedi
+  // .agents/memory/bowie-real-model-quality-check.md), quindi una
+  // conversazione a più turni può sembrare bloccata senza un'indicazione di
+  // quanto manca. Questi valori arrivano dal server con ogni evento
+  // `turn_start` così il client non deve indovinare il totale dei turni
+  // (dipende da `DEFAULT_MAX_TURNS`/`maxTurns` lato server).
+  const [convoProgress, setConvoProgress] = useState<{
+    turnNumber: number;
+    totalTurns: number;
+    estimatedSecondsPerTurn: number;
+  } | null>(null);
+  // Aggiornato ogni secondo mentre la conversazione gira, solo per mostrare
+  // un cronometro "trascorsi" all'utente (nessun impatto sulla logica).
+  const [convoElapsedSeconds, setConvoElapsedSeconds] = useState(0);
+  const convoStartedAtRef = useRef<number | null>(null);
   const [convoError, setConvoError] = useState<{
     message: string;
     agent: ConvoAgent | null;
@@ -118,6 +153,20 @@ export function HorusChat() {
   useEffect(() => {
     convoScrollRef.current?.scrollTo({ top: convoScrollRef.current.scrollHeight, behavior: "smooth" });
   }, [convoMessages, convoActiveAgent]);
+
+  // Cronometro "trascorsi" per la conversazione osservata (Task #157): parte
+  // quando la conversazione viene avviata/ripresa e si ferma appena si esce
+  // dallo stato "in corso", indipendentemente da come finisce (done, error,
+  // abort manuale).
+  useEffect(() => {
+    if (!isConvoRunning) return;
+    const interval = setInterval(() => {
+      if (convoStartedAtRef.current !== null) {
+        setConvoElapsedSeconds(Math.floor((Date.now() - convoStartedAtRef.current) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isConvoRunning]);
 
   useEffect(() => {
     if (mode !== "history" || !password) return;
@@ -246,6 +295,9 @@ export function HorusChat() {
     setIsConvoRunning(false);
     convoTranscriptRef.current = [];
     convoConversationIdRef.current = null;
+    setConvoProgress(null);
+    setConvoElapsedSeconds(0);
+    convoStartedAtRef.current = null;
   }
 
   async function startConversation(e?: FormEvent) {
@@ -282,6 +334,9 @@ export function HorusChat() {
     lastTopicRef.current = text;
     setConvoError(null);
     setIsConvoRunning(true);
+    setConvoProgress(null);
+    convoStartedAtRef.current = Date.now();
+    setConvoElapsedSeconds(0);
 
     const controller = new AbortController();
     convoAbortRef.current = controller;
@@ -372,6 +427,17 @@ export function HorusChat() {
             currentId = uid();
             const id = currentId;
             setConvoMessages((prev) => [...prev, { id, agent, content: "" }]);
+            if (
+              typeof payload.turnNumber === "number" &&
+              typeof payload.totalTurns === "number" &&
+              typeof payload.estimatedSecondsPerTurn === "number"
+            ) {
+              setConvoProgress({
+                turnNumber: payload.turnNumber,
+                totalTurns: payload.totalTurns,
+                estimatedSecondsPerTurn: payload.estimatedSecondsPerTurn,
+              });
+            }
           } else if (eventName === "token" && agent && typeof payload.token === "string") {
             const id = currentId;
             setConvoMessages((prev) =>
@@ -603,6 +669,33 @@ export function HorusChat() {
         <>
           {convoNotConfigured && (
             <div className="text-sm text-muted-foreground mb-3 px-1">{convoNotConfigured}</div>
+          )}
+          {isConvoRunning && convoProgress && (
+            // Stima di avanzamento/durata (Task #157): Bowie/Horus su questo
+            // tunnel CPU condiviso impiegano realisticamente 90-120s a
+            // turno, quindi senza questa indicazione una conversazione a più
+            // turni sembra bloccata. `totalTurns` arriva dal server (dipende
+            // da DEFAULT_MAX_TURNS/maxTurns), non è ipotizzato qui.
+            <div className="text-xs text-muted-foreground mb-3 px-1 flex items-center justify-between gap-3">
+              <span>
+                Turno {convoProgress.turnNumber} di {convoProgress.totalTurns} · trascorsi{" "}
+                {formatDurationShort(convoElapsedSeconds)}
+              </span>
+              <span>
+                circa{" "}
+                {formatDurationShort(
+                  Math.max(0, convoProgress.totalTurns - convoProgress.turnNumber + 1) *
+                    convoProgress.estimatedSecondsPerTurn
+                )}{" "}
+                rimanenti
+              </span>
+            </div>
+          )}
+          {!isConvoRunning && convoMessages.length === 0 && (
+            <p className="text-xs text-muted-foreground mb-3 px-1">
+              Ogni turno richiede in genere 1-2 minuti: una conversazione tipica dura circa{" "}
+              {formatDurationShort(DEFAULT_CONVO_TURNS_HINT * ESTIMATED_SECONDS_PER_TURN_HINT)}.
+            </p>
           )}
           <div ref={convoScrollRef} className="flex-1 border border-border bg-muted/5 mb-4 overflow-y-auto">
             <div className="p-6 space-y-6">

@@ -382,8 +382,20 @@ function buildConvoSystemPrompt(opts: {
   return { role: "system", content: `${intro} ${body}${toolsNote}` };
 }
 
-const DEFAULT_MAX_TURNS = 8;
+// Ridotto da 8 a 6 (Task #157): con Bowie su llama3.2:3b la latenza reale è
+// ~90-120s a turno (vedi .agents/memory/bowie-real-model-quality-check.md),
+// quindi 8 turni potevano superare i 12-16 minuti per una conversazione che
+// l'utente guarda dal vivo. 6 turni restano una discussione completa
+// (apertura + repliche da entrambi i lati) ma tagliano il caso peggiore a
+// circa 9-12 minuti. Non cambia la qualità né il turn-taking (già verificati
+// nel Task #150), solo quanti turni avvengono di default.
+const DEFAULT_MAX_TURNS = 6;
 const MAX_ALLOWED_TURNS = 20;
+// Stima usata SOLO per dare all'utente un'idea di durata prima/durante la
+// conversazione (vedi evento turn_start più sotto): non è una garanzia, è la
+// mediana osservata dal vivo per un turno di Bowie/Horus sul tunnel CPU
+// condiviso.
+const ESTIMATED_SECONDS_PER_TURN = 105;
 
 // L'identificativo di un agente conversazionale è un `string` generico, non
 // più un'unione fissa a due valori: la conversazione osservabile è
@@ -621,7 +633,17 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
         const agentConfig = agents[i % agents.length]!;
         const agent = agentConfig.id;
         failingAgent = agentConfig;
-        sendEvent(res, "turn_start", { agent });
+        // `turnNumber`/`totalTurns`/`estimatedSecondsPerTurn` non guidano la
+        // logica server-side (già decisa da `totalTurns` sopra): servono solo
+        // al client per mostrare un'attesa realistica ("turno 2 di 6, circa
+        // X min rimanenti") invece di far sembrare la conversazione bloccata
+        // (Task #157).
+        sendEvent(res, "turn_start", {
+          agent,
+          turnNumber: i + 1,
+          totalTurns,
+          estimatedSecondsPerTurn: ESTIMATED_SECONDS_PER_TURN,
+        });
 
         // Nomi degli altri interlocutori e chi ha parlato per ultimo:
         // servono al system prompt per l'apertura vs. la risposta. Con due
