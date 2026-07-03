@@ -141,6 +141,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #164** — Catch a regression where two agents down at once hide one of the names <!-- ea4ce1e -->
 - **Task #163** — Add a "Chat con Quebracho" direct-chat tab <!-- d5ab446 -->
   - _In parole semplici:_ Abbiamo aggiunto una nuova opzione di chat diretta con il nostro assistente virtuale Quebracho.
 - **Task #162** — Add regression test for GET /horus/agents registry endpoint <!-- 25d27e6 -->
@@ -186,6 +187,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **18:29** · Git commit prior to merge <!-- a3d1cef -->
+  - _In parole semplici:_ Commit effettuato prima del merge.
 - **18:24** · Git commit prior to merge <!-- fec61bc -->
   - _In parole semplici:_ Commit effettuato prima del merge.
 - **18:06** · Derive agent health-gate config from a single registry <!-- d971b78 -->
