@@ -120,9 +120,34 @@ function isValidHistory(value: unknown): value is ChatRequestMessage[] {
   );
 }
 
+// Un `setInterval` (heartbeat o progresso dei tool) può scattare dopo che la
+// connessione si è già chiusa (utente che chiude la tab, abort, fine dello
+// stream). Senza questo controllo, `res.write` lancerebbe "write after end"
+// dentro un timer callback non racchiuso in try/catch: senza un handler
+// `uncaughtException` globale, questo fa crashare l'intero processo Node —
+// mandando in "network error" TUTTI gli agenti (Horus/Bowie/Quebracho)
+// insieme, non solo la chat colpita.
 function sendEvent(res: express.Response, event: string, data: unknown): void {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
+  if (res.writableEnded || res.destroyed) return;
+  try {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  } catch {
+    // La connessione è morta tra il controllo sopra e la write: ignorare, non
+    // c'è più nessuno che legga questo stream.
+  }
+}
+
+// Stesso motivo di sendEvent sopra: l'heartbeat scrive un commento SSE grezzo
+// (non un evento nominato), ma è comunque un `res.write` dentro un
+// `setInterval` e va protetto allo stesso modo.
+function writeHeartbeatPing(res: express.Response): void {
+  if (res.writableEnded || res.destroyed) return;
+  try {
+    res.write(": ping\n\n");
+  } catch {
+    // Connessione morta tra il controllo e la write: nessuno resta ad ascoltare.
+  }
 }
 
 export interface DirectChatAgentConfig {
@@ -184,7 +209,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     res.flushHeaders?.();
 
     const heartbeat = setInterval(() => {
-      res.write(": ping\n\n");
+      writeHeartbeatPing(res);
     }, 15_000);
 
     // Segnale di abort collegato sia alla chiusura della connessione (l'utente
@@ -724,7 +749,7 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
     res.flushHeaders?.();
 
     const heartbeat = setInterval(() => {
-      res.write(": ping\n\n");
+      writeHeartbeatPing(res);
     }, 15_000);
 
     // Vedi il commento nel chat handler diretto sopra: si ascolta "close" su

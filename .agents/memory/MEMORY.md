@@ -27,3 +27,4 @@
 - [Agent-registry-driven health gate](horus-agent-registry-driven-ui.md) — health/chat routes + UI unreachable copy derive from one server-side agent list, not hand-copied endpoints; also: stale lib tsbuildinfo can cause false typecheck errors.
 - [Chat file attachments are client-side only](horus-chat-file-attachments.md) — no vision model exists here, so "send/receive files" was implemented as text-extraction-in-browser + response-as-download, no server storage.
 - [Direct chat tool-calling + reply length](horus-direct-chat-tools.md) — web direct chat now runs the same tool loop as the CLI; reply length cap only relaxes once a tool was actually used this turn.
+- [SSE write-after-end crashes whole process](sse-write-after-end-crash.md) — no global uncaughtException handler here, so an unguarded `res.write` in a `setInterval` (heartbeat/tool-progress) after the client disconnects took down ALL agents at once, not just one chat.
