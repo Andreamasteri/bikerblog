@@ -89,6 +89,37 @@ const MAX_REPLY_CHARS_WITH_TOOLS = 2400;
 const MAX_REPLY_TOKENS_WITH_TOOLS = 700;
 const MAX_TOOL_ITERATIONS = 3;
 
+// Ogni risultato di un tool viene rimandato al modello come parte del prompt
+// dell'iterazione successiva. Su hardware CPU la fase (silenziosa) di prompt
+// processing/prefill cresce con la dimensione del prompt: un risultato molto
+// grande (es. github_read fino a ~8000 caratteri, o una ricerca web/Nadir
+// corposa) può da solo far sì che il prefill dell'iterazione post-tool superi
+// il tetto di ~100s di silenzio del tunnel Cloudflare PRIMA che arrivi il primo
+// token in streaming — restituendo un HTTP 524. È esattamente il motivo per cui
+// il 1° messaggio (senza tool, prompt piccolo) rispondeva in ~5s mentre il 2°
+// (con tool → risultato grande nel prompt) moriva a ~125s in 524. Cappiamo
+// quindi ogni risultato prima di reinserirlo nella conversazione, così il
+// prefill resta sotto la soglia e i messaggi consecutivi che usano tool non si
+// bloccano più. Il modello viene avvisato esplicitamente del taglio e può
+// richiamare il tool in modo più mirato se gli serve il resto.
+const MAX_TOOL_RESULT_CHARS = 4000;
+
+/** Taglia un risultato di tool troppo grande prima di reinserirlo nel prompt
+ * dell'iterazione successiva, spezzando su un a-capo quando possibile e
+ * segnalando il taglio al modello. Vedi `MAX_TOOL_RESULT_CHARS` per il perché
+ * (tetto di prefill del tunnel Cloudflare). */
+export function capToolResult(result: string): string {
+  if (result.length <= MAX_TOOL_RESULT_CHARS) return result;
+  const cut = result.slice(0, MAX_TOOL_RESULT_CHARS);
+  const lastNewline = cut.lastIndexOf("\n");
+  const safeCut = lastNewline > MAX_TOOL_RESULT_CHARS * 0.6 ? cut.slice(0, lastNewline) : cut;
+  return (
+    `${safeCut.trimEnd()}\n\n[... risultato troncato a ${MAX_TOOL_RESULT_CHARS} caratteri ` +
+    `per restare sotto il limite di tempo del tunnel: richiama il tool in modo più specifico ` +
+    `(es. un percorso o una query più mirata) se ti serve il resto.]`
+  );
+}
+
 /** Taglia una risposta al limite di caratteri applicabile (esteso se in
  * questo turno sono stati usati dei tool), spezzando su uno spazio quando
  * possibile invece che a metà parola, e segnalando il taglio con "…". */
@@ -325,7 +356,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
           if (abortController.signal.aborted) break;
 
           sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-          conversation.push({ role: "tool", name: toolName, content: result });
+          conversation.push({ role: "tool", name: toolName, content: capToolResult(result) });
         }
       }
 

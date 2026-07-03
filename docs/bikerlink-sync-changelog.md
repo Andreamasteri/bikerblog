@@ -188,6 +188,22 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **21:00** · Adjust response limits to prevent chat timeouts on slower hardware <!-- 0fc1b99 -->
+  - _In parole semplici:_ Abbiamo migliorato le risposte dell'app per evitare tempi di attesa troppo lunghi sui dispositivi più lenti.
+- **20:47** · Filter agents for group conversations to only include configured ones <!-- f904a35 -->
+  - _In parole semplici:_ In futuro, solo gli agenti configurati potranno partecipare alle conversazioni di gruppo.
+- **20:35** · Improve chat experience by fixing tool output and UI layout <!-- 7b6b855 -->
+  - _In parole semplici:_ Abbiamo migliorato l'esperienza di chat risolvendo alcuni problemi nell'output degli strumenti e nella disposizione dell'interfaccia utente.
+- **20:21** · Prevent chat server crashes by safely handling disconnections <!-- bf6b4c0 -->
+  - _In parole semplici:_ Abbiamo migliorato la stabilità della chat impedendo che si verifichino crash del server in caso di disconnessioni improvvise degli utenti.
+- **20:14** · Enable tools in web chat and adjust reply length limits <!-- 1eb694c -->
+  - _In parole semplici:_ Abbiamo attivato gli strumenti nella chat web e regolato i limiti di lunghezza delle risposte.
+- **19:57** · Add file handling and improve message memory for AI chat <!-- c77eb7c -->
+  - _In parole semplici:_ Abbiamo migliorato il modo in cui l'app gestisce i file e le conversazioni con l'IA per offrirti un'esperienza più fluida.
+- **19:52** · Increase chat message history for AI to improve conversation continuity <!-- ecaab04 -->
+  - _In parole semplici:_ Abbiamo aumentato la cronologia delle conversazioni per offrire un'esperienza più fluida con l'IA.
+- **19:27** · Update changelog to include recent task completions and AI response changes <!-- 2c40f37 -->
+  - _In parole semplici:_ Ultimo aggiornamento del registro delle modifiche per includere i compiti recentemente completati e i cambiamenti nelle risposte dell'IA.
 - **19:24** · Update AI assistants to provide brief, direct responses <!-- 394972a -->
   - _In parole semplici:_ Abbiamo migliorato i nostri assistenti virtuali per fornire risposte brevi e dirette.
 - **19:09** · Add notes about completed tasks and merge commits to the changelog <!-- 386df50 -->

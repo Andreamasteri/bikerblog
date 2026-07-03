@@ -312,12 +312,23 @@ export function AgentChatPanel({
             );
           } else if (eventName === "error" && typeof payload.message === "string") {
             setError(payload.message);
+            // Se l'errore arriva prima di qualsiasi token (es. HTTP 524 del
+            // tunnel sul prefill del 2° messaggio), rimuovi il bubble vuoto
+            // dell'assistente: l'utente vede un errore chiaro e recuperabile
+            // invece di una bolla vuota "in sospeso" (freeze silenzioso).
+            if (!content) {
+              setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+            }
           }
         }
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setError(friendlyChatErrorMessage(err));
+      // Connessione caduta prima di ricevere qualsiasi contenuto (il caso
+      // classico del "network error"): togli il bubble vuoto dell'assistente
+      // così resta solo il messaggio d'errore, non una bolla in sospeso.
+      setMessages((prev) => prev.filter((m) => m.id !== assistantId || m.content.length > 0));
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
