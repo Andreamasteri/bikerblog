@@ -141,6 +141,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #157** — Keep long Horus<->Bowie conversations from dragging on <!-- d2594fe -->
 - **Task #150** — Verify Bowie's real llama3.2:3b model still gives good conversations <!-- 24fd067 -->
   - _In parole semplici:_ Abbiamo verificato che il modello di llama3.2:3b di Bowie funzioni correttamente per conversazioni di qualità.
 - **Task #147** — Alert when Nadir semantic search silently stops working <!-- 8f6b0ed -->
@@ -170,6 +171,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **16:36** · Git commit prior to merge <!-- 908333a -->
+  - _In parole semplici:_ Commit git prima del merge.
 - **16:16** · Update system to sync changelog in real-time after every merge <!-- 75b8117 -->
   - _In parole semplici:_ Abbiamo migliorato il sistema per sincronizzare i cambiamenti in tempo reale dopo ogni fusione.
 - **16:05** · Update changelog to reflect all recent task completions <!-- c2d5f6e -->
