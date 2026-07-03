@@ -142,6 +142,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 **Task completati:**
 
 - **Task #157** — Keep long Horus<->Bowie conversations from dragging on <!-- d2594fe -->
+- **Task #154** — Generalize the observed-conversation UI to N agents <!-- 792a759 -->
+  - _In parole semplici:_ Abbiamo migliorato l'interfaccia utente per gestire conversazioni con più agenti contemporaneamente.
 - **Task #150** — Verify Bowie's real llama3.2:3b model still gives good conversations <!-- 24fd067 -->
   - _In parole semplici:_ Abbiamo verificato che il modello di llama3.2:3b di Bowie funzioni correttamente per conversazioni di qualità.
 - **Task #147** — Alert when Nadir semantic search silently stops working <!-- 8f6b0ed -->
@@ -171,6 +173,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **16:40** · Git commit prior to merge <!-- a96f001 -->
+  - _In parole semplici:_ Commit git prima del merge.
 - **16:36** · Git commit prior to merge <!-- 908333a -->
   - _In parole semplici:_ Commit git prima del merge.
 - **16:16** · Update system to sync changelog in real-time after every merge <!-- 75b8117 -->
