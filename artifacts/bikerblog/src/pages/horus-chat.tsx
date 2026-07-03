@@ -287,7 +287,12 @@ export function HorusChat() {
     retry: retryAgentRegistry,
   } = useAgentRegistry(password, handleUnauthorized);
 
-  const healthEndpoints = agentRegistry.map((a) => a.healthEndpoint);
+  // Ogni endpoint porta il `displayName` dell'agente (Task #161): senza
+  // questo, `useAgentHealth` non saprebbe nominare quale agente specifico è
+  // giù quando il fallimento è a livello di rete/HTTP (nessun corpo JSON da
+  // cui ricavare il nome), e mostrerebbe un avviso generico indistinguibile
+  // dagli altri anche con un solo agente su N effettivamente irraggiungibile.
+  const healthEndpoints = agentRegistry.map((a) => ({ endpoint: a.healthEndpoint, displayName: a.displayName }));
 
   // Controllo di raggiungibilità di TUTTI gli agenti del registry eseguito
   // all'apertura della tab "Horus ↔ Bowie", prima che l'utente proponga un
