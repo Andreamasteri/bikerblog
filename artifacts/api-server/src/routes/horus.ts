@@ -78,9 +78,16 @@ function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
 // invocare tool in sequenza nello stesso turno (stesso valore della CLI).
 const MAX_REPLY_CHARS = 400;
 const MAX_REPLY_TOKENS = 220;
-const MAX_REPLY_CHARS_WITH_TOOLS = 6000;
-const MAX_REPLY_TOKENS_WITH_TOOLS = 1600;
-const MAX_TOOL_ITERATIONS = 5;
+const MAX_REPLY_CHARS_WITH_TOOLS = 2400;
+// Il tunnel Cloudflare dell'utente chiude la connessione dopo ~100s senza
+// byte in arrivo (vedi lib/horus/src/client.ts). Su questo hardware CPU,
+// generare 1600 token può da solo superare quella soglia (osservato: turni
+// con tool arrivavano a 125s+ e finivano in HTTP 524), quindi il budget
+// "con tool" resta comunque più corposo di quello di default ma abbastanza
+// piccolo da restare sotto il tetto del tunnel nella grande maggioranza dei
+// casi anche su questo hardware lento.
+const MAX_REPLY_TOKENS_WITH_TOOLS = 700;
+const MAX_TOOL_ITERATIONS = 3;
 
 /** Taglia una risposta al limite di caratteri applicabile (esteso se in
  * questo turno sono stati usati dei tool), spezzando su uno spazio quando
