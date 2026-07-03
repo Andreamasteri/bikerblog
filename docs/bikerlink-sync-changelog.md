@@ -133,12 +133,14 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 - **Task #137** — Confirm closing the browser mid-discussion stops Horus/Bowie generation <!-- b12a9ba -->
   - _In parole semplici:_ Abbiamo risolto il problema che impediva di chiudere il browser durante una discussione in corso tra Horus e Bowie.
 - **Task #136** — Surface corrupted resumeTranscript as one clear, non-looping error <!-- 5504788 -->
-  - _In parole semplici:_ Risolto il problema di ripetizione del testo nella trascrizione della superficie corrotta.
+  - _In parole semplici:_ Corretto un errore che causava il ripristino continuo della superficie e risolto il problema di ripetizione del testo nella trascrizione.
 - **Task #135** — Build "Nadir" standalone semantic-search service for Horus/Bowie <!-- 161851a -->
   - _In parole semplici:_ Abbiamo creato un servizio di ricerca semantica in grado di funzionare in modo autonomo per Horus e Bowie
 
 **Altre modifiche:**
 
+- **13:46** · Display actual AI model names in the chat interface <!-- 56ee5d4 -->
+  - _In parole semplici:_ Visualizzazione dei nomi del modello AI attuale nell'interfaccia di chat
 - **13:37** · Add simple Italian translations to commit log entries <!-- 0d597b1 -->
-  - _In parole semplici:_ Aggiunto supporto per le traduzioni in italiano nei messaggi di commit
+  - _In parole semplici:_ Aggiunte traduzioni semplici in italiano ai messaggi di commit
 <!-- AUTO-CHANGELOG:END -->

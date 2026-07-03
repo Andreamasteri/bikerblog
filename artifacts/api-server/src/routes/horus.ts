@@ -268,11 +268,12 @@ function createHealthHandler(config: HealthAgentConfig) {
         message:
           `${config.agentName} sembra configurato ma non risponde in questo momento ` +
           "(server o tunnel non raggiungibile). Riprova tra poco.",
+        model: health.model,
       });
       return;
     }
 
-    res.json({ status: "ok" });
+    res.json({ status: "ok", model: health.model });
   };
 }
 

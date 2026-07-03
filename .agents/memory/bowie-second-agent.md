@@ -12,3 +12,7 @@ Env vars for Bowie: `BOWIE_OLLAMA_MODEL` (required to enable it) with `BOWIE_OLL
 **Why:** the user's actual secret name preference was `BOWIE_OLLAMA_MODEL`, not `BOWIE_MODEL` — matches the naming style of `HORUS_OLLAMA_URL`. Bowie intentionally does NOT get Horus's persistent memory file attached (`useHorusMemoryByDefault: false`) — it's a distinct agent, not an alter ego.
 
 **How to apply:** if a third Ollama agent is ever added, follow the same pattern: one `createOllamaAgentClient()` call with a required `<AGENT>_OLLAMA_MODEL` env var and optional URL/CF-creds overrides that fall back to Horus's.
+
+**Confirmed topology (2026-07-03):** in this environment no `BOWIE_OLLAMA_URL`/`BOWIE_CF_ACCESS_*` are set, so Bowie really does share Horus's tunnel/URL/CF creds — same-endpoint topology, not a dedicated tunnel, verified via `printenv` + the running api-server's own health checks (`/horus/health`, `/horus/bowie-health` both return a `model` field now). `checkHealth()` and the health routes surface the real configured model string end-to-end (startup log, health JSON, chat UI header) instead of silently implying a shared model.
+
+**Gotcha:** when asking a user to (re)supply a secret like `BOWIE_OLLAMA_MODEL` via `requestEnvVar`, the userMessage must state the exact literal value expected — otherwise the user may paste the *key name* as the value (happened once: `BOWIE_OLLAMA_MODEL="BOWIE_OLLAMA_MODEL"`). Always verify the new value took effect via a live health/log check after restart, don't assume the round-trip succeeded.

@@ -7,11 +7,19 @@ export interface AgentHealthState {
   notConfigured: string | null;
   unreachableMessage: string | null;
   retry: () => void;
+  /**
+   * Nome del modello reale dietro ciascun endpoint di health check, es.
+   * `{ "api/horus/health": "bikerlink:latest", "api/horus/bowie-health": "llama3.2:3b" }`.
+   * Usato per affiancare "che cervello c'è davvero dietro il nome in codice"
+   * ovunque lo stato dell'agente sia già mostrato, senza inventare una nuova UI.
+   */
+  modelsByEndpoint: Record<string, string>;
 }
 
 interface HealthResult {
   status?: "ok" | "not_configured" | "unreachable";
   message?: string;
+  model?: string;
 }
 
 /**
@@ -40,6 +48,7 @@ export function useAgentHealth(
   const [notConfigured, setNotConfigured] = useState<string | null>(null);
   const [unreachableMessage, setUnreachableMessage] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [modelsByEndpoint, setModelsByEndpoint] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!enabled || !password) return;
@@ -70,6 +79,13 @@ export function useAgentHealth(
         }
 
         const okResults = results as Exclude<(typeof results)[number], "unauthorized">[];
+
+        const models: Record<string, string> = {};
+        endpoints.forEach((ep, i) => {
+          const model = okResults[i]?.data.model;
+          if (model) models[ep] = model;
+        });
+        setModelsByEndpoint(models);
 
         if (okResults.some((r) => !r.res.ok)) {
           setUnreachableMessage("Impossibile verificare lo stato della connessione. Riprova tra poco.");
@@ -120,5 +136,6 @@ export function useAgentHealth(
     notConfigured,
     unreachableMessage,
     retry: () => setRetryKey((k) => k + 1),
+    modelsByEndpoint,
   };
 }

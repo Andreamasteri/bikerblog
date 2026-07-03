@@ -145,8 +145,8 @@ export interface HorusRawResult {
  */
 export type OllamaAgentHealth =
   | { status: "not_configured" }
-  | { status: "ok" }
-  | { status: "unreachable"; detail?: string };
+  | { status: "ok"; model: string }
+  | { status: "unreachable"; detail?: string; model?: string };
 
 /** Configurazione di un agente Ollama generico (Horus, Bowie, o altri in futuro). */
 export interface OllamaAgentConfig {
@@ -383,13 +383,14 @@ export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentC
         signal: controller.signal,
       });
       if (!res.ok) {
-        return { status: "unreachable", detail: `HTTP ${res.status}` };
+        return { status: "unreachable", detail: `HTTP ${res.status}`, model: config.model };
       }
-      return { status: "ok" };
+      return { status: "ok", model: config.model };
     } catch (err) {
       return {
         status: "unreachable",
         detail: err instanceof Error ? err.message : "errore sconosciuto",
+        model: config.model,
       };
     } finally {
       clearTimeout(timer);

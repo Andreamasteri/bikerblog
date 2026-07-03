@@ -140,12 +140,20 @@ export function HorusChat() {
     notConfigured: convoNotConfigured,
     unreachableMessage: convoUnreachableMessage,
     retry: retryConvoHealth,
+    modelsByEndpoint: agentModels,
   } = useAgentHealth(
     ["api/horus/health", "api/horus/bowie-health"],
     password,
     handleUnauthorized,
-    mode === "conversation"
+    // Sempre attivo (non solo in modalità "conversation"): serve anche a
+    // conoscere il nome del modello reale dietro Horus/Bowie da mostrare nel
+    // sottotitolo dell'header in ogni modalità, non solo per il gate della
+    // conversazione osservata.
+    true
   );
+
+  const horusModelLabel = agentModels["api/horus/health"] ?? "bikerlink:latest";
+  const bowieModelLabel = agentModels["api/horus/bowie-health"];
 
   async function loadHistoryList() {
     if (!password) return;
@@ -478,11 +486,13 @@ export function HorusChat() {
             </h1>
             <p className="text-xs text-muted-foreground mt-1">
               {mode === "chat"
-                ? "bikerlink:latest"
+                ? `Horus (${horusModelLabel})`
                 : mode === "bowie-chat"
-                  ? "Chat diretta con Bowie"
+                  ? `Chat diretta con Bowie${bowieModelLabel ? ` (${bowieModelLabel})` : ""}`
                   : mode === "conversation"
-                    ? "Conversazione con Bowie"
+                    ? `Conversazione Horus (${horusModelLabel}) ↔ Bowie${
+                        bowieModelLabel ? ` (${bowieModelLabel})` : ""
+                      }`
                     : "Cronologia conversazioni"}
             </p>
           </div>
