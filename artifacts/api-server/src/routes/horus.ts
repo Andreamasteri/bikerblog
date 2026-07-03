@@ -13,8 +13,6 @@ import {
   checkQuebrachoHealth,
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
-  getHorusTools,
-  executeHorusTool,
   type HorusMessage,
   type OllamaAgentHealth,
 } from "@workspace/horus";
@@ -36,6 +34,12 @@ function requireHorusPassword(req: express.Request, res: express.Response): bool
   return true;
 }
 
+// Vedi nota su MAX_REPLY_CHARS più sotto: le chat dirette (Horus, Bowie,
+// Quebracho) devono restare brevi e sempre dirette (niente tool) per tenere
+// bassa la latenza su hardware CPU. Le conversazioni sono comunque salvate
+// nello storico/log, quindi non serve un tool "di memoria" in tempo reale
+// dentro la chat: se un agente ha bisogno di contesto passato, lo trova nei
+// log invece di doverlo cercare via tool durante la risposta.
 function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
   return {
     role: "system",
@@ -44,26 +48,38 @@ function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
       "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
       "NON riportare la conversazione su BikerLink, sviluppo software, moto o sul blog a meno che sia l'utente stesso a parlarne esplicitamente. " +
       "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink. " +
-      "Hai a disposizione dei tool: usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
-      "usa github_read per leggere file o cartelle dal codice sorgente reale di bikerlink, bikerblog o bikerweb quando l'utente chiede di codice, struttura del progetto, " +
-      "come funziona una feature, o quando vuoi proporre idee di nuovi task o contenuti basate su cosa esiste già nel codice — è sempre sola lettura, non puoi scrivere né eseguire nulla, " +
-      "e qualsiasi idea o proposta va detta a parole in chat, mai eseguita autonomamente; " +
-      "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
-      "anche se non te lo chiede esplicitamente con un comando — non serve chiedere conferma, salvala e basta " +
-      `(le tue note vengono salvate nella memoria condivisa taggate come tue, così non si confondono con quelle dell'altro agente); ` +
-      "se disponibili, hai anche typecheck_repo, lint_repo, search_code e git_log: usali quando ti chiedono di trovare errori, bug, typo o problemi nel codice, o di cercare un pattern in tutto il repo — " +
-      "sono analisi statica REALE (tsc/eslint/grep eseguiti davvero), non una tua stima. Se questi tool non compaiono nella lista disponibile, di' esplicitamente che l'analisi statica del codice non è configurata in questo momento, invece di rispondere con un generico disclaimer da 'modello linguistico'. " +
-      "Se disponibile, hai anche architect: usalo (non i tool leggeri sopra) quando ti chiedono un'analisi architetturale approfondita, di pianificare l'implementazione di una feature/modifica non banale, o di trovare la causa radice di un bug complesso — passagli i percorsi dei file più rilevanti come contesto quando li conosci. È solo analisi (mai scrittura/esecuzione di codice) e può richiedere qualche minuto: avvisa l'utente che ci vorrà un po' prima di invocarlo.",
+      `Rispondi sempre in modo breve, diretto e conciso: al massimo circa ${MAX_REPLY_CHARS} caratteri (poche frasi), mai un testo lungo o articolato. ` +
+      "Vai dritto al punto senza premesse o ripetizioni.",
   };
 }
 
-const MAX_TOOL_ITERATIONS = 5;
+// Le chat dirette e la conversazione osservata devono restare rapide anche
+// su hardware CPU: risposte brevi (poche frasi) invece che articolate.
+// `MAX_REPLY_CHARS` è applicato come istruzione nel prompt E come taglio
+// difensivo lato server (`truncateReply`) nel caso il modello ignori
+// l'istruzione; `MAX_REPLY_TOKENS` limita `num_predict` così Ollama smette di
+// generare presto invece di continuare oltre il necessario.
+const MAX_REPLY_CHARS = 400;
+const MAX_REPLY_TOKENS = 220;
+
+/** Taglia una risposta a MAX_REPLY_CHARS, spezzando su uno spazio quando
+ * possibile invece che a metà parola, e segnalando il taglio con "…". */
+function truncateReply(content: string): string {
+  if (content.length <= MAX_REPLY_CHARS) return content;
+  const cut = content.slice(0, MAX_REPLY_CHARS);
+  const lastSpace = cut.lastIndexOf(" ");
+  const safeCut = lastSpace > MAX_REPLY_CHARS * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return `${safeCut.trimEnd()}…`;
+}
+
 // Ogni messaggio rimanda l'intera cronologia a Ollama, che la rielabora da
 // zero (nessun riuso del contesto tra richieste HTTP separate). Su hardware
 // CPU questo tempo di "prompt processing" cresce con la lunghezza della
-// conversazione, quindi teniamo la finestra inviata ragionevolmente corta
-// per mantenere le risposte veloci anche in chat lunghe.
-const MAX_HISTORY_MESSAGES = 16;
+// conversazione, quindi teniamo la finestra inviata cortissima (1 messaggio
+// precedente) per mantenere le risposte veloci: le conversazioni restano
+// comunque salvate per intero nello storico/log, quindi non si perde nulla,
+// solo non viene rimandato a Ollama ad ogni turno.
+const MAX_HISTORY_MESSAGES = 1;
 
 interface ChatRequestMessage {
   role: "user" | "assistant";
@@ -98,11 +114,18 @@ export interface DirectChatAgentConfig {
 }
 
 /**
- * Handler generico per la chat diretta a un agente (Horus o Bowie): stesso
- * loop di tool-calling, stessi eventi SSE e stessa gestione di abort per
- * entrambi. Solo il client Ollama (chatRaw), il system prompt e il nome
- * dell'agente cambiano — questo evita di duplicare la logica di streaming
- * quando aggiungiamo un secondo agente con chat diretta a pari livello.
+ * Handler generico per la chat diretta a un agente (Horus, Bowie o
+ * Quebracho): stessi eventi SSE e stessa gestione di abort per tutti. Solo il
+ * client Ollama (chatRaw), il system prompt e il nome dell'agente cambiano —
+ * questo evita di duplicare la logica di streaming quando aggiungiamo un
+ * nuovo agente con chat diretta a pari livello.
+ *
+ * Le risposte sono sempre dirette: nessun tool-calling qui (niente
+ * web_search/github_read/ecc.), una sola chiamata a Ollama per messaggio. Le
+ * conversazioni sono comunque salvate/loggate per intero, quindi un agente
+ * che ha bisogno di contesto passato lo trova nei log invece che dover
+ * invocare un tool in tempo reale — e la chat resta molto più veloce su
+ * hardware CPU.
  */
 export function createDirectChatHandler(config: DirectChatAgentConfig) {
   return async (req: express.Request, res: express.Response): Promise<void> => {
@@ -144,10 +167,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
 
     // Segnale di abort collegato sia alla chiusura della connessione (l'utente
     // chiude la tab o naviga altrove) sia al pulsante "Stop" lato client, che
-    // interrompe lo stream chiudendo la request. Il segnale viene propagato
-    // sia alla chiamata a Ollama sia all'esecuzione del tool in corso (es.
-    // architect), per non lasciar girare inutilmente un'analisi che nessuno
-    // leggerà più.
+    // interrompe lo stream chiudendo la request.
     // NB: si ascolta "close" su `res` (ServerResponse), non su `req`
     // (IncomingMessage): quest'ultimo emette "close" quasi subito dopo che
     // express.json() ha finito di consumare il body della richiesta — molto
@@ -159,67 +179,22 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     res.on("close", () => abortController.abort());
 
     try {
-      let finalReply = "";
+      const { content } = await config.chatRaw(conversation, {
+        maxTokens: MAX_REPLY_TOKENS,
+        signal: abortController.signal,
+        onToken: (token) => {
+          sendEvent(res, "token", { token });
+        },
+      });
 
-      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted; iteration++) {
-        const { content, toolCalls } = await config.chatRaw(conversation, {
-          tools: await getHorusTools(),
-          signal: abortController.signal,
-          onToken: (token) => {
-            sendEvent(res, "token", { token });
-          },
-        });
-
-        if (abortController.signal.aborted) break;
-
-        if (toolCalls.length === 0) {
-          finalReply = content;
-          break;
-        }
-
-        conversation.push({ role: "assistant", content, tool_calls: toolCalls });
-
-        for (const call of toolCalls) {
-          if (abortController.signal.aborted) break;
-
-          const toolName = call.function.name;
-          sendEvent(res, "tool_call", { name: toolName, arguments: call.function.arguments });
-
-          // Alcuni tool (es. architect) girano su hardware CPU e possono
-          // richiedere diversi minuti. Senza un segnale periodico la chat
-          // sembrerebbe bloccata: emettiamo un evento di progresso ogni pochi
-          // secondi finché il tool non ha terminato, così il client può
-          // mostrare "ancora al lavoro..." invece di restare in silenzio.
-          const toolStartedAt = Date.now();
-          const progressInterval = setInterval(() => {
-            sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-          }, 5_000);
-
-          let result: string;
-          try {
-            result = await executeHorusTool(
-              toolName,
-              call.function.arguments,
-              abortController.signal,
-              config.agentName
-            );
-          } finally {
-            clearInterval(progressInterval);
-          }
-
-          if (abortController.signal.aborted) break;
-
-          sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-          conversation.push({ role: "tool", name: toolName, content: result });
-        }
-      }
+      const finalReply = truncateReply(content);
 
       if (abortController.signal.aborted) {
         // Connessione già chiusa dal client: non ha senso scrivere altro sullo
         // stream (fallirebbe comunque).
       } else if (!finalReply) {
         sendEvent(res, "error", {
-          message: "Troppe chiamate a strumenti senza una risposta finale. Riprova con un'altra domanda.",
+          message: `${config.agentName} non ha restituito una risposta. Riprova con un'altra domanda.`,
         });
       } else {
         sendEvent(res, "done", { content: finalReply });
@@ -448,16 +423,17 @@ function buildConvoSystemPrompt(opts: {
     `Stai partecipando a una conversazione osservabile tra ${italianCountWord(totalAgents)} IA, tu (${selfName}) e ${otherList}, ` +
     `${othersDescriptor}. Un utente umano ha proposto un argomento iniziale e vuole ` +
     "guardarvi discuterne a turni.";
+  const brevity = ` Resta breve e diretto: al massimo circa ${MAX_REPLY_CHARS} caratteri (poche frasi), mai un testo lungo o articolato.`;
   const body =
     previousSpeakerName === null
       ? `Sei tu ad aprire la discussione: ${openingOthers} non ha ancora detto nulla. Presenta la tua opinione o ` +
-        "prospettiva sull'argomento proposto dall'utente, in modo naturale e conciso (pochi paragrafi al massimo), " +
+        "prospettiva sull'argomento proposto dall'utente, in modo naturale e conciso, " +
         `ponendo le basi per il confronto con ${openingOthers}. Non inventare né riassumere battute di ${openingOthers} che ` +
         "non sono ancora avvenute."
-      : `Rispondi in modo naturale e conciso (pochi paragrafi al massimo) a ciò che ${previousSpeakerName} ha appena detto, ` +
+      : `Rispondi in modo naturale e conciso a ciò che ${previousSpeakerName} ha appena detto, ` +
         `portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello ` +
         `che ha detto ${previousSpeakerName}, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.`;
-  return { role: "system", content: `${intro} ${body}${toolsNote}` };
+  return { role: "system", content: `${intro} ${body}${brevity}${toolsNote}` };
 }
 
 // Ridotto da 8 a 6 (Task #157): con Bowie su llama3.2:3b la latenza reale è
@@ -754,13 +730,14 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
 
         const { content } = await agentConfig.chatRaw(messages, {
           ...agentConfig.chatOptions,
+          maxTokens: MAX_REPLY_TOKENS,
           signal: abortController.signal,
           onToken: (token) => sendEvent(res, "token", { agent, token }),
         });
 
         if (abortController.signal.aborted) break;
 
-        const finalContent = content || "(nessuna risposta)";
+        const finalContent = truncateReply(content) || "(nessuna risposta)";
         transcript.push({ agent, content: finalContent });
         sendEvent(res, "turn_end", { agent, content: finalContent });
       }
