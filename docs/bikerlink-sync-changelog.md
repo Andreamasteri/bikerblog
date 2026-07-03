@@ -141,9 +141,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
-- **Task #158** — Let users pick a shorter Horus↔Bowie conversation before starting it <!-- 8c4baad -->
+- **Task #158** — Let users pick a shorter Horus↔Bowie conversation before starting it <!-- c62a700 -->
+  - _In parole semplici:_ Abbiamo migliorato la funzione di chat tra Horus e Bowie per consentire agli utenti di scegliere una conversazione più breve prima di avviare.
 - **Task #157** — Keep long Horus<->Bowie conversations from dragging on <!-- d2594fe -->
-  - _In parole semplici:_ Abbiamo migliorato il sistema di chat tra utenti per rendere le conversazioni più rapide e fluide.
+  - _In parole semplici:_ Abbiamo migliorato il sistema di chat tra Horus e Bowie per rendere le conversazioni più rapide ed efficienti.
 - **Task #154** — Generalize the observed-conversation UI to N agents <!-- 792a759 -->
   - _In parole semplici:_ Abbiamo migliorato l'interfaccia utente per gestire conversazioni con più agenti contemporaneamente.
 - **Task #150** — Verify Bowie's real llama3.2:3b model still gives good conversations <!-- 24fd067 -->
@@ -175,6 +176,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **16:46** · Git commit prior to merge <!-- 2a7146f -->
+  - _In parole semplici:_ Commit prima del merge.
 - **16:40** · Git commit prior to merge <!-- a96f001 -->
   - _In parole semplici:_ Commit git prima del merge.
 - **16:36** · Git commit prior to merge <!-- 908333a -->
