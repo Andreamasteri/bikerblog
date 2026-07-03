@@ -64,6 +64,15 @@
  *                     non configurati, questi tool non vengono esposti al
  *                     modello (nessun errore, semplicemente non compaiono
  *                     nella lista strumenti).
+ *  - search_manual — ricerca semantica (per significato, non per parole
+ *                     esatte) su un "manuale" testuale + le conversazioni
+ *                     recenti che coinvolgono Bowie + i commenti pubblici,
+ *                     delegata al servizio Nadir su TC (embedding all-minilm
+ *                     via Ollama, indice file-based con similarità del coseno),
+ *                     vedi deploy/horus-nadir/. Agnostico rispetto all'agente:
+ *                     Horus, Bowie o un eventuale terzo agente lo usano allo
+ *                     stesso modo. Richiede NADIR_URL + NADIR_GATE_TOKEN; se
+ *                     non configurati, il tool non viene esposto al modello.
  */
 
 import type { HorusToolSpec } from "./client.js";
@@ -384,8 +393,47 @@ const ANALYSIS_TOOL_SPECS: HorusToolSpec[] = [
   },
 ];
 
+// Nadir è il servizio di ricerca semantica su TC (deploy/horus-nadir/):
+// indicizza il "manuale" testuale, le conversazioni recenti che coinvolgono
+// Bowie e i commenti pubblici, e risponde a query in linguaggio naturale con i
+// frammenti più pertinenti (embedding all-minilm + similarità del coseno). Il
+// tool è deliberatamente agnostico rispetto all'agente: Horus, Bowie o un
+// eventuale terzo agente lo interrogano tutti allo stesso modo — basta che
+// abbiano accesso a questa lista di tool.
+const NADIR_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "search_manual",
+      description:
+        "Cerca per significato (ricerca semantica, non per parole esatte) dentro la base di conoscenza di Nadir: un \"manuale\" testuale, " +
+        "le conversazioni recenti che coinvolgono Bowie e i commenti pubblici dei lettori. Usalo quando ti serve recuperare qualcosa di già " +
+        "detto o annotato — una procedura, una convenzione, una risposta data in passato, il parere dei lettori — anche se non ricordi le " +
+        "parole precise. Restituisce i frammenti più pertinenti con la loro origine (manuale/conversazione/commento). Sola lettura.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Cosa cercare, espresso in linguaggio naturale (per significato, non per parole chiave esatte).",
+          },
+          limit: {
+            type: "number",
+            description: "Numero massimo di frammenti da restituire (default 5, massimo 20).",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+];
+
 function isAnalysisServiceConfigured(): boolean {
   return Boolean(process.env["HORUS_ANALYSIS_URL"] && process.env["ANALYSIS_GATE_TOKEN"]);
+}
+
+function isNadirConfigured(): boolean {
+  return Boolean(process.env["NADIR_URL"] && process.env["NADIR_GATE_TOKEN"]);
 }
 
 // SONARQUBE_TOKEN vive solo lato servizio su TC — invisibile a Replit — quindi
@@ -427,12 +475,17 @@ async function isSonarAvailable(): Promise<boolean> {
 const SONAR_SCAN_TOOL_NAME = "sonar_scan";
 
 export async function getHorusTools(): Promise<HorusToolSpec[]> {
-  if (!isAnalysisServiceConfigured()) return BASE_HORUS_TOOLS;
+  // search_manual (Nadir) è gated solo sulla presenza delle env var: a
+  // differenza di sonar_scan non serve un capability-check live, perché non ci
+  // sono sotto-configurazioni che possano variare indipendentemente.
+  const nadirTools = isNadirConfigured() ? NADIR_TOOL_SPECS : [];
+
+  if (!isAnalysisServiceConfigured()) return [...BASE_HORUS_TOOLS, ...nadirTools];
   const sonarAvailable = await isSonarAvailable();
   const analysisTools = sonarAvailable
     ? ANALYSIS_TOOL_SPECS
     : ANALYSIS_TOOL_SPECS.filter((spec) => spec.function.name !== SONAR_SCAN_TOOL_NAME);
-  return [...BASE_HORUS_TOOLS, ...analysisTools];
+  return [...BASE_HORUS_TOOLS, ...nadirTools, ...analysisTools];
 }
 
 /** @deprecated usa `getHorusTools()` — mantenuto per compatibilità, non include i tool di analisi condizionali. */
@@ -1157,6 +1210,58 @@ async function sonarScanTool(repoArg: string, signal?: AbortSignal): Promise<str
   return callAnalysisService("/sonar", { repo: repoKey }, signal);
 }
 
+interface NadirServiceResponse {
+  result?: string;
+  error?: string;
+}
+
+/**
+ * Chiama il servizio di ricerca semantica Nadir su TC (deploy/horus-nadir/).
+ * Come per callAnalysisService, l'embedding e la ricerca girano tutti su TC,
+ * mai su Replit: qui inviamo solo la query e riceviamo i frammenti pertinenti.
+ */
+async function callNadirService(
+  query: string,
+  limit: number | undefined,
+  signal?: AbortSignal
+): Promise<string> {
+  const baseUrl = process.env["NADIR_URL"];
+  const gateToken = process.env["NADIR_GATE_TOKEN"];
+  if (!baseUrl || !gateToken) {
+    return "Servizio di ricerca semantica Nadir non configurato (NADIR_URL/NADIR_GATE_TOKEN mancanti).";
+  }
+  if (!query.trim()) {
+    return "Query di ricerca mancante.";
+  }
+
+  const timeoutSignal = AbortSignal.timeout(60 * 1000);
+  const combinedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal;
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl.replace(/\/$/, "")}/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Nadir-Gate-Token": gateToken,
+      },
+      body: JSON.stringify({ query: query.trim(), ...(limit !== undefined ? { limit } : {}) }),
+      signal: combinedSignal,
+    });
+  } catch (err) {
+    if (signal?.aborted) {
+      return "Ricerca interrotta dall'utente.";
+    }
+    throw err;
+  }
+
+  const data = (await res.json().catch(() => ({}))) as NadirServiceResponse;
+  if (!res.ok || data.error) {
+    return `Il servizio Nadir ha risposto con errore (HTTP ${res.status}): ${data.error ?? "errore sconosciuto"}.`;
+  }
+  return data.result ?? "Nadir non ha restituito alcun risultato.";
+}
+
 /**
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
  * da rimandare come messaggio role:"tool". `signal` è opzionale e permette al
@@ -1204,6 +1309,12 @@ export async function executeHorusTool(
         );
       case "sonar_scan":
         return await sonarScanTool(String(args.repo ?? ""), signal);
+      case "search_manual":
+        return await callNadirService(
+          String(args.query ?? ""),
+          typeof args.limit === "number" ? args.limit : undefined,
+          signal
+        );
       default:
         return `Tool sconosciuto: "${name}".`;
     }

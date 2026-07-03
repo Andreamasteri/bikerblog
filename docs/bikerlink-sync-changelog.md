@@ -97,6 +97,24 @@ corrispondono a un task portato a termine.
 - **Test di non-regressione dedicati** per assicurarsi che questi recuperi
   continuino a funzionare anche in futuro.
 
+### 3 luglio 2026 · Arriva "Nadir", la memoria ricercabile di Horus e Bowie
+
+- **Nuovo servizio "Nadir" per la ricerca semantica.** Nadir è un piccolo
+  programma che gira sul server personale dell'utente ("TC"), come gli altri
+  strumenti di Horus. Serve a cercare informazioni "per significato" e non per
+  parole esatte: gli si fa una domanda a parole e restituisce i pezzi di testo
+  più pertinenti. Costruisce il suo indice su tre fonti — un "manuale" testuale
+  scritto a mano, le conversazioni recenti che coinvolgono Bowie e i commenti
+  pubblici dei lettori. Usa il modello `all-minilm` (via Ollama) per capire i
+  significati e un semplice file per l'indice, senza database aggiuntivi.
+- **Nuovo strumento `search_manual` per Horus e Bowie.** Entrambi gli agenti
+  possono ora interrogare Nadir allo stesso modo. Lo strumento è pensato per
+  essere "neutro": un eventuale terzo agente in futuro lo userebbe senza
+  modifiche. Compare solo quando Nadir è configurato, altrimenti resta nascosto.
+- **Nuovo canale di sola lettura** sul blog per fornire a Nadir i dati da
+  indicizzare (manuale, conversazioni, commenti), protetto dallo stesso token
+  interno già usato dalle altre automazioni.
+
 ---
 
 ## Aggiornamenti automatici
@@ -110,7 +128,16 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 **Task completati:**
 
 - **Task #139** — Add automated coverage for corrupted saved-chat restart flow <!-- 19cc6fd -->
-- **Task #138** — Changelog di sincronizzazione BikerLink (backfill + auto-update con task completati) <!-- f5d4bf4 -->
+  - _In parole semplici:_ Abbiamo migliorato il sistema di chat per evitare interruzioni durante le conversazioni salvate.
+- **Task #138** — Changelog di sincronizzazione BikerLink (backfill + auto-update con task completati) <!-- dc46e5d -->
+  - _In parole semplici:_ BikerLink ora sincronizza automaticamente i dati dei tuoi viaggi e aggiorna le informazioni in background.
 - **Task #137** — Confirm closing the browser mid-discussion stops Horus/Bowie generation <!-- b12a9ba -->
+  - _In parole semplici:_ Chiudi il browser durante una discussione per fermare la generazione di Horus/Bowie.
 - **Task #136** — Surface corrupted resumeTranscript as one clear, non-looping error <!-- 5504788 -->
+  - _In parole semplici:_ Correzione del bug che causava il ripristino continuo della superficie
+
+**Altre modifiche:**
+
+- **13:37** · Add simple Italian translations to commit log entries <!-- 0d597b1 -->
+  - _In parole semplici:_ Aggiunte traduzioni semplici in italiano ai messaggi di commit
 <!-- AUTO-CHANGELOG:END -->

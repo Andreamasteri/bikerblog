@@ -1,15 +1,22 @@
 import { Router, type IRouter } from "express";
 import express from "express";
 import { createHmac } from "crypto";
-import { writeFileSync, mkdirSync } from "fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from "fs";
 import path from "path";
 import { Storage } from "@google-cloud/storage";
-import { db, postsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import {
+  db,
+  postsTable,
+  commentsTable,
+  horusBowieConversationsTable,
+  type HorusConversationTurn,
+} from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 const INBOX_DIR = path.resolve(__dirname, "..", "..", "..", "..", "inbox");
+const NADIR_MANUAL_PATH = path.join(INBOX_DIR, "nadir-manual.md");
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
 // "Termina la sessione...."
@@ -248,5 +255,98 @@ router.delete(
     }
   },
 );
+
+// Sorgente di sola lettura per Nadir (deploy/horus-nadir/), il servizio di
+// ricerca semantica su TC. Nadir gira fuori da Replit e non ha accesso diretto
+// al DB: questo endpoint gli fornisce, dietro lo stesso bearer token interno
+// delle altre rotte /_internal/*, i tre corpi che indicizza — il "manuale"
+// testuale (inbox/nadir-manual.md), le conversazioni recenti che coinvolgono
+// Bowie e i commenti pubblici dei post. Nessun secret o dato privato oltre a
+// questi; nessuna scrittura.
+const NADIR_EXPORT_MAX_CONVERSATIONS = 200;
+const NADIR_EXPORT_DEFAULT_CONVERSATIONS = 50;
+const NADIR_EXPORT_MAX_COMMENTS = 2000;
+const NADIR_EXPORT_DEFAULT_COMMENTS = 500;
+
+function clampLimit(raw: unknown, fallback: number, max: number): number {
+  const n = typeof raw === "string" ? Number.parseInt(raw, 10) : Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.floor(n), max);
+}
+
+router.get("/_internal/nadir-export", async (req, res): Promise<void> => {
+  const auth = req.headers.authorization;
+  if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+
+  const conversationLimit = clampLimit(
+    req.query["conversations"],
+    NADIR_EXPORT_DEFAULT_CONVERSATIONS,
+    NADIR_EXPORT_MAX_CONVERSATIONS,
+  );
+  const commentLimit = clampLimit(
+    req.query["comments"],
+    NADIR_EXPORT_DEFAULT_COMMENTS,
+    NADIR_EXPORT_MAX_COMMENTS,
+  );
+
+  try {
+    const manual = existsSync(NADIR_MANUAL_PATH)
+      ? readFileSync(NADIR_MANUAL_PATH, "utf-8")
+      : "";
+
+    const conversationRows = await db
+      .select({
+        id: horusBowieConversationsTable.id,
+        topic: horusBowieConversationsTable.topic,
+        transcript: horusBowieConversationsTable.transcript,
+        status: horusBowieConversationsTable.status,
+        createdAt: horusBowieConversationsTable.createdAt,
+      })
+      .from(horusBowieConversationsTable)
+      .orderBy(desc(horusBowieConversationsTable.createdAt))
+      .limit(conversationLimit);
+
+    const conversations = conversationRows.map((row) => ({
+      id: row.id,
+      topic: row.topic,
+      status: row.status,
+      createdAt: row.createdAt,
+      turns: (row.transcript as HorusConversationTurn[]).map((t) => ({
+        agent: t.agent,
+        content: t.content,
+      })),
+    }));
+
+    const commentRows = await db
+      .select({
+        id: commentsTable.id,
+        authorName: commentsTable.authorName,
+        body: commentsTable.body,
+        createdAt: commentsTable.createdAt,
+        likeCount: commentsTable.likeCount,
+        postSlug: postsTable.slug,
+        postTitle: postsTable.title,
+      })
+      .from(commentsTable)
+      .leftJoin(postsTable, eq(commentsTable.postId, postsTable.id))
+      .orderBy(desc(commentsTable.createdAt))
+      .limit(commentLimit);
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      manual,
+      conversations,
+      comments: commentRows,
+    });
+  } catch (err) {
+    req.log.error({ err }, "nadir-export failed");
+    res
+      .status(500)
+      .json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 export default router;
