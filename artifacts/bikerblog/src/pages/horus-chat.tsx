@@ -132,7 +132,7 @@ function storeTurnsPreset(preset: (typeof CONVO_TURN_PRESETS)[number]): void {
   }
 }
 
-type Mode = "chat" | "bowie-chat" | "conversation" | "history";
+type Mode = "chat" | "bowie-chat" | "quebracho-chat" | "conversation" | "history";
 
 type ConvoStatus = "complete" | "interrupted";
 
@@ -187,6 +187,7 @@ export function HorusChat() {
 
   const [horusChatKey, setHorusChatKey] = useState(0);
   const [bowieChatKey, setBowieChatKey] = useState(0);
+  const [quebrachoChatKey, setQuebrachoChatKey] = useState(0);
 
   const [topic, setTopic] = useState("");
   // Preset scelto dall'utente prima di avviare la conversazione (Task #158).
@@ -403,6 +404,10 @@ export function HorusChat() {
 
   function handleResetBowieChat() {
     setBowieChatKey((k) => k + 1);
+  }
+
+  function handleResetQuebrachoChat() {
+    setQuebrachoChatKey((k) => k + 1);
   }
 
   function handleUnauthorized() {
@@ -690,11 +695,13 @@ export function HorusChat() {
                 ? `Horus (${horusModelLabel})`
                 : mode === "bowie-chat"
                   ? `Chat diretta con Bowie${bowieModelLabel ? ` (${bowieModelLabel})` : ""}`
-                  : mode === "conversation"
-                    ? `Conversazione Horus (${horusModelLabel}) ↔ Bowie${
-                        bowieModelLabel ? ` (${bowieModelLabel})` : ""
-                      } ↔ Quebracho${quebrachoModelLabel ? ` (${quebrachoModelLabel})` : ""}`
-                    : "Cronologia conversazioni"}
+                  : mode === "quebracho-chat"
+                    ? `Chat diretta con Quebracho${quebrachoModelLabel ? ` (${quebrachoModelLabel})` : ""}`
+                    : mode === "conversation"
+                      ? `Conversazione Horus (${horusModelLabel}) ↔ Bowie${
+                          bowieModelLabel ? ` (${bowieModelLabel})` : ""
+                        } ↔ Quebracho${quebrachoModelLabel ? ` (${quebrachoModelLabel})` : ""}`
+                      : "Cronologia conversazioni"}
             </p>
           </div>
         </div>
@@ -705,6 +712,11 @@ export function HorusChat() {
           </Button>
         ) : mode === "bowie-chat" ? (
           <Button variant="ghost" size="sm" onClick={handleResetBowieChat} className="gap-2">
+            <RotateCcw className="w-4 h-4" />
+            Nuova chat
+          </Button>
+        ) : mode === "quebracho-chat" ? (
+          <Button variant="ghost" size="sm" onClick={handleResetQuebrachoChat} className="gap-2">
             <RotateCcw className="w-4 h-4" />
             Nuova chat
           </Button>
@@ -741,6 +753,16 @@ export function HorusChat() {
         >
           <Cpu className="w-4 h-4" />
           Chat con Bowie
+        </Button>
+        <Button
+          type="button"
+          variant={mode === "quebracho-chat" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setMode("quebracho-chat")}
+          className="gap-2"
+        >
+          <Bot className="w-4 h-4" />
+          Chat con Quebracho
         </Button>
         <Button
           type="button"
@@ -789,6 +811,20 @@ export function HorusChat() {
           agentAvatarClassName="bg-accent text-accent-foreground"
           emptyStateText="Scrivi un messaggio per iniziare a chattare con Bowie."
           placeholderText="Scrivi a Bowie... (Invio per inviare, Shift+Invio per andare a capo)"
+        />
+      </div>
+
+      <div className={mode === "quebracho-chat" ? "flex-1 flex flex-col overflow-hidden" : "hidden"}>
+        <AgentChatPanel
+          key={quebrachoChatKey}
+          endpoint="api/horus/quebracho-chat"
+          healthEndpoint="api/horus/quebracho-health"
+          password={password}
+          onUnauthorized={handleUnauthorized}
+          agentIcon={<Bot className="w-4 h-4" />}
+          agentAvatarClassName="bg-primary text-primary-foreground"
+          emptyStateText="Scrivi un messaggio per iniziare a chattare con Quebracho."
+          placeholderText="Scrivi a Quebracho... (Invio per inviare, Shift+Invio per andare a capo)"
         />
       </div>
 
