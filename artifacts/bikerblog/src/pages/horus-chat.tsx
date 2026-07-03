@@ -710,32 +710,43 @@ export function HorusChat() {
             </p>
           </div>
         </div>
-        {mode === "chat" ? (
-          <Button variant="ghost" size="sm" onClick={handleResetHorusChat} className="gap-2">
-            <RotateCcw className="w-4 h-4" />
-            Nuova chat
+        <div className="flex items-center gap-1 shrink-0">
+          {mode === "chat" ? (
+            <Button variant="ghost" size="sm" onClick={handleResetHorusChat} className="gap-2">
+              <RotateCcw className="w-4 h-4" />
+              Nuova chat
+            </Button>
+          ) : mode === "bowie-chat" ? (
+            <Button variant="ghost" size="sm" onClick={handleResetBowieChat} className="gap-2">
+              <RotateCcw className="w-4 h-4" />
+              Nuova chat
+            </Button>
+          ) : mode === "quebracho-chat" ? (
+            <Button variant="ghost" size="sm" onClick={handleResetQuebrachoChat} className="gap-2">
+              <RotateCcw className="w-4 h-4" />
+              Nuova chat
+            </Button>
+          ) : mode === "conversation" ? (
+            <Button variant="ghost" size="sm" onClick={resetConversation} className="gap-2">
+              <RotateCcw className="w-4 h-4" />
+              Nuova conversazione
+            </Button>
+          ) : viewingConvo ? (
+            <Button variant="ghost" size="sm" onClick={() => setViewingConvo(null)} className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Torna alla cronologia
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant={mode === "history" ? "default" : "ghost"}
+            size="icon"
+            onClick={() => setMode("history")}
+            title="Conversazioni salvate"
+          >
+            <History className="w-4 h-4" />
           </Button>
-        ) : mode === "bowie-chat" ? (
-          <Button variant="ghost" size="sm" onClick={handleResetBowieChat} className="gap-2">
-            <RotateCcw className="w-4 h-4" />
-            Nuova chat
-          </Button>
-        ) : mode === "quebracho-chat" ? (
-          <Button variant="ghost" size="sm" onClick={handleResetQuebrachoChat} className="gap-2">
-            <RotateCcw className="w-4 h-4" />
-            Nuova chat
-          </Button>
-        ) : mode === "conversation" ? (
-          <Button variant="ghost" size="sm" onClick={resetConversation} className="gap-2">
-            <RotateCcw className="w-4 h-4" />
-            Nuova conversazione
-          </Button>
-        ) : viewingConvo ? (
-          <Button variant="ghost" size="sm" onClick={() => setViewingConvo(null)} className="gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Torna alla cronologia
-          </Button>
-        ) : null}
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4 shrink-0">
@@ -778,16 +789,6 @@ export function HorusChat() {
         >
           <Cpu className="w-4 h-4" />
           Horus ↔ Bowie ↔ Quebracho
-        </Button>
-        <Button
-          type="button"
-          variant={mode === "history" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setMode("history")}
-          className="gap-2"
-        >
-          <History className="w-4 h-4" />
-          Cronologia
         </Button>
       </div>
 
@@ -836,7 +837,8 @@ export function HorusChat() {
         />
       </div>
 
-      {mode === "conversation" && effectiveConvoHealth !== "ok" ? (
+      {(mode === "conversation" || mode === "history" || viewingConvo) &&
+      (mode === "conversation" && effectiveConvoHealth !== "ok" ? (
         <AgentHealthGate
           health={effectiveConvoHealth}
           unreachableMessage={effectiveConvoUnreachableMessage}
@@ -1109,7 +1111,7 @@ export function HorusChat() {
               ))}
           </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }

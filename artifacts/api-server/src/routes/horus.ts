@@ -16,6 +16,8 @@ import {
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
   type HorusMessage,
+  type HorusToolCall,
+  type HorusToolSpec,
   type OllamaAgentHealth,
 } from "@workspace/horus";
 
@@ -90,6 +92,44 @@ function truncateReply(content: string, usedTools: boolean): string {
   const lastSpace = cut.lastIndexOf(" ");
   const safeCut = lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut;
   return `${safeCut.trimEnd()}…`;
+}
+
+// Bowie (llama3.2:3b) non supporta in modo affidabile il function-calling
+// nativo di Ollama: a volte, invece di emettere un `tool_calls` strutturato,
+// "racconta" la chiamata scrivendo il JSON del tool direttamente nel testo
+// della risposta (es. `{"name": "remember_note", "parameters": {...}}`), che
+// altrimenti verrebbe mostrato all'utente così com'è, senza eseguire davvero
+// nulla (bug osservato in produzione). Questo fallback rileva quel pattern
+// testuale — SOLO quando il modello non ha già emesso una vera tool_call —
+// e lo converte in una tool_call reale, così il tool viene comunque eseguito
+// invece di far leggere all'utente un blob JSON grezzo.
+export function tryParseTextualToolCall(content: string, tools: HorusToolSpec[]): HorusToolCall[] | null {
+  const trimmed = content.trim();
+  if (!trimmed.includes("{") || !trimmed.includes("name")) return null;
+
+  const match = trimmed.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const obj = parsed as Record<string, unknown>;
+  const name = obj["name"];
+  const rawArgs = obj["parameters"] ?? obj["arguments"];
+  if (typeof name !== "string" || !tools.some((t) => t.function.name === name)) return null;
+  if (rawArgs !== undefined && (typeof rawArgs !== "object" || rawArgs === null)) return null;
+
+  return [
+    {
+      id: `textual-${Date.now()}`,
+      function: { name, arguments: (rawArgs as Record<string, unknown> | undefined) ?? {} },
+    },
+  ];
 }
 
 // Ogni messaggio rimanda l'intera cronologia a Ollama, che la rielabora da
@@ -235,7 +275,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
         iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted;
         iteration++
       ) {
-        const { content, toolCalls } = await config.chatRaw(conversation, {
+        const { content, toolCalls: nativeToolCalls } = await config.chatRaw(conversation, {
           tools,
           maxTokens: usedTools ? MAX_REPLY_TOKENS_WITH_TOOLS : MAX_REPLY_TOKENS,
           signal: abortController.signal,
@@ -245,6 +285,9 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
         });
 
         if (abortController.signal.aborted) break;
+
+        const toolCalls =
+          nativeToolCalls.length > 0 ? nativeToolCalls : (tryParseTextualToolCall(content, tools) ?? []);
 
         if (toolCalls.length === 0) {
           finalReply = content;

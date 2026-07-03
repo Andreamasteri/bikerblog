@@ -452,7 +452,7 @@ export function AgentChatPanel({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholderText}
-          className="min-h-[3rem] max-h-40 resize-none"
+          className="min-h-[5.5rem] max-h-60 resize-none"
           disabled={isStreaming}
         />
         {isStreaming ? (

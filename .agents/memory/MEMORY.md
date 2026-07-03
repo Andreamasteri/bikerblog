@@ -28,3 +28,5 @@
 - [Chat file attachments are client-side only](horus-chat-file-attachments.md) — no vision model exists here, so "send/receive files" was implemented as text-extraction-in-browser + response-as-download, no server storage.
 - [Direct chat tool-calling + reply length](horus-direct-chat-tools.md) — web direct chat now runs the same tool loop as the CLI; reply length cap only relaxes once a tool was actually used this turn.
 - [SSE write-after-end crashes whole process](sse-write-after-end-crash.md) — no global uncaughtException handler here, so an unguarded `res.write` in a `setInterval` (heartbeat/tool-progress) after the client disconnects took down ALL agents at once, not just one chat.
+- [Weak-model textual tool calls](horus-textual-tool-call-fallback.md) — small models (Bowie/llama3.2:3b) sometimes emit a tool call as JSON text instead of native `tool_calls`; must detect and execute it, not display the raw JSON.
+- [Mode-gated JSX ternary chains](horus-chat-mode-leak-bug.md) — an unconditional tail ternary in a multi-mode page rendered a panel on every mode except the ones it explicitly checked; always gate the whole chain, not just the branches you added.
