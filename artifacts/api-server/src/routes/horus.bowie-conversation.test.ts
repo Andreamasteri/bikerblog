@@ -264,3 +264,93 @@ test("bowie-conversation rejects a resumeTranscript with a broken alternation in
     await server.close();
   }
 });
+
+/**
+ * Regressione per Task #130: la conversazione deve fermarsi esattamente al
+ * numero di turni richiesto (ed emettere `done`), non proseguire oltre né
+ * fermarsi prima. Un refactor futuro della clamping math in `totalTurns`
+ * (il combo `Math.max`/`Math.min` su `MAX_ALLOWED_TURNS`, `maxTurns` e
+ * `transcript.length`) potrebbe rompere silenziosamente questo invariante.
+ */
+test("bowie-conversation stops after exactly maxTurns turns and emits done", async () => {
+  const deps = makeDeps({
+    horusChatRaw: makeScriptedChatRaw([{ content: "horus-1" }, { content: "horus-2" }]),
+    bowieChatRaw: makeScriptedChatRaw([{ content: "bowie-1" }]),
+  });
+  const server = await startTestServer(deps);
+
+  try {
+    const events = await postConversation(server.url, { topic: "moto elettriche", maxTurns: 3 });
+
+    const turnStarts = events.filter((e) => e.event === "turn_start").map((e) => (e.data as { agent: string }).agent);
+    const turnEnds = events.filter((e) => e.event === "turn_end").map((e) => (e.data as { agent: string }).agent);
+
+    assert.deepEqual(turnStarts, ["horus", "bowie", "horus"], "expected exactly 3 alternating turn_start events");
+    assert.deepEqual(turnEnds, ["horus", "bowie", "horus"], "expected exactly 3 alternating turn_end events");
+
+    const doneIndex = events.findIndex((e) => e.event === "done");
+    assert.ok(doneIndex !== -1, "expected a done event after the 3rd turn");
+    assert.equal(
+      events.slice(doneIndex + 1).length,
+      0,
+      "no further turn_start/turn_end events should be emitted after done"
+    );
+  } finally {
+    await server.close();
+  }
+});
+
+test("bowie-conversation clamps maxTurns to MAX_ALLOWED_TURNS (20) instead of running unbounded", async () => {
+  // 25 richiesto ma il server deve fermarsi a 20 turni totali (10 coppie horus/bowie).
+  const horusReplies = Array.from({ length: 10 }, (_, i) => ({ content: `horus-${i}` }));
+  const bowieReplies = Array.from({ length: 10 }, (_, i) => ({ content: `bowie-${i}` }));
+  const deps = makeDeps({
+    horusChatRaw: makeScriptedChatRaw(horusReplies),
+    bowieChatRaw: makeScriptedChatRaw(bowieReplies),
+  });
+  const server = await startTestServer(deps);
+
+  try {
+    const events = await postConversation(server.url, { topic: "moto elettriche", maxTurns: 25 });
+
+    const turnEnds = events.filter((e) => e.event === "turn_end");
+    assert.equal(turnEnds.length, 20, "conversation must be clamped to MAX_ALLOWED_TURNS (20), not the requested 25");
+    assert.ok(events.some((e) => e.event === "done"), "clamped conversation should still complete with done");
+  } finally {
+    await server.close();
+  }
+});
+
+test("bowie-conversation resuming near MAX_ALLOWED_TURNS extends the bound by exactly one more turn, then stops", async () => {
+  // 19 turni già completati (alternanza horus/bowie a partire da horus).
+  // transcript.length + 1 = 20 = MAX_ALLOWED_TURNS, quindi deve fare esattamente
+  // un altro turno (index 19 -> bowie) e poi fermarsi, anche con maxTurns basso.
+  const resumeTranscript: Array<{ agent: ConvoAgent; content: string }> = Array.from({ length: 19 }, (_, i) => ({
+    agent: i % 2 === 0 ? "horus" : "bowie",
+    content: `turn-${i}`,
+  }));
+
+  const deps = makeDeps({
+    horusChatRaw: makeScriptedChatRaw([{ content: "should-not-be-called" }]),
+    bowieChatRaw: makeScriptedChatRaw([{ content: "final-bowie-turn" }]),
+  });
+  const server = await startTestServer(deps);
+
+  try {
+    const events = await postConversation(server.url, {
+      topic: "moto elettriche",
+      maxTurns: 2,
+      resumeTranscript,
+    });
+
+    const turnStarts = events.filter((e) => e.event === "turn_start").map((e) => (e.data as { agent: string }).agent);
+    assert.deepEqual(turnStarts, ["bowie"], "resuming at 19/20 turns must run exactly one more turn (bowie)");
+
+    const turnEnds = events.filter((e) => e.event === "turn_end").map((e) => e.data);
+    assert.deepEqual(turnEnds, [{ agent: "bowie", content: "final-bowie-turn" }]);
+
+    assert.ok(events.some((e) => e.event === "done"), "conversation must still reach done after hitting the bound");
+  } finally {
+    await server.close();
+  }
+});
