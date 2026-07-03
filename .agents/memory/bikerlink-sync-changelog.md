@@ -48,6 +48,21 @@ only — the pipeline never blocks and no entry goes missing.
 `ensureItalianForEntries` (fills only missing keys), saves the cache (skipped on
 `--dry-run`), then renders. Tests stay deterministic by passing an explicit map.
 
+## Runs in real time after every merge, not just overnight
+**Rule:** `scripts/post-merge.sh` fires `changelog:sync` right after every task
+merge, detached (`setsid nohup ... & disown`) and serialized with `flock
+/tmp/changelog-sync.lock`, output swallowed with `|| true`. The nightly
+`cluster:daily` step 10 call still exists as a safety net.
+
+**Why:** the user explicitly rejected "batched/nightly only" — task merges
+arrive in bursts seconds apart, and batching risked losing/delaying entries
+("Facendolo in blocco, qualcosa si perde"). Running it inline (blocking) in
+post-merge.sh isn't viable either: the post-merge script's own timeout is ~20s,
+but `changelog:sync` calls Horus over the Cloudflare tunnel per new entry and
+has been observed to take 500s+. Detaching keeps post-merge fast/reliable;
+`flock` prevents two overlapping merges from racing on the same changelog/cache
+files (a queued run still picks up everything merged since, nothing is lost).
+
 ## Idempotency + testing
 Pure functions (`buildEntries`, `buildAutoSection`, `replaceAutoSection`, `humanize`,
 `extractTaskNumber`) are exported and `main()` is guarded by an `import.meta.url`
