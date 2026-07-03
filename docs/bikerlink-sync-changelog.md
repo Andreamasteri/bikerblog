@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #166** — Stop CLI chat freezing on the same tunnel timeout as web chat <!-- 1221fd2 -->
+  - _In parole semplici:_ Risolto il problema di blocco della chat CLI durante lo stesso timeout del tunnel come nella chat web.
 - **Task #165** — Fix Horus/Bowie web chat freeze from the 2nd message <!-- e4a0522 -->
   - _In parole semplici:_ Corretto il blocco della chat web di Horus/Bowie dal secondo messaggio
 - **Task #164** — Catch a regression where two agents down at once hide one of the names <!-- ea4ce1e -->
@@ -190,6 +192,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **21:42** · Git commit prior to merge <!-- 71be900 -->
+  - _In parole semplici:_ Commit Git prima del merge.
 - **21:00** · Adjust response limits to prevent chat timeouts on slower hardware <!-- 0fc1b99 -->
   - _In parole semplici:_ Abbiamo ottimizzato i limiti di risposta per evitare tempi di attesa eccessivi su dispositivi più lenti.
 - **20:47** · Filter agents for group conversations to only include configured ones <!-- f904a35 -->
