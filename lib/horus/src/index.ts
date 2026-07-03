@@ -16,6 +16,8 @@ export {
   quebrachoChatRaw,
   createOllamaAgentClient,
   extractJson,
+  OllamaGatewayTimeoutError,
+  isGatewayTimeoutError,
   type HorusMessage,
   type HorusToolCall,
   type HorusToolSpec,

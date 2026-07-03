@@ -14,6 +14,7 @@ import {
   getHorusTools,
   executeHorusTool,
   capToolResult,
+  isGatewayTimeoutError,
   MAX_TOOL_RESULT_CHARS,
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
@@ -116,16 +117,19 @@ export { capToolResult };
 // può eseguire fino a `MAX_TOOL_ITERATIONS` iterazioni, ognuna con uno o più
 // tool, e OGNI risultato cappato resta nel prompt (`conversation`) per tutte le
 // iterazioni successive. Nel caso peggiore (3 iterazioni, tool grandi) si
-// accumulano ~12000 caratteri di soli risultati di tool nel prompt, e su
+// accumulano molti caratteri di soli risultati di tool nel prompt, e su
 // hardware CPU quel prefill silenzioso può comunque avvicinarsi al tetto di
 // ~100s del tunnel Cloudflare → HTTP 524. Teniamo quindi anche un budget TOTALE
 // per turno: man mano che i risultati si accumulano, il cap effettivo del
 // risultato successivo si restringe fino a esaurire il budget, così la somma di
 // tutto il testo dei tool reinserito nel prompt resta limitata a prescindere da
-// quanti tool vengano chiamati. Valore scelto ~2× il cap singolo: lascia spazio
-// per un paio di risultati pieni ma mantiene il prefill cumulativo ben sotto la
-// soglia del tunnel anche nei turni multi-tool.
-const MAX_TOTAL_TOOL_RESULT_CHARS = 8000;
+// quanti tool vengano chiamati. Ridotto da 8000 a 6000 (Task #171): i 524
+// ricorrevano ancora sui messaggi successivi, e il prefill del prompt post-tool
+// è la leva dominante — un budget più stretto riduce il prefill cumulativo per
+// tenere più turni sotto il tetto del tunnel. Resta comunque spazio per un
+// risultato pieno più uno parziale; oltre a questo entra in gioco il fallback
+// senza-tool più sotto per i casi che superano ancora la soglia.
+const MAX_TOTAL_TOOL_RESULT_CHARS = 6000;
 
 // Sotto questa soglia il cap residuo è troppo piccolo per contenere del
 // contenuto utile oltre alla nota di troncamento: meglio restituire solo una
@@ -310,11 +314,18 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
       ? history.slice(-MAX_HISTORY_MESSAGES)
       : [];
 
-    const conversation: HorusMessage[] = [
+    // Prompt "pulito" del turno (system + cronologia + messaggio utente), senza
+    // i risultati-tool che il loop qui sotto vi accumula. Serve come base per il
+    // loop e, soprattutto, per il fallback senza-tool in caso di timeout del
+    // tunnel: quel prompt è piccolo e genera in fretta, restando sotto il tetto.
+    const baseConversation: HorusMessage[] = [
       config.systemPrompt,
       ...priorHistory.map((m) => ({ role: m.role, content: m.content }) satisfies HorusMessage),
       { role: "user", content: message },
     ];
+    // Copia di lavoro: il loop dei tool spinge qui i messaggi assistant/tool,
+    // mentre `baseConversation` resta intatto per l'eventuale fallback.
+    const conversation: HorusMessage[] = [...baseConversation];
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -347,58 +358,95 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
       // le iterazioni e i tool, non si resetta a ogni iterazione.
       let toolResultCharsUsed = 0;
 
-      for (
-        let iteration = 0;
-        iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted;
-        iteration++
-      ) {
-        const { content, toolCalls: nativeToolCalls } = await config.chatRaw(conversation, {
-          tools,
-          maxTokens: usedTools ? MAX_REPLY_TOKENS_WITH_TOOLS : MAX_REPLY_TOKENS,
+      try {
+        for (
+          let iteration = 0;
+          iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted;
+          iteration++
+        ) {
+          const { content, toolCalls: nativeToolCalls } = await config.chatRaw(conversation, {
+            tools,
+            maxTokens: usedTools ? MAX_REPLY_TOKENS_WITH_TOOLS : MAX_REPLY_TOKENS,
+            signal: abortController.signal,
+            onToken: (token) => {
+              sendEvent(res, "token", { token });
+            },
+          });
+
+          if (abortController.signal.aborted) break;
+
+          const toolCalls =
+            nativeToolCalls.length > 0 ? nativeToolCalls : (tryParseTextualToolCall(content, tools) ?? []);
+
+          if (toolCalls.length === 0) {
+            finalReply = content;
+            break;
+          }
+
+          usedTools = true;
+          conversation.push({ role: "assistant", content, tool_calls: toolCalls });
+
+          for (const call of toolCalls) {
+            if (abortController.signal.aborted) break;
+
+            const toolName = call.function.name;
+            sendEvent(res, "tool_call", { name: toolName });
+
+            const toolStartedAt = Date.now();
+            const progressTimer = setInterval(() => {
+              sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+            }, 4_000);
+
+            let result: string;
+            try {
+              result = await executeHorusTool(toolName, call.function.arguments, abortController.signal);
+            } finally {
+              clearInterval(progressTimer);
+            }
+
+            if (abortController.signal.aborted) break;
+
+            sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+            const budgeted = budgetedToolResult(result, toolResultCharsUsed);
+            toolResultCharsUsed += budgeted.charsUsed;
+            conversation.push({ role: "tool", name: toolName, content: budgeted.content });
+          }
+        }
+      } catch (loopErr) {
+        // Se il turno con i tool ha superato il tetto ~100s del tunnel (HTTP 524
+        // sul prefill silenzioso del prompt post-tool, causa classica del
+        // "si blocca dopo il primo messaggio"), NON arrenderti subito: riprova
+        // UNA volta senza tool e col prompt pulito (senza i risultati-tool
+        // accumulati), che è piccolo, genera in fretta e resta sotto il tetto —
+        // così l'utente ottiene comunque una risposta best-effort invece di un
+        // errore secco. Ogni altro errore, o un abort del client, si propaga
+        // com'era prima. Se anche il fallback fallisce, l'errore raggiunge il
+        // catch esterno che mostra un messaggio chiaro.
+        if (abortController.signal.aborted || !isGatewayTimeoutError(loopErr)) throw loopErr;
+
+        req.log.warn({ err: loopErr }, `${config.logLabel}: gateway timeout con tool, retry senza tool`);
+
+        const fallbackConversation: HorusMessage[] = [
+          ...baseConversation.slice(0, -1),
+          {
+            role: "system",
+            content:
+              "Nota: gli strumenti non sono disponibili in questo momento e il tentativo precedente ha " +
+              "superato il tempo massimo del server. Rispondi comunque nel modo più utile e conciso " +
+              "possibile usando solo ciò che già sai, senza fare riferimento a strumenti.",
+          },
+          baseConversation[baseConversation.length - 1]!,
+        ];
+
+        const fallback = await config.chatRaw(fallbackConversation, {
+          maxTokens: MAX_REPLY_TOKENS,
           signal: abortController.signal,
           onToken: (token) => {
             sendEvent(res, "token", { token });
           },
         });
-
-        if (abortController.signal.aborted) break;
-
-        const toolCalls =
-          nativeToolCalls.length > 0 ? nativeToolCalls : (tryParseTextualToolCall(content, tools) ?? []);
-
-        if (toolCalls.length === 0) {
-          finalReply = content;
-          break;
-        }
-
-        usedTools = true;
-        conversation.push({ role: "assistant", content, tool_calls: toolCalls });
-
-        for (const call of toolCalls) {
-          if (abortController.signal.aborted) break;
-
-          const toolName = call.function.name;
-          sendEvent(res, "tool_call", { name: toolName });
-
-          const toolStartedAt = Date.now();
-          const progressTimer = setInterval(() => {
-            sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-          }, 4_000);
-
-          let result: string;
-          try {
-            result = await executeHorusTool(toolName, call.function.arguments, abortController.signal);
-          } finally {
-            clearInterval(progressTimer);
-          }
-
-          if (abortController.signal.aborted) break;
-
-          sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-          const budgeted = budgetedToolResult(result, toolResultCharsUsed);
-          toolResultCharsUsed += budgeted.charsUsed;
-          conversation.push({ role: "tool", name: toolName, content: budgeted.content });
-        }
+        finalReply = fallback.content;
+        usedTools = false;
       }
 
       const finalContent = truncateReply(finalReply, usedTools);

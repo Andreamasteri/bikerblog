@@ -177,6 +177,41 @@ const HEALTH_CHECK_TIMEOUT_MS = 6_000;
  * timeout su una generazione molto pesante). */
 const GATEWAY_TIMEOUT_STATUSES = new Set([502, 503, 504, 524]);
 
+/**
+ * Errore lanciato quando il gateway/tunnel (tipicamente il Cloudflare Tunnel
+ * verso il server TC dell'utente) interrompe la richiesta prima che Ollama
+ * risponda — HTTP 502/503/504/524, oppure la connessione chiusa a metà stream.
+ * È distinto da un `Error` generico apposta: il chiamante (es. la chat web in
+ * `createDirectChatHandler`) può riconoscerlo con `isGatewayTimeoutError` e
+ * reagire con un fallback dedicato (riprovare senza tool, con un prompt più
+ * piccolo che genera in fretta e resta sotto il tetto ~100s del tunnel) invece
+ * di trattarlo come un errore fatale qualsiasi.
+ */
+export class OllamaGatewayTimeoutError extends Error {
+  readonly status: number | undefined;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "OllamaGatewayTimeoutError";
+    this.status = status;
+  }
+}
+
+/**
+ * Vero se l'errore è un timeout del gateway/tunnel: sia il caso "pulito" (un
+ * vero HTTP 524/502/503/504 → `OllamaGatewayTimeoutError`) sia il caso in cui
+ * il tunnel chiude la connessione a metà stream, che `fetch` riporta come un
+ * `TypeError` con "terminated"/"other side closed"/"fetch failed" invece di uno
+ * status HTTP. Entrambi indicano lo stesso problema (la richiesta non ha retto
+ * fino alla risposta) e giustificano lo stesso fallback best-effort.
+ */
+export function isGatewayTimeoutError(err: unknown): boolean {
+  if (err instanceof OllamaGatewayTimeoutError) return true;
+  if (err instanceof Error) {
+    return /terminated|other side closed|fetch failed/i.test(err.message);
+  }
+  return false;
+}
+
 /** Vero se il corpo della risposta sembra una pagina HTML di errore
  * (tipica dei gateway/edge come Cloudflare) invece di testo/JSON da Ollama. */
 function looksLikeHtmlErrorPage(body: string): boolean {
@@ -287,7 +322,11 @@ export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentC
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        throw new Error(buildRequestFailedMessage(config.agentName, res.status, res.statusText, body));
+        const message = buildRequestFailedMessage(config.agentName, res.status, res.statusText, body);
+        if (GATEWAY_TIMEOUT_STATUSES.has(res.status)) {
+          throw new OllamaGatewayTimeoutError(message, res.status);
+        }
+        throw new Error(message);
       }
 
       if (!res.body) {
