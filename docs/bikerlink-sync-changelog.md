@@ -127,20 +127,24 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #144** — Add regression coverage for Nadir export route and search_manual tool <!-- ff5a50b -->
+- **Task #143** — Keep Nadir's search index fresh automatically every night <!-- 9dec50b -->
+  - _In parole semplici:_ Ogni notte l'app aggiorna automaticamente l'indice di ricerca di Nadir per garantire risultati precisi e veloci.
 - **Task #139** — Add automated coverage for corrupted saved-chat restart flow <!-- 19cc6fd -->
+  - _In parole semplici:_ Abbiamo migliorato il processo di riavvio della chat salvata in caso di problemi per farlo funzionare automaticamente.
 - **Task #138** — Changelog di sincronizzazione BikerLink (backfill + auto-update con task completati) <!-- dc46e5d -->
   - _In parole semplici:_ BikerLink ora sincronizza automaticamente i tuoi dati e aggiorna le attività concluse.
 - **Task #137** — Confirm closing the browser mid-discussion stops Horus/Bowie generation <!-- b12a9ba -->
   - _In parole semplici:_ Abbiamo risolto il problema che impediva di chiudere il browser durante una discussione in corso tra Horus e Bowie.
 - **Task #136** — Surface corrupted resumeTranscript as one clear, non-looping error <!-- 5504788 -->
-  - _In parole semplici:_ Corretto un errore che causava il ripristino continuo della superficie e risolto il problema di ripetizione del testo nella trascrizione.
+  - _In parole semplici:_ Risolto il problema di ripetizione del testo nella trascrizione della superficie corrotta.
 - **Task #135** — Build "Nadir" standalone semantic-search service for Horus/Bowie <!-- 161851a -->
   - _In parole semplici:_ Abbiamo creato un servizio di ricerca semantica in grado di funzionare in modo autonomo per Horus e Bowie
 
 **Altre modifiche:**
 
-- **13:46** · Display actual AI model names in the chat interface <!-- 56ee5d4 -->
-  - _In parole semplici:_ Visualizzazione dei nomi del modello AI attuale nell'interfaccia di chat
+- **15:09** · Git commit prior to merge <!-- 2f6b11a -->
+  - _In parole semplici:_ Commit git prima del merge.
 - **13:37** · Add simple Italian translations to commit log entries <!-- 0d597b1 -->
-  - _In parole semplici:_ Aggiunte traduzioni semplici in italiano ai messaggi di commit
+  - _In parole semplici:_ Aggiunto supporto per le traduzioni in italiano nei messaggi di commit
 <!-- AUTO-CHANGELOG:END -->
