@@ -10,6 +10,11 @@ import { useAgentHealth, useAgentRegistry } from "@/hooks/use-agent-health";
 import { AgentHealthGate } from "@/hooks/agent-health-status";
 
 const SESSION_KEY = "horus-chat-password";
+// Preset di lunghezza conversazione ricordato tra una visita e l'altra
+// (Task #160): senza questo, ogni apertura della tab "Horus ↔ Bowie" o ogni
+// "Nuova conversazione" ripartiva sempre da "Normale", costringendo chi
+// preferisce sempre "Veloce" a riselezionarlo ogni volta.
+const CONVO_TURNS_PRESET_STORAGE_KEY = "horus-convo-turns-preset";
 
 // Deve restare in sync con `DEFAULT_MAX_TURNS` in
 // `artifacts/api-server/src/routes/horus.ts` — usato solo per il messaggio
@@ -101,6 +106,25 @@ function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+function loadStoredTurnsPreset(): (typeof CONVO_TURN_PRESETS)[number] {
+  try {
+    const storedKey = localStorage.getItem(CONVO_TURNS_PRESET_STORAGE_KEY);
+    const found = CONVO_TURN_PRESETS.find((preset) => preset.key === storedKey);
+    if (found) return found;
+  } catch {
+    // localStorage non disponibile (es. modalità privata): usa il default.
+  }
+  return CONVO_TURN_PRESETS[1];
+}
+
+function storeTurnsPreset(preset: (typeof CONVO_TURN_PRESETS)[number]): void {
+  try {
+    localStorage.setItem(CONVO_TURNS_PRESET_STORAGE_KEY, preset.key);
+  } catch {
+    // localStorage non disponibile: la preferenza semplicemente non persiste.
+  }
+}
+
 type Mode = "chat" | "bowie-chat" | "conversation" | "history";
 
 type ConvoStatus = "complete" | "interrupted";
@@ -162,7 +186,7 @@ export function HorusChat() {
   // Resta lo stesso anche durante un "Riprova" dopo un drop-out, così la
   // lunghezza totale non cambia a metà conversazione.
   const [selectedTurnsPreset, setSelectedTurnsPreset] = useState<(typeof CONVO_TURN_PRESETS)[number]>(
-    CONVO_TURN_PRESETS[1]
+    loadStoredTurnsPreset
   );
   const [convoMessages, setConvoMessages] = useState<ConvoMessage[]>([]);
   const [convoActiveAgent, setConvoActiveAgent] = useState<ConvoAgent | null>(null);
@@ -395,7 +419,10 @@ export function HorusChat() {
     setConvoProgress(null);
     setConvoElapsedSeconds(0);
     convoStartedAtRef.current = null;
-    setSelectedTurnsPreset(CONVO_TURN_PRESETS[1]);
+    // Il preset resta quello ricordato dall'ultima scelta dell'utente
+    // (Task #160), non torna a "Normale": la funzione di reset permette
+    // comunque di cambiarlo tramite i pulsanti prima di ripartire.
+    setSelectedTurnsPreset(loadStoredTurnsPreset());
   }
 
   async function startConversation(e?: FormEvent) {
@@ -808,7 +835,10 @@ export function HorusChat() {
                       variant={selectedTurnsPreset.key === preset.key ? "default" : "outline"}
                       size="sm"
                       className="h-7 px-3 text-xs"
-                      onClick={() => setSelectedTurnsPreset(preset)}
+                      onClick={() => {
+                        setSelectedTurnsPreset(preset);
+                        storeTurnsPreset(preset);
+                      }}
                     >
                       {preset.label}
                     </Button>
