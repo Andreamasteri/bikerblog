@@ -11,6 +11,8 @@ import {
   checkHorusHealth,
   checkBowieHealth,
   checkQuebrachoHealth,
+  getHorusTools,
+  executeHorusTool,
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
   type HorusMessage,
@@ -34,12 +36,13 @@ function requireHorusPassword(req: express.Request, res: express.Response): bool
   return true;
 }
 
-// Vedi nota su MAX_REPLY_CHARS più sotto: le chat dirette (Horus, Bowie,
-// Quebracho) devono restare brevi e sempre dirette (niente tool) per tenere
-// bassa la latenza su hardware CPU. Le conversazioni sono comunque salvate
-// nello storico/log, quindi non serve un tool "di memoria" in tempo reale
-// dentro la chat: se un agente ha bisogno di contesto passato, lo trova nei
-// log invece di doverlo cercare via tool durante la risposta.
+// Le chat dirette (Horus, Bowie, Quebracho) hanno accesso agli stessi tool
+// della CLI (github_read, web_search, remember_note, search_manual/Nadir,
+// ecc. — vedi getHorusTools()/executeHorusTool in @workspace/horus), non più
+// "sempre dirette senza tool" come in origine: l'utente chatta solo dalla web
+// UI (non usa la CLI), quindi capacità come "leggi il codice di BikerLink su
+// GitHub e scrivi un manuale" devono funzionare da qui. Le conversazioni sono
+// comunque salvate nello storico/log a prescindere dai tool.
 function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
   return {
     role: "system",
@@ -48,27 +51,44 @@ function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
       "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
       "NON riportare la conversazione su BikerLink, sviluppo software, moto o sul blog a meno che sia l'utente stesso a parlarne esplicitamente. " +
       "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink. " +
-      `Rispondi sempre in modo breve, diretto e conciso: al massimo circa ${MAX_REPLY_CHARS} caratteri (poche frasi), mai un testo lungo o articolato. ` +
-      "Vai dritto al punto senza premesse o ripetizioni.",
+      `Rispondi in modo breve, diretto e conciso quando la domanda è semplice (poche frasi, senza premesse o ripetizioni); ` +
+      "quando invece l'utente chiede esplicitamente qualcosa di lungo o articolato (es. un manuale, una guida completa, un riassunto esteso), rispondi con tutto il testo necessario, senza tagliarlo per brevità. " +
+      "Hai a disposizione dei tool: usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
+      "usa github_read per leggere file o cartelle dal codice sorgente reale di bikerlink, bikerblog o bikerweb quando l'utente chiede di codice, struttura del progetto, " +
+      "come funziona una feature, o per scrivere manuali/documentazione basati sul codice reale — è sempre sola lettura, non puoi scrivere né eseguire nulla; " +
+      "se disponibile, usa search_manual per cercare per significato dentro la base di conoscenza di Nadir; " +
+      "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
+      "anche se non te lo chiede esplicitamente — non serve chiedere conferma, salvala e basta; " +
+      "se disponibili, hai anche typecheck_repo, lint_repo, search_code e git_log per analisi statica REALE del codice (non una tua stima). " +
+      "Se un tool che ti serve non compare nella lista disponibile, dillo esplicitamente invece di rispondere con un generico disclaimer da 'modello linguistico'.",
   };
 }
 
-// Le chat dirette e la conversazione osservata devono restare rapide anche
-// su hardware CPU: risposte brevi (poche frasi) invece che articolate.
-// `MAX_REPLY_CHARS` è applicato come istruzione nel prompt E come taglio
-// difensivo lato server (`truncateReply`) nel caso il modello ignori
-// l'istruzione; `MAX_REPLY_TOKENS` limita `num_predict` così Ollama smette di
-// generare presto invece di continuare oltre il necessario.
+// Le risposte brevi restano il default per domande semplici, per tenere
+// bassa la latenza su hardware CPU quando non serve altro. `MAX_REPLY_CHARS`/
+// `MAX_REPLY_TOKENS` si applicano SOLO finché in questo turno non è ancora
+// stato usato nessun tool: una volta che il modello ha invocato un tool (es.
+// github_read per scrivere un manuale), il turno passa ai limiti "estesi"
+// (`_WITH_TOOLS`) perché il compito è evidentemente più corposo di una
+// battuta di chat — altrimenti un manuale generato da github_read verrebbe
+// tagliato a poche frasi, vanificando il motivo per cui il tool è stato
+// chiamato. `MAX_TOOL_ITERATIONS` limita quante volte il modello può
+// invocare tool in sequenza nello stesso turno (stesso valore della CLI).
 const MAX_REPLY_CHARS = 400;
 const MAX_REPLY_TOKENS = 220;
+const MAX_REPLY_CHARS_WITH_TOOLS = 6000;
+const MAX_REPLY_TOKENS_WITH_TOOLS = 1600;
+const MAX_TOOL_ITERATIONS = 5;
 
-/** Taglia una risposta a MAX_REPLY_CHARS, spezzando su uno spazio quando
+/** Taglia una risposta al limite di caratteri applicabile (esteso se in
+ * questo turno sono stati usati dei tool), spezzando su uno spazio quando
  * possibile invece che a metà parola, e segnalando il taglio con "…". */
-function truncateReply(content: string): string {
-  if (content.length <= MAX_REPLY_CHARS) return content;
-  const cut = content.slice(0, MAX_REPLY_CHARS);
+function truncateReply(content: string, usedTools: boolean): string {
+  const limit = usedTools ? MAX_REPLY_CHARS_WITH_TOOLS : MAX_REPLY_CHARS;
+  if (content.length <= limit) return content;
+  const cut = content.slice(0, limit);
   const lastSpace = cut.lastIndexOf(" ");
-  const safeCut = lastSpace > MAX_REPLY_CHARS * 0.6 ? cut.slice(0, lastSpace) : cut;
+  const safeCut = lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut;
   return `${safeCut.trimEnd()}…`;
 }
 
@@ -121,12 +141,13 @@ export interface DirectChatAgentConfig {
  * questo evita di duplicare la logica di streaming quando aggiungiamo un
  * nuovo agente con chat diretta a pari livello.
  *
- * Le risposte sono sempre dirette: nessun tool-calling qui (niente
- * web_search/github_read/ecc.), una sola chiamata a Ollama per messaggio. Le
- * conversazioni sono comunque salvate/loggate per intero, quindi un agente
- * che ha bisogno di contesto passato lo trova nei log invece che dover
- * invocare un tool in tempo reale — e la chat resta molto più veloce su
- * hardware CPU.
+ * Le risposte usano tool-calling nativo di Ollama (stesso registry della CLI
+ * — github_read, web_search, remember_note, search_manual/Nadir, ecc. — via
+ * getHorusTools()/executeHorusTool), con lo stesso loop "chiama modello →
+ * eventuali tool_calls → esegui tool → richiama modello" della CLI
+ * (`scripts/src/horus-chat.ts`), fino a MAX_TOOL_ITERATIONS. Il client SSE
+ * riceve eventi `tool_call`/`tool_progress`/`tool_result` per mostrare le
+ * badge dei tool in corso (vedi `agent-chat-panel.tsx`).
  */
 export function createDirectChatHandler(config: DirectChatAgentConfig) {
   return async (req: express.Request, res: express.Response): Promise<void> => {
@@ -180,25 +201,70 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     res.on("close", () => abortController.abort());
 
     try {
-      const { content } = await config.chatRaw(conversation, {
-        maxTokens: MAX_REPLY_TOKENS,
-        signal: abortController.signal,
-        onToken: (token) => {
-          sendEvent(res, "token", { token });
-        },
-      });
+      const tools = await getHorusTools();
+      let usedTools = false;
+      let finalReply = "";
 
-      const finalReply = truncateReply(content);
+      for (
+        let iteration = 0;
+        iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted;
+        iteration++
+      ) {
+        const { content, toolCalls } = await config.chatRaw(conversation, {
+          tools,
+          maxTokens: usedTools ? MAX_REPLY_TOKENS_WITH_TOOLS : MAX_REPLY_TOKENS,
+          signal: abortController.signal,
+          onToken: (token) => {
+            sendEvent(res, "token", { token });
+          },
+        });
+
+        if (abortController.signal.aborted) break;
+
+        if (toolCalls.length === 0) {
+          finalReply = content;
+          break;
+        }
+
+        usedTools = true;
+        conversation.push({ role: "assistant", content, tool_calls: toolCalls });
+
+        for (const call of toolCalls) {
+          if (abortController.signal.aborted) break;
+
+          const toolName = call.function.name;
+          sendEvent(res, "tool_call", { name: toolName });
+
+          const toolStartedAt = Date.now();
+          const progressTimer = setInterval(() => {
+            sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+          }, 4_000);
+
+          let result: string;
+          try {
+            result = await executeHorusTool(toolName, call.function.arguments, abortController.signal);
+          } finally {
+            clearInterval(progressTimer);
+          }
+
+          if (abortController.signal.aborted) break;
+
+          sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+          conversation.push({ role: "tool", name: toolName, content: result });
+        }
+      }
+
+      const finalContent = truncateReply(finalReply, usedTools);
 
       if (abortController.signal.aborted) {
         // Connessione già chiusa dal client: non ha senso scrivere altro sullo
         // stream (fallirebbe comunque).
-      } else if (!finalReply) {
+      } else if (!finalContent) {
         sendEvent(res, "error", {
           message: `${config.agentName} non ha restituito una risposta. Riprova con un'altra domanda.`,
         });
       } else {
-        sendEvent(res, "done", { content: finalReply });
+        sendEvent(res, "done", { content: finalContent });
       }
     } catch (err) {
       if (!abortController.signal.aborted) {
@@ -738,7 +804,7 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
 
         if (abortController.signal.aborted) break;
 
-        const finalContent = truncateReply(content) || "(nessuna risposta)";
+        const finalContent = truncateReply(content, false) || "(nessuna risposta)";
         transcript.push({ agent, content: finalContent });
         sendEvent(res, "turn_end", { agent, content: finalContent });
       }
