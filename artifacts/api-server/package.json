@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "node --experimental-test-module-mocks --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
