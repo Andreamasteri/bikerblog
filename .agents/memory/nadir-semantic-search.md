@@ -31,6 +31,20 @@ calling.
 `[Nadir/all-minilm]`, `/health` returns `embedModel`). This was an explicit task
 requirement, not incidental.
 
+**`inbox/` is gitignored but still reaches production.** `/_internal/nadir-export`
+reads `inbox/nadir-manual.md` (and other manually-dropped `inbox/*` files like
+diary-notes) even though the whole `inbox/` dir is `.gitignore`d — Replit
+deployments package the live filesystem, not just git-tracked paths, so this
+is the intended pattern for one-off manual content, not a bug to "fix" by
+force-adding to git.
+
+**`INBOX_DIR` path math must match the bundled runtime location, not the
+source tree.** `internal.ts` resolves `INBOX_DIR` from `__dirname`; both dev
+and prod always run the esbuild bundle `dist/index.mjs` (never `tsx` on
+`src/`), so `__dirname` is `artifacts/api-server/dist` and only 3 `..` hops
+reach the repo root — a count based on the `src/routes/` source layout is
+silently wrong (mocked tests won't catch it since they stub the filesystem).
+
 **Reindex success ≠ search reachability — check both separately.** A
 successful `/reindex` (pipeline step 7.5) says nothing about whether `/search`
 is still up hours later; Nadir can die in between and `search_manual` will

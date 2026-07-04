@@ -15,7 +15,12 @@ import { createNadirExportHandler } from "./nadir-export.js";
 
 const router: IRouter = Router();
 
-const INBOX_DIR = path.resolve(__dirname, "..", "..", "..", "..", "inbox");
+// Il server gira sempre dal bundle in dist/index.mjs (sia in dev che in
+// produzione, vedi artifacts/api-server/package.json e artifact.toml), quindi
+// __dirname è .../artifacts/api-server/dist: tre livelli sopra è la root del
+// monorepo. Un conteggio errato qui (es. assumendo il layout sorgente
+// src/routes/) fa scrivere/leggere fuori dal progetto senza errori visibili.
+const INBOX_DIR = path.resolve(__dirname, "..", "..", "..", "inbox");
 const NADIR_MANUAL_PATH = path.join(INBOX_DIR, "nadir-manual.md");
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
