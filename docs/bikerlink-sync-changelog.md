@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #182** — Restore the chat test suite so future breakages get caught <!-- e665d3e -->
+  - _In parole semplici:_ Abbiamo ripristinato i test della chat per intercettare eventuali problemi futuri.
 - **Task #181** — Fix raw "network error" leaking into Horus/Bowie chat <!-- 78d48cc -->
   - _In parole semplici:_ Abbiamo risolto un problema che causava l'errore di rete grezzo nella chat tra Horus e Bowie
 - **Task #178** — Contextual tool loading + always-resident Ollama models <!-- 62efe66 -->
@@ -150,6 +152,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **03:22** · Git commit prior to merge <!-- 9de01c2 -->
+  - _In parole semplici:_ Commit git prima del merge.
 - **03:17** · Git commit prior to merge <!-- 2c6efa9 -->
   - _In parole semplici:_ Commit git prima del merge.
 - **03:02** · Update Ollama chat to correctly format keep alive duration <!-- 3e34770 -->
