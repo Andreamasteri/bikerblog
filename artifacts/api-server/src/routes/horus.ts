@@ -783,8 +783,12 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
         // Connessione già chiusa dal client: non ha senso scrivere altro sullo
         // stream (fallirebbe comunque).
       } else if (!finalContent) {
+        // Risposta vuota: rimandare la STESSA richiesta darebbe di nuovo vuoto.
+        // recoverable: false → il client non offre "Riprova" (il messaggio
+        // stesso invita a riformulare la domanda).
         sendEvent(res, "error", {
           message: `${config.agentName} non ha restituito una risposta. Riprova con un'altra domanda.`,
+          recoverable: false,
         });
       } else {
         sendEvent(res, "done", { content: finalContent });
@@ -792,8 +796,14 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     } catch (err) {
       if (!abortController.signal.aborted) {
         req.log.error({ err }, config.logLabel);
+        // Fallimento transitorio (timeout del tunnel, sovraccarico, gateway
+        // timeout): il messaggio d'errore qui è già in italiano e chiaro
+        // (overloadedMessage / OllamaGatewayTimeoutError). recoverable: true →
+        // il client mostra "Riprova": la stessa richiesta può recuperare la
+        // risposta dalla cache (Task #185) o rigenerarla in fretta.
         sendEvent(res, "error", {
           message: err instanceof Error ? err.message : `Errore imprevisto contattando ${config.agentName}.`,
+          recoverable: true,
         });
       }
     } finally {

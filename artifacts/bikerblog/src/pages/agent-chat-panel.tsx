@@ -344,6 +344,18 @@ export function AgentChatPanel({
             );
           } else if (eventName === "error" && typeof payload.message === "string") {
             setError(payload.message);
+            // Task #188: il server segnala con `recoverable: true` i fallimenti
+            // transitori (timeout del tunnel, sovraccarico, gateway timeout).
+            // In quel caso offriamo lo stesso "Riprova" a un click già usato per
+            // il drop lato client: la stessa richiesta può recuperare la
+            // risposta dalla cache del server (Task #185) o rigenerarla in
+            // fretta. NON lo offriamo quando `recoverable` è false (es. "nessuna
+            // risposta, prova con un'altra domanda"): lì un retry identico è
+            // inutile. 401/503 non passano nemmeno da qui (gestiti prima via
+            // status HTTP).
+            if (payload.recoverable === true) {
+              setCanRetry(true);
+            }
             // Se l'errore arriva prima di qualsiasi token (es. HTTP 524 del
             // tunnel sul prefill del 2° messaggio), rimuovi il bubble vuoto
             // dell'assistente: l'utente vede un errore chiaro e recuperabile
@@ -360,8 +372,10 @@ export function AgentChatPanel({
       // Task #185: drop di connessione (il "network error" classico). Il server
       // potrebbe aver completato la risposta e averla messa in cache, quindi
       // offriamo un "Riprova" che rimanda la stessa richiesta e la recupera
-      // all'istante. Non abilitiamo il retry sugli errori server (`error` SSE)
-      // né su abort/401/503: lì non c'è nulla di già-generato da riusare.
+      // all'istante. (I fallimenti transitori segnalati dal server come evento
+      // SSE `error` recuperabile abilitano lo stesso "Riprova" nel loop sopra —
+      // Task #188.) Non offriamo il retry su abort/401/503: lì non c'è nulla di
+      // già-generato da riusare.
       setCanRetry(true);
       // Connessione caduta prima di ricevere qualsiasi contenuto (il caso
       // classico del "network error"): togli il bubble vuoto dell'assistente
