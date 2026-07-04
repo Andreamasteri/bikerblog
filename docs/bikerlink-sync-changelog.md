@@ -158,6 +158,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **20:04** · Update project documentation with recent changes <!-- e7ba95b -->
+  - _In parole semplici:_ Aggiornamento della documentazione del progetto con le modifiche recenti
 - **19:58** · Add Cloudflared and update site image <!-- 75cbc4e -->
   - _In parole semplici:_ Abbiamo migliorato la sicurezza del sito con l'aggiunta di Cloudflared e l'aggiornamento dell'immagine del sito.
 - **19:57** · Add Cloudflared to project dependencies and update site image <!-- ec28a0f -->
