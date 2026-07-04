@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #188** — Mostra sempre "Riprova" quando l'agente va in timeout (chat diretta) <!-- 867a3a2 -->
+  - _In parole semplici:_ In caso di timeout durante una chat diretta, l'app mostrerà sempre la scritta "Riprova".
 - **Task #184** — Type health-status mocks against HealthResult <!-- 26f3fe8 -->
   - _In parole semplici:_ Abbiamo migliorato i test di salute del sistema per fornire risultati più precisi e affidabili.
 - **Task #183** — Type chat test mocks against real AgentRegistryEntry shape <!-- b278cda -->
