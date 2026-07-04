@@ -97,7 +97,11 @@ async function collectSseEvents(
 
 async function runChatRequest(
   url: string,
-  body: unknown = { message: "domanda che innesca un tool", history: [] }
+  // Messaggio che, con la selezione contestuale dei tool (Task #178), allega
+  // davvero un tool (web_search): serve al primo test per esercitare il ramo
+  // "tentativo con tool → 524 → fallback senza tool". I test #176 passano un
+  // body esplicito e non dipendono da questo default.
+  body: unknown = { message: "cerca online le ultime notizie", history: [] }
 ): Promise<Array<{ event: string; data: unknown }>> {
   const events: Array<{ event: string; data: unknown }> = [];
   await new Promise<void>((resolve, reject) => {

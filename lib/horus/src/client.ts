@@ -311,7 +311,12 @@ export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentC
           model: config.model,
           messages: finalMessages,
           stream: true,
-          keep_alive: options.keepAlive ?? "30m",
+          // Task #178: default "-1" = il modello resta residente in RAM a
+          // tempo indeterminato (richiesta esplicita dell'utente), scaricabile
+          // solo con un'azione manuale sul server TC. Evita di ripagare il
+          // caricamento da disco a ogni messaggio dopo una pausa. L'override
+          // per-chiamata resta possibile via `keepAlive`.
+          keep_alive: options.keepAlive ?? "-1",
           ...(options.tools ? { tools: options.tools } : {}),
           options: {
             num_predict: options.maxTokens ?? 4096,

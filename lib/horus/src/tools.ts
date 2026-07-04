@@ -474,18 +474,152 @@ async function isSonarAvailable(): Promise<boolean> {
 
 const SONAR_SCAN_TOOL_NAME = "sonar_scan";
 
-export async function getHorusTools(): Promise<HorusToolSpec[]> {
+/**
+ * Selezione contestuale dei tool (Task #178). Su CPU, allegare a Ollama
+ * l'intero blocco di tool (schemi JSON verbosi) a ogni chiamata gonfia il
+ * prompt di ~2.500-3.000 token: il prefill silenzioso di quel contesto su CPU
+ * supera i ~100s che il tunnel Cloudflare concede prima del primo byte → 524,
+ * anche per un banale "Ciao".
+ *
+ * Questa funzione deduce dal SOLO messaggio dell'utente (analisi leggera per
+ * parole chiave, nessun round-trip aggiuntivo al modello) quale sottoinsieme
+ * MINIMO di tool sia pertinente, e restituisce solo quelli — intersecati con
+ * `available` (che è già filtrato per capacità: gating "sopra" il contestuale).
+ * Per un messaggio conversazionale non ritorna alcun tool, così il prefill è
+ * minimo e la risposta è immediata anche su CPU.
+ *
+ * Deliberatamente conservativa: mappa intenti diversi su sottoinsiemi diversi
+ * (non un unico pacchetto) e, in caso di dubbio, preferisce allegare il singolo
+ * tool più probabile. Se il modello si accorge di aver bisogno di un tool non
+ * allegato, il system prompt gli chiede di dichiararlo esplicitamente.
+ */
+export function selectRelevantTools(
+  message: string,
+  available: HorusToolSpec[]
+): HorusToolSpec[] {
+  const text = message.toLowerCase();
+  const has = (re: RegExp): boolean => re.test(text);
+  const wanted = new Set<string>();
+
+  // Contesto "codice": presenza di uno dei repo o di lessico da sorgente.
+  const codeContext =
+    /\bcodice\b|sorgent|reposit|\brepo\b|github|\bfile\b|funzione|classe|metodo|implementaz|struttura del progetto|typescript|refactor|bikerlink|bikerblog|bikerweb/;
+  const isCode = has(codeContext);
+
+  // remember_note — l'utente comunica qualcosa da ricordare.
+  if (has(/ricord|memorizz|non dimenticare|tieni a mente|segnati|prendi nota|appunta/)) {
+    wanted.add("remember_note");
+  }
+
+  // read_blog — contenuti già pubblicati del blog (post, commenti, podcast).
+  if (has(/\bblog\b|\bpost\b|articol|commenti|lettori|episodi|podcast|pubblicat|in evidenza/)) {
+    wanted.add("read_blog");
+  }
+
+  // search_manual (Nadir) — ricerca semantica / knowledge base / cosa già detto.
+  if (
+    has(
+      /per significato|semantic|knowledge base|base di conoscenza|\bmanuale\b|cosa (ti )?avevo detto|ne avevamo (già )?parlato|come avevamo detto/
+    )
+  ) {
+    wanted.add("search_manual");
+  }
+
+  // Tool di analisi statica reale (gated a monte per servizio disponibile).
+  if (has(/typecheck|type check|errori di tipo|controllo dei tipi/)) wanted.add("typecheck_repo");
+  if (has(/\blint\b|eslint|stile del codice/)) wanted.add("lint_repo");
+  if (has(/\bcommit\b|git log|cronologia dei commit|ultime modifiche al codice|cosa è cambiato/)) {
+    wanted.add("git_log");
+  }
+  if (has(/sonar|code smell|duplicazion|debito tecnico|vulnerabilit|security hotspot|qualità del codice/)) {
+    wanted.add("sonar_scan");
+  }
+  if (
+    has(
+      /come (lo )?implementeresti|come implemento|pianific|piano di|root cause|causa (del|di questo|radice)|valuta (questa|l'implementazione|l')|architettura|progett(a|are|azione)|\bdebug\b/
+    )
+  ) {
+    wanted.add("architect");
+  }
+
+  // Codice: lettura (github_read) e/o ricerca full-text nel sorgente (search_code).
+  // Se l'intento è già un'analisi specifica (typecheck/lint/git_log/sonar/
+  // architect) NON aggiungere anche github_read: la parola "repo"/nome-repo è
+  // naturalmente presente in quelle richieste ma l'intento non è "leggi il
+  // codice". Così "fai il typecheck del repo bikerblog" allega solo
+  // typecheck_repo, non anche github_read.
+  const analysisIntent = ["typecheck_repo", "lint_repo", "git_log", "sonar_scan", "architect"].some(
+    (name) => wanted.has(name)
+  );
+  if (isCode) {
+    if (has(/cerc|trova|occorrenz|grep|dove (viene|è|sono)|quante volte/)) wanted.add("search_code");
+    if (!analysisIntent) wanted.add("github_read");
+    // "trova bug/errori nel codice" senza un tool esplicito → typecheck è il
+    // segnale più utile.
+    if (has(/\bbug\b|\berrore\b|errori|non funziona/) && !wanted.has("typecheck_repo")) {
+      wanted.add("typecheck_repo");
+    }
+  }
+
+  // web_search — informazioni aggiornate o ricerca generica sul web, ma non
+  // quando la ricerca è chiaramente su codice/manuale/blog.
+  const freshInfo =
+    /notizi|ultim\w*\s+(notizi|novità|nov)|recent|aggiornat|attual|\boggi\b|\bieri\b|meteo|previsioni|prezzo|quanto costa|quotazion|\binternet\b|\bweb\b|google|in rete|classifica|risultat/;
+  if (has(freshInfo)) wanted.add("web_search");
+  if (has(/cerca (online|sul web|su internet|in rete)|ricerca (online|sul web|su internet)/)) {
+    wanted.add("web_search");
+  }
+  // "cerca/cercami/ricerca" nudo → web solo se non è già una ricerca mirata.
+  if (
+    has(/\bcerca\b|\bcercami\b|\bricerca\b/) &&
+    !wanted.has("search_code") &&
+    !wanted.has("search_manual") &&
+    !wanted.has("read_blog")
+  ) {
+    wanted.add("web_search");
+  }
+
+  if (wanted.size === 0) return [];
+  return available.filter((tool) => wanted.has(tool.function.name));
+}
+
+/**
+ * Restituisce i tool disponibili per la chat.
+ *
+ * Se `message` è fornito, applica la selezione contestuale (Task #178):
+ * allega solo il sottoinsieme minimo di tool pertinente al messaggio (o nessun
+ * tool per un messaggio conversazionale). Se `message` è omesso, restituisce
+ * l'intero set disponibile (comportamento storico, es. per chi vuole tutti i
+ * tool a prescindere dal contesto).
+ *
+ * Il gating per capacità resta SOPRA quello contestuale: i tool di analisi
+ * (typecheck/lint/search_code/git_log/architect/sonar_scan) e search_manual
+ * compaiono solo se il rispettivo servizio TC/Nadir è configurato, e sonar_scan
+ * solo se il capability-check live conferma la sua disponibilità — pagato solo
+ * quando sonar_scan sopravvive alla selezione contestuale, così un messaggio
+ * semplice non paga alcun round-trip di rete.
+ */
+export async function getHorusTools(message?: string): Promise<HorusToolSpec[]> {
   // search_manual (Nadir) è gated solo sulla presenza delle env var: a
   // differenza di sonar_scan non serve un capability-check live, perché non ci
   // sono sotto-configurazioni che possano variare indipendentemente.
   const nadirTools = isNadirConfigured() ? NADIR_TOOL_SPECS : [];
+  const analysisCandidates = isAnalysisServiceConfigured() ? ANALYSIS_TOOL_SPECS : [];
 
-  if (!isAnalysisServiceConfigured()) return [...BASE_HORUS_TOOLS, ...nadirTools];
+  // Insieme candidato PRIMA del capability-check live di sonar_scan.
+  const candidates = [...BASE_HORUS_TOOLS, ...nadirTools, ...analysisCandidates];
+  const contextual = message === undefined ? candidates : selectRelevantTools(message, candidates);
+
+  // sonar_scan richiede un capability-check live (il token vive solo su TC):
+  // interrogalo solo se sonar_scan è effettivamente tra i tool selezionati,
+  // così un messaggio che non lo richiede non aggiunge una richiesta di rete.
+  const hasSonar = contextual.some((tool) => tool.function.name === SONAR_SCAN_TOOL_NAME);
+  if (!hasSonar) return contextual;
+
   const sonarAvailable = await isSonarAvailable();
-  const analysisTools = sonarAvailable
-    ? ANALYSIS_TOOL_SPECS
-    : ANALYSIS_TOOL_SPECS.filter((spec) => spec.function.name !== SONAR_SCAN_TOOL_NAME);
-  return [...BASE_HORUS_TOOLS, ...nadirTools, ...analysisTools];
+  return sonarAvailable
+    ? contextual
+    : contextual.filter((tool) => tool.function.name !== SONAR_SCAN_TOOL_NAME);
 }
 
 /** @deprecated usa `getHorusTools()` — mantenuto per compatibilità, non include i tool di analisi condizionali. */

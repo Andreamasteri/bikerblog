@@ -90,7 +90,12 @@ async function embed(texts) {
   const res = await fetch(`${OLLAMA_URL}/api/embed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: EMBED_MODEL, input: texts }),
+    // keep_alive: -1 tiene il modello di embedding residente in RAM a tempo
+    // indeterminato (Task #178, richiesta esplicita dell'utente): senza questo
+    // Ollama lo scarica dopo ~5 minuti di inattività e ogni reindex/ricerca
+    // successiva paga il ricaricamento da disco. Si scarica solo con un'azione
+    // manuale sul server TC.
+    body: JSON.stringify({ model: EMBED_MODEL, input: texts, keep_alive: -1 }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");

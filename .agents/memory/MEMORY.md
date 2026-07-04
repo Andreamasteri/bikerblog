@@ -23,6 +23,7 @@
 - [Horus↔Bowie turn attribution + resume](horus-convo-turn-attribution-retry.md) — index parity decides agent, transcript is the resume payload; keep this shape for any future multi-agent turn-taking surface.
 - [BikerBlog frontend testing setup](bikerblog-frontend-testing-setup.md) — vitest+RTL setup for artifacts/bikerblog, jsdom scrollTo polyfill, and SSE-mocking pattern for streaming chat components.
 - [Tool-mode token budget vs tunnel timeout](horus-tool-timeout-token-budget.md) — "chat works once then 524s" is usually the with-tools token budget outliving the Cloudflare Tunnel's ~100s ceiling, not a code bug — check prod logs first.
+- [Contextual tools + resident models](horus-contextual-tools-resident.md) — chat attaches only intent-matched tools (bare msg → zero, keeps CPU prefill under the tunnel ceiling); keep_alive is -1 everywhere by user policy — don't revert or add app-level unload.
 - [Group conversation agent filtering](group-conversation-agent-filtering.md) — Horus/Bowie/Quebracho group chat filters to `isConfigured()` agents on both server and client; an unconfigured agent must not break the others' panel.
 - [Bowie real-model quality check](bowie-real-model-quality-check.md) — llama3.2:3b is coherent/on-topic and turn-taking works; the real risk is CPU latency (~90-120s/turn), not quality.
 - [Horus↔Bowie conversation duration UX](horus-convo-duration-ux.md) — fix pacing complaints with progress/ETA + turn-count tuning, not prompt/model changes; latency is the bottleneck.

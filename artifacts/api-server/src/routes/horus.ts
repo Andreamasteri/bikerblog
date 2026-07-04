@@ -58,7 +58,7 @@ function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
       "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink. " +
       `Rispondi in modo breve, diretto e conciso quando la domanda è semplice (poche frasi, senza premesse o ripetizioni); ` +
       "quando invece l'utente chiede esplicitamente qualcosa di lungo o articolato (es. un manuale, una guida completa, un riassunto esteso), rispondi con tutto il testo necessario, senza tagliarlo per brevità. " +
-      "Hai a disposizione dei tool: usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
+      "Puoi disporre di alcuni strumenti, che vengono attivati automaticamente solo quando la tua richiesta li rende utili (per un messaggio conversazionale non ne hai nessuno, ed è normale): usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
       "usa github_read per leggere file o cartelle dal codice sorgente reale di bikerlink, bikerblog o bikerweb quando l'utente chiede di codice, struttura del progetto, " +
       "come funziona una feature, o per scrivere manuali/documentazione basati sul codice reale — è sempre sola lettura, non puoi scrivere né eseguire nulla; " +
       "se disponibile, usa search_manual per cercare per significato dentro la base di conoscenza di Nadir; " +
@@ -379,7 +379,10 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     res.on("close", () => abortController.abort());
 
     try {
-      const tools = await getHorusTools();
+      // Task #178: allega solo il sottoinsieme di tool pertinente al messaggio
+      // dell'utente (o nessun tool per un messaggio conversazionale), così il
+      // prefill su CPU resta minimo e "Ciao" non scade sul tunnel Cloudflare.
+      const tools = await getHorusTools(message);
       let usedTools = false;
       let finalReply = "";
       // Budget TOTALE di testo dei risultati-tool reinserito nel prompt in
