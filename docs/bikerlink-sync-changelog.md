@@ -158,6 +158,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **06:42** · Revert message history limit to improve response speed <!-- 53d0cf8 -->
+  - _In parole semplici:_ Abbiamo migliorato la velocità di risposta dell'app aumentando il limite della cronologia dei messaggi.
 - **04:17** · Fix Task #185: recover chat replies lost to mobile network drops <!-- ae1746d -->
   - _In parole semplici:_ Abbiamo risolto un problema che causava la perdita di risposte alle chat durante le interruzioni della rete mobile.
 - **03:33** · Git commit prior to merge <!-- 69a5327 -->
