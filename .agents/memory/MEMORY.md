@@ -35,3 +35,4 @@
 - [Mode-gated JSX ternary chains](horus-chat-mode-leak-bug.md) — an unconditional tail ternary in a multi-mode page rendered a panel on every mode except the ones it explicitly checked; always gate the whole chain, not just the branches you added.
 - [Testing module-scope dependencies](module-scope-dependency-test-mocking.md) — use `node:test` `mock.module` (needs `--experimental-test-module-mocks`, spread real exports first) to fake deps imported directly, not via config.
 - [Missing-tool sentinel escalation](horus-missing-tool-sentinel.md) — when contextual tool selection guesses wrong, model emits a hidden sentinel and gets one silent retry with the full tool set.
+- [Ollama keep_alive duration format](horus-ollama-keep-alive-duration-format.md) — send `keep_alive: -1` as a number, not the string "-1" (no unit) — Ollama 400s on the bare string.

@@ -121,13 +121,19 @@ export interface HorusChatOptions {
   signal?: AbortSignal;
   /**
    * Per quanto tempo Ollama tiene il modello caricato in RAM dopo questa
-   * richiesta (formato Ollama, es. "30m", "-1" per sempre). Se il modello
-   * viene scaricato tra un messaggio e l'altro (default Ollama: 5 minuti di
-   * inattività), ogni nuovo messaggio paga il costo di ricaricarlo da disco
-   * prima ancora di iniziare a generare — è spesso la causa principale di
-   * lentezza percepita in una chat con pause tra i messaggi.
+   * richiesta. Se il modello viene scaricato tra un messaggio e l'altro
+   * (default Ollama: 5 minuti di inattività), ogni nuovo messaggio paga il
+   * costo di ricaricarlo da disco prima ancora di iniziare a generare — è
+   * spesso la causa principale di lentezza percepita in una chat con pause
+   * tra i messaggi.
+   *
+   * Formato Ollama: durata come stringa CON unità (es. "30m", "-1s" per
+   * sempre) OPPURE numero di secondi (es. -1 per sempre). La stringa "-1"
+   * SENZA unità non è valida (Ollama la passa al parser Go time.ParseDuration
+   * che risponde 400 "missing unit in duration"). Usa il numero -1, non la
+   * stringa "-1".
    */
-  keepAlive?: string;
+  keepAlive?: string | number;
 }
 
 export interface HorusRawResult {
@@ -311,12 +317,14 @@ export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentC
           model: config.model,
           messages: finalMessages,
           stream: true,
-          // Task #178: default "-1" = il modello resta residente in RAM a
-          // tempo indeterminato (richiesta esplicita dell'utente), scaricabile
-          // solo con un'azione manuale sul server TC. Evita di ripagare il
-          // caricamento da disco a ogni messaggio dopo una pausa. L'override
-          // per-chiamata resta possibile via `keepAlive`.
-          keep_alive: options.keepAlive ?? "-1",
+          // Task #178: default -1 (numero, non stringa "-1" — Ollama la passa
+          // al parser Go time.ParseDuration che rifiuta "-1" senza unità con
+          // un 400) = il modello resta residente in RAM a tempo indeterminato
+          // (richiesta esplicita dell'utente), scaricabile solo con un'azione
+          // manuale sul server TC. Evita di ripagare il caricamento da disco a
+          // ogni messaggio dopo una pausa. L'override per-chiamata resta
+          // possibile via `keepAlive`.
+          keep_alive: options.keepAlive ?? -1,
           ...(options.tools ? { tools: options.tools } : {}),
           options: {
             num_predict: options.maxTokens ?? 4096,
