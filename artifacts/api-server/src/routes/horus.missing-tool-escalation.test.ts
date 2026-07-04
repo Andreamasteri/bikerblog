@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import http from "node:http";
-import { test } from "node:test";
+import { test, beforeEach } from "node:test";
 import express from "express";
 import type { HorusMessage, HorusRawResult, HorusChatOptions, OllamaAgentHealth } from "@workspace/horus";
-import { createDirectChatHandler } from "./horus.js";
+import { createDirectChatHandler, __clearDirectReplyCacheForTests } from "./horus.js";
+
+// Task #185: azzera la cache best-effort delle risposte tra un test e l'altro,
+// così una richiesta identica non viene servita dalla cache di un test
+// precedente saltando la generazione sotto esame.
+beforeEach(() => {
+  __clearDirectReplyCacheForTests();
+});
 
 /**
  * Copertura per Task #179: se il modello dichiara di aver bisogno di un tool

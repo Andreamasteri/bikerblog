@@ -37,3 +37,4 @@
 - [Missing-tool sentinel escalation](horus-missing-tool-sentinel.md) — when contextual tool selection guesses wrong, model emits a hidden sentinel and gets one silent retry with the full tool set.
 - [Ollama keep_alive duration format](horus-ollama-keep-alive-duration-format.md) — send `keep_alive: -1` as a number, not the string "-1" (no unit) — Ollama 400s on the bare string.
 - [Browser network-error leaks into chat](friendly-chat-error-browser-variants.md) — Chrome's mid-stream `TypeError: network error` (+ Safari "Load failed") don't contain "fetch"; friendlyChatErrorMessage must map EVERY TypeError, not just fetch-matching ones.
+- [Chat network-drop reply cache](horus-network-drop-reply-cache.md) — "network error" but server logged HTTP 200 = mobile network suspension (not the tunnel); recover via best-effort server reply cache + one-click client retry that reuses it.

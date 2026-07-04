@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import http from "node:http";
-import { test } from "node:test";
+import { test, beforeEach } from "node:test";
 import express from "express";
 import type {
   HorusMessage,
@@ -8,7 +8,15 @@ import type {
   HorusChatOptions,
   OllamaAgentHealth,
 } from "@workspace/horus";
-import { createDirectChatHandler } from "./horus.js";
+import { createDirectChatHandler, __clearDirectReplyCacheForTests } from "./horus.js";
+
+// Task #185: la cache best-effort delle risposte è a livello di modulo e i test
+// usano tutti lo stesso agente + messaggio ("ciao") + cronologia vuota. Senza
+// reset, il 2° test troverebbe la risposta del 1° in cache e salterebbe del
+// tutto la generazione (nessun token, nessun abort), falsando l'asserzione.
+beforeEach(() => {
+  __clearDirectReplyCacheForTests();
+});
 
 /**
  * Regressione: /horus/chat, /horus/bowie-chat e /horus/bowie-conversation
@@ -63,6 +71,17 @@ async function startTestServer(
   close: () => Promise<void>;
 }> {
   const app = express();
+  // In produzione `req.log` è attaccato da pino-http; qui basta un no-op.
+  app.use((req, _res, next) => {
+    const noop = () => {};
+    (req as unknown as { log: Record<string, () => void> }).log = {
+      warn: noop,
+      error: noop,
+      info: noop,
+      debug: noop,
+    };
+    next();
+  });
   app.post(
     "/test/chat",
     express.json(),
@@ -206,6 +225,76 @@ test("SSE chat handler still aborts generation when the client actually disconne
       fake.lastSignal?.aborted,
       true,
       "a real client disconnect should still abort generation via res.on('close')"
+    );
+  } finally {
+    await server.close();
+  }
+});
+
+/** Legge una richiesta completa e ritorna tutti gli eventi SSE. */
+function runFullChatRequest(
+  url: string,
+  body: unknown
+): Promise<Array<{ event: string; data: unknown }>> {
+  return new Promise((resolve, reject) => {
+    const events: Array<{ event: string; data: unknown }> = [];
+    const req = http.request(
+      url,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Horus-Password": process.env["HORUS_CHAT_PASSWORD"]!,
+        },
+      },
+      (res) => {
+        collectSseEvents(res, { onEvent: (event, data) => events.push({ event, data }) })
+          .then(() => resolve(events))
+          .catch(reject);
+      }
+    );
+    req.on("error", reject);
+    req.end(JSON.stringify(body));
+  });
+}
+
+test("Task #185: an identical follow-up request is served from cache without re-generating", async () => {
+  // chatRaw che conta quante volte viene davvero invocato: la seconda
+  // richiesta identica NON deve rigenerare (deve arrivare dalla cache).
+  let calls = 0;
+  const chatRaw = (async (_messages, options = {}) => {
+    calls++;
+    options.onToken?.("tok");
+    return { content: "risposta-generata", toolCalls: [] };
+  }) as Parameters<typeof startTestServer>[0];
+
+  const server = await startTestServer(chatRaw);
+  try {
+    const body = { message: "domanda unica del test cache", history: [] };
+
+    const first = await runFullChatRequest(server.url, body);
+    const firstDone = first.find((e) => e.event === "done");
+    assert.ok(firstDone, "prima richiesta: atteso un evento done");
+    assert.equal((firstDone!.data as { content: string }).content, "risposta-generata");
+    assert.equal(calls, 1, "la prima richiesta deve generare (1 chiamata a chatRaw)");
+
+    const second = await runFullChatRequest(server.url, body);
+    const secondDone = second.find((e) => e.event === "done");
+    assert.ok(secondDone, "seconda richiesta: atteso un evento done dalla cache");
+    assert.equal(
+      (secondDone!.data as { content: string }).content,
+      "risposta-generata",
+      "la risposta dalla cache deve essere identica a quella generata"
+    );
+    assert.equal(
+      calls,
+      1,
+      "la seconda richiesta identica NON deve rigenerare: deve arrivare dalla cache (chatRaw invariato)"
+    );
+    // Servita dalla cache: nessun token in streaming, solo il done finale.
+    assert.ok(
+      !second.some((e) => e.event === "token"),
+      "una risposta dalla cache non deve ri-streammare i token, solo emettere done"
     );
   } finally {
     await server.close();

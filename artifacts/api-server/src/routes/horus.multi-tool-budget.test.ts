@@ -93,7 +93,11 @@ function makeMultiToolChatRaw(): (
 async function startTestServer(
   chatRaw: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<HorusRawResult>
 ): Promise<{ url: string; close: () => Promise<void> }> {
-  const { createDirectChatHandler } = await import("./horus.js");
+  const { createDirectChatHandler, __clearDirectReplyCacheForTests } = await import("./horus.js");
+  // Task #185: azzera la cache best-effort delle risposte tra un test e
+  // l'altro (tutti usano lo stesso agente/messaggio: senza reset il 2° test
+  // troverebbe la risposta del 1° in cache e salterebbe la generazione).
+  __clearDirectReplyCacheForTests();
   const app = express();
   app.post(
     "/test/chat",

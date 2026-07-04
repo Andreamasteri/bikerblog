@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import express from "express";
+import { createHash } from "node:crypto";
 import { desc, eq, lt, and, sql } from "drizzle-orm";
 import { db, horusBowieConversationsTable, type HorusConversationTurn } from "@workspace/db";
 import {
@@ -561,6 +562,86 @@ async function runChatTurn(
   return { finalReply, usedTools, missingTool };
 }
 
+// Cache best-effort delle risposte complete della chat diretta (Task #185).
+// Problema reale confermato dai log di produzione: sul 2° messaggio il server
+// genera e completa la risposta (HTTP 200, ~83s), ma la connessione del client
+// mobile viene sospesa dal browser/OS durante il lungo prefill silenzioso
+// (Chrome su Android sospende la rete quando lo schermo si blocca o la tab va
+// in background). Il server, che vede il socket ancora half-open finché il TCP
+// keepalive non scade, scrive comunque `done` — ma quel byte non raggiunge mai
+// il browser, e la risposta GIÀ generata va persa: l'utente vede un "network
+// error" pur avendo il server lavorato correttamente.
+//
+// Con questa cache, quando la generazione completa memorizziamo la risposta
+// (anche se nel frattempo il client è sparito). Al retry della STESSA
+// richiesta (stesso agente + messaggio + cronologia) rispondiamo subito con la
+// risposta in cache invece di rigenerarla — evitando altri ~80s e un nuovo
+// possibile drop. È un recupero best-effort in RAM: su deployment autoscale la
+// cache non è condivisa tra istanze, ma per l'uso reale (singolo utente, retry
+// entro pochi secondi sulla stessa istanza calda) è sufficiente; se il retry
+// finisce su un'altra istanza si rigenera semplicemente, come prima.
+interface CachedDirectReply {
+  content: string;
+  expiresAt: number;
+}
+
+const REPLY_CACHE_TTL_MS = 10 * 60_000;
+const REPLY_CACHE_MAX_ENTRIES = 50;
+const directReplyCache = new Map<string, CachedDirectReply>();
+
+function directReplyCacheKey(
+  agentName: string,
+  message: string,
+  history: ChatRequestMessage[]
+): string {
+  return createHash("sha256")
+    .update(agentName)
+    .update("\u0000")
+    .update(message)
+    .update("\u0000")
+    .update(JSON.stringify(history))
+    .digest("hex");
+}
+
+function getCachedDirectReply(key: string): string | null {
+  const hit = directReplyCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt <= Date.now()) {
+    directReplyCache.delete(key);
+    return null;
+  }
+  // Re-inserimento in coda per un comportamento LRU-ish (l'entry usata di
+  // recente non viene sfrattata per prima).
+  directReplyCache.delete(key);
+  directReplyCache.set(key, hit);
+  return hit.content;
+}
+
+/** Solo per i test: svuota la cache delle risposte dirette così ogni test
+ * parte da uno stato pulito (in produzione la condivisione tra richieste
+ * identiche è esattamente il comportamento voluto). */
+export function __clearDirectReplyCacheForTests(): void {
+  directReplyCache.clear();
+}
+
+function setCachedDirectReply(key: string, content: string): void {
+  directReplyCache.delete(key);
+  directReplyCache.set(key, { content, expiresAt: Date.now() + REPLY_CACHE_TTL_MS });
+  if (directReplyCache.size > REPLY_CACHE_MAX_ENTRIES) {
+    const now = Date.now();
+    for (const [k, v] of directReplyCache) {
+      if (v.expiresAt <= now) directReplyCache.delete(k);
+    }
+    // Sfratta le più vecchie (ordine di inserimento della Map) finché
+    // rientriamo nel limite, così la cache non cresce mai illimitatamente.
+    while (directReplyCache.size > REPLY_CACHE_MAX_ENTRIES) {
+      const oldest = directReplyCache.keys().next().value;
+      if (oldest === undefined) break;
+      directReplyCache.delete(oldest);
+    }
+  }
+}
+
 /**
  * Handler generico per la chat diretta a un agente (Horus, Bowie o
  * Quebracho): stessi eventi SSE e stessa gestione di abort per tutti. Solo il
@@ -620,6 +701,20 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders?.();
 
+    // Task #185: se questa identica richiesta è già stata generata di recente
+    // ma la risposta non era arrivata al client (connessione mobile sospesa),
+    // restituiscila subito dalla cache invece di rigenerarla. Un retry a un
+    // click dalla UI riusa così la risposta già prodotta, senza altri ~80s di
+    // attesa e senza un secondo possibile drop.
+    const cacheKey = directReplyCacheKey(config.agentName, message, priorHistory);
+    const cachedReply = getCachedDirectReply(cacheKey);
+    if (cachedReply) {
+      req.log.info({ agent: config.agentName }, `${config.logLabel}: risposta servita dalla cache (retry)`);
+      sendEvent(res, "done", { content: cachedReply });
+      res.end();
+      return;
+    }
+
     const heartbeat = setInterval(() => {
       writeHeartbeatPing(res);
     }, 15_000);
@@ -675,6 +770,14 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
       }
 
       const finalContent = truncateReply(finalReply, usedTools);
+
+      // Task #185: memorizza la risposta completa PRIMA di controllare l'abort.
+      // Proprio quando il client mobile è già sparito (abort o socket morto) la
+      // cache serve di più: al retry della stessa richiesta la risposta viene
+      // restituita all'istante invece di essere rigenerata e persa di nuovo.
+      if (finalContent) {
+        setCachedDirectReply(cacheKey, finalContent);
+      }
 
       if (abortController.signal.aborted) {
         // Connessione già chiusa dal client: non ha senso scrivere altro sullo

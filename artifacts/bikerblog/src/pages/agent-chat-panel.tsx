@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { Send, Wrench, User, Square, Paperclip, X, Download } from "lucide-react";
+import { Send, Wrench, User, Square, Paperclip, X, Download, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -131,6 +131,17 @@ export function AgentChatPanel({
   const [notConfigured, setNotConfigured] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  // Task #185: la connessione fetch/SSE su mobile può cadere mentre il server
+  // sta ancora generando (Chrome sospende la rete a schermo bloccato/tab in
+  // background). In quel caso il server completa comunque la risposta e la
+  // mette in cache: un "Riprova" a un click rimanda la STESSA richiesta e il
+  // server restituisce all'istante la risposta già generata, invece di lasciare
+  // l'utente con un errore secco su una risposta che di fatto esisteva.
+  const [canRetry, setCanRetry] = useState(false);
+  const lastRequestRef = useRef<{
+    outgoing: string;
+    history: { role: Role; content: string }[];
+  } | null>(null);
 
   const { health, notConfigured: healthNotConfigured, unreachableMessage, retry: retryHealth } =
     useAgentHealth(healthEndpoint, password, onUnauthorized);
@@ -188,17 +199,38 @@ export function AgentChatPanel({
     const text = input.trim();
     if ((!text && !attachment) || isStreaming || !password) return;
 
-    setError(null);
     setInput("");
     const outgoingAttachment = attachment;
     setAttachment(null);
 
     const outgoing = buildOutgoingContent(text, outgoingAttachment);
-    const userMsg: ChatMessage = { id: uid(), role: "user", content: outgoing };
-    const assistantId = uid();
+    // Cronologia PRIMA di aggiungere il nuovo messaggio utente: è esattamente
+    // quella che il server usa come chiave di cache, così un eventuale retry
+    // (stesso `outgoing` + stessa `history`) trova la risposta già generata.
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
+    setMessages((prev) => [...prev, { id: uid(), role: "user", content: outgoing }]);
+    await runSend(outgoing, history);
+  }
 
-    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
+  // Task #185: rimanda l'ultima richiesta identica (stesso messaggio + stessa
+  // cronologia) dopo un drop di connessione. Il messaggio utente è già in
+  // lista, quindi ri-eseguiamo solo lo streaming: se il server aveva già
+  // generato la risposta la restituisce dalla cache all'istante.
+  async function retryLastMessage() {
+    const last = lastRequestRef.current;
+    if (!last || isStreaming || !password) return;
+    await runSend(last.outgoing, last.history);
+  }
+
+  async function runSend(outgoing: string, history: { role: Role; content: string }[]) {
+    if (!password) return;
+
+    setError(null);
+    setCanRetry(false);
+    lastRequestRef.current = { outgoing, history };
+
+    const assistantId = uid();
+    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
     setIsStreaming(true);
 
     const controller = new AbortController();
@@ -218,13 +250,13 @@ export function AgentChatPanel({
 
       if (res.status === 401) {
         onUnauthorized();
-        setMessages((prev) => prev.filter((m) => m.id !== assistantId && m.id !== userMsg.id));
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
         return;
       }
 
       if (res.status === 503) {
         const data = (await res.json().catch(() => ({}))) as { message?: string };
-        setMessages((prev) => prev.filter((m) => m.id !== assistantId && m.id !== userMsg.id));
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
         setNotConfigured(data.message ?? "Questo agente non è configurato su questo ambiente.");
         return;
       }
@@ -325,6 +357,12 @@ export function AgentChatPanel({
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setError(friendlyChatErrorMessage(err));
+      // Task #185: drop di connessione (il "network error" classico). Il server
+      // potrebbe aver completato la risposta e averla messa in cache, quindi
+      // offriamo un "Riprova" che rimanda la stessa richiesta e la recupera
+      // all'istante. Non abilitiamo il retry sugli errori server (`error` SSE)
+      // né su abort/401/503: lì non c'è nulla di già-generato da riusare.
+      setCanRetry(true);
       // Connessione caduta prima di ricevere qualsiasi contenuto (il caso
       // classico del "network error"): togli il bubble vuoto dell'assistente
       // così resta solo il messaggio d'errore, non una bolla in sospeso.
@@ -424,7 +462,23 @@ export function AgentChatPanel({
         </div>
       </div>
 
-      {error && <div className="text-sm text-destructive mb-3 px-1">{error}</div>}
+      {error && (
+        <div className="text-sm text-destructive mb-3 px-1 flex items-center gap-3 flex-wrap">
+          <span>{error}</span>
+          {canRetry && !isStreaming && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={retryLastMessage}
+              className="h-7 gap-1.5"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Riprova
+            </Button>
+          )}
+        </div>
+      )}
       {attachmentError && <div className="text-sm text-destructive mb-3 px-1">{attachmentError}</div>}
 
       {attachment && (
