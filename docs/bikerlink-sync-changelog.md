@@ -156,6 +156,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **04:17** · Fix Task #185: recover chat replies lost to mobile network drops <!-- ae1746d -->
+  - _In parole semplici:_ Abbiamo risolto un problema che causava la perdita di risposte alle chat durante le interruzioni della rete mobile.
 - **03:33** · Git commit prior to merge <!-- 69a5327 -->
   - _In parole semplici:_ Commit effettuato prima del merge.
 - **03:29** · Git commit prior to merge <!-- db7d8e1 -->
