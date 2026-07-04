@@ -65,7 +65,83 @@ function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
       "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
       "anche se non te lo chiede esplicitamente — non serve chiedere conferma, salvala e basta; " +
       "se disponibili, hai anche typecheck_repo, lint_repo, search_code e git_log per analisi statica REALE del codice (non una tua stima). " +
-      "Se un tool che ti serve non compare nella lista disponibile, dillo esplicitamente invece di rispondere con un generico disclaimer da 'modello linguistico'.",
+      "IMPORTANTE: la selezione dei tool allegati a questo turno è automatica e basata sul messaggio dell'utente, quindi può capitare che ti serva un " +
+      "tool che questa volta non è stato allegato. Se ti accorgi che ti servirebbe un tool assente dalla lista disponibile in questo turno, NON " +
+      "rispondere con un disclaimer generico e non provare a rispondere comunque senza: rispondi in QUESTO turno con ESATTAMENTE e SOLO questo testo, " +
+      "nient'altro prima o dopo: [TOOL_MANCANTE: nome_tool] dove nome_tool è uno tra web_search, github_read, remember_note, read_blog, search_manual, " +
+      "typecheck_repo, lint_repo, search_code, git_log, sonar_scan, architect (usa sconosciuto se non sei sicuro di quale serva). Il sistema se ne " +
+      "accorgerà e riproverà subito con lo strumento giusto disponibile, senza che l'utente debba richiedere nulla.",
+  };
+}
+
+// Task #179: la selezione contestuale dei tool (Task #178) è un'euristica per
+// parole chiave e può non riconoscere una richiesta formulata in modo
+// insolito, lasciando il modello senza il tool che gli servirebbe davvero. Il
+// system prompt sopra chiede al modello di rispondere con questo tag esatto
+// quando gli manca un tool; qui lo intercettiamo PRIMA che arrivi
+// all'utente (bufferizzando solo l'inizio della risposta, non l'intero
+// streaming) e riproviamo lo stesso turno una sola volta con l'intero set di
+// tool disponibili, così l'utente vede solo la risposta finale utile, non il
+// tag interno né un rifiuto.
+const MISSING_TOOL_SENTINEL_PREFIX = "[TOOL_MANCANTE:";
+const MISSING_TOOL_SENTINEL_RE = /^\[TOOL_MANCANTE:\s*([a-z_]+)\s*\]/i;
+// Margine oltre la lunghezza del prefisso per far stare "[TOOL_MANCANTE: nome_piu_lungo]"
+// prima di arrenderci e trattare il testo come una risposta normale.
+const MISSING_TOOL_SENTINEL_MAX_BUFFER = 64;
+
+/**
+ * Avvolge un `onToken` per intercettare il sentinel `[TOOL_MANCANTE: ...]`
+ * SOLO se compare all'inizio della risposta. Finché il buffer accumulato è
+ * ancora un prefisso plausibile del tag, i token non vengono inoltrati al
+ * client (nessun testo interno mostrato); appena si capisce che NON è il tag
+ * (primo carattere già diverso, o buffer troppo lungo senza una "]" di
+ * chiusura), tutto il buffer accumulato viene inoltrato in un colpo solo e i
+ * token successivi tornano a passare live come prima — quindi lo streaming
+ * normale perde al più qualche millisecondo, non la sua reattività.
+ */
+function createSentinelAwareTokenHandler(
+  send: (token: string) => void,
+  onMissingTool: (toolName: string) => void
+): (token: string) => void {
+  let buffer = "";
+  let resolved = false;
+  let isSentinel = false;
+
+  return (token: string) => {
+    if (resolved) {
+      if (!isSentinel) send(token);
+      return;
+    }
+
+    buffer += token;
+    const candidate = buffer.trimStart();
+    const prefixLen = Math.min(candidate.length, MISSING_TOOL_SENTINEL_PREFIX.length);
+    const candidatePrefix = candidate.slice(0, prefixLen).toUpperCase();
+    const expectedPrefix = MISSING_TOOL_SENTINEL_PREFIX.slice(0, prefixLen).toUpperCase();
+
+    if (candidatePrefix !== expectedPrefix) {
+      resolved = true;
+      send(buffer);
+      return;
+    }
+
+    const closingIdx = candidate.indexOf("]");
+    if (closingIdx !== -1) {
+      resolved = true;
+      const match = MISSING_TOOL_SENTINEL_RE.exec(candidate);
+      if (match?.[1]) {
+        isSentinel = true;
+        onMissingTool(match[1].toLowerCase());
+      } else {
+        send(buffer);
+      }
+      return;
+    }
+
+    if (buffer.length >= MISSING_TOOL_SENTINEL_MAX_BUFFER) {
+      resolved = true;
+      send(buffer);
+    }
   };
 }
 
@@ -305,6 +381,186 @@ export interface DirectChatAgentConfig {
   logLabel: string;
 }
 
+interface ChatTurnResult {
+  finalReply: string;
+  usedTools: boolean;
+  /** Nome del tool che il modello ha dichiarato mancante (Task #179), se il
+   * sentinel `[TOOL_MANCANTE: ...]` è stato intercettato in questo turno. */
+  missingTool?: string;
+}
+
+/**
+ * Esegue un turno completo di chat (loop tool-calling + fallback timeout
+ * gateway) su una conversazione data. Estratto da `createDirectChatHandler`
+ * (Task #179) per poter rieseguire lo STESSO turno una seconda volta con un
+ * set di tool più ampio quando il modello dichiara di aver bisogno di un tool
+ * che la selezione contestuale (Task #178) non aveva allegato.
+ *
+ * `detectMissingTool` va acceso solo sul tentativo "primario" (con i tool
+ * contestuali): intercetta il sentinel prima che arrivi al client. Sul
+ * tentativo di riprova va spento, così qualsiasi output del modello — anche
+ * se per errore contenesse ancora il tag — viene comunque mostrato all'utente
+ * invece di innescare un loop di riprove.
+ */
+async function runChatTurn(
+  req: express.Request,
+  res: express.Response,
+  config: DirectChatAgentConfig,
+  abortController: AbortController,
+  message: string,
+  conversation: HorusMessage[],
+  tools: HorusToolSpec[],
+  detectMissingTool: boolean
+): Promise<ChatTurnResult> {
+  let usedTools = false;
+  let finalReply = "";
+  let missingTool: string | undefined;
+  // Budget TOTALE di testo dei risultati-tool reinserito nel prompt in questo
+  // turno (vedi MAX_TOTAL_TOOL_RESULT_CHARS): si accumula tra tutte le
+  // iterazioni e i tool di QUESTA chiamata a runChatTurn. Un'eventuale riprova
+  // con tool estesi (Task #179) è una chiamata separata con budget proprio,
+  // non condiviso con il tentativo primario.
+  let toolResultCharsUsed = 0;
+
+  try {
+    for (
+      let iteration = 0;
+      iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted;
+      iteration++
+    ) {
+      const onToken = detectMissingTool
+        ? createSentinelAwareTokenHandler(
+            (token) => sendEvent(res, "token", { token }),
+            (name) => {
+              missingTool = name;
+            }
+          )
+        : (token: string) => sendEvent(res, "token", { token });
+
+      const { content, toolCalls: nativeToolCalls } = await config.chatRaw(conversation, {
+        tools,
+        maxTokens: usedTools ? MAX_REPLY_TOKENS_WITH_TOOLS : MAX_REPLY_TOKENS,
+        signal: abortController.signal,
+        onToken,
+      });
+
+      if (abortController.signal.aborted) break;
+
+      const toolCalls =
+        nativeToolCalls.length > 0 ? nativeToolCalls : (tryParseTextualToolCall(content, tools) ?? []);
+
+      if (toolCalls.length === 0) {
+        // Se il sentinel è stato riconosciuto, il chiamante rifarà il turno
+        // con più tool: questo tentativo non produce una risposta da mostrare.
+        finalReply = missingTool ? "" : content;
+        break;
+      }
+
+      usedTools = true;
+      conversation.push({ role: "assistant", content, tool_calls: toolCalls });
+
+      for (const call of toolCalls) {
+        if (abortController.signal.aborted) break;
+
+        const toolName = call.function.name;
+        sendEvent(res, "tool_call", { name: toolName });
+
+        const toolStartedAt = Date.now();
+        const progressTimer = setInterval(() => {
+          sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+        }, 4_000);
+
+        let result: string;
+        try {
+          result = await executeHorusTool(toolName, call.function.arguments, abortController.signal);
+        } finally {
+          clearInterval(progressTimer);
+        }
+
+        if (abortController.signal.aborted) break;
+
+        sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
+        const budgeted = budgetedToolResult(result, toolResultCharsUsed);
+        toolResultCharsUsed += budgeted.charsUsed;
+        conversation.push({ role: "tool", name: toolName, content: budgeted.content });
+      }
+    }
+  } catch (loopErr) {
+    // Se il turno con i tool ha superato il tetto ~100s del tunnel (HTTP 524
+    // sul prefill silenzioso del prompt post-tool, causa classica del
+    // "si blocca dopo il primo messaggio"), NON arrenderti subito: riprova
+    // UNA volta senza tool e col prompt pulito. Ogni altro errore, o un
+    // abort del client, si propaga com'era prima.
+    if (abortController.signal.aborted || !isGatewayTimeoutError(loopErr)) throw loopErr;
+
+    req.log.warn(
+      { err: loopErr },
+      `${config.logLabel}: gateway timeout con tool, verifico raggiungibilità prima del fallback`
+    );
+
+    // Prima di spendere un secondo round-trip a tempo pieno, fai un ping
+    // veloce (~6s): nella riproduzione reale (Task #176) sia il tentativo
+    // con tool sia il fallback scadevano a ~125s ciascuno (~250s totali)
+    // prima che l'utente vedesse lo stesso errore. Se il server non è
+    // nemmeno raggiungibile per un /api/version, non ha senso riprovare
+    // una generazione completa: fallisci subito con un messaggio chiaro.
+    const health = await config.checkHealth();
+
+    if (abortController.signal.aborted) {
+      // Il client se n'è andato durante il ping: niente da scrivere.
+    } else if (health.status !== "ok") {
+      req.log.warn(
+        { healthStatus: health.status },
+        `${config.logLabel}: agente non raggiungibile, salto il fallback`
+      );
+      throw new Error(overloadedMessage(config.agentName));
+    } else {
+      // Raggiungibile: riprova UNA volta senza tool con un prompt MINIMO
+      // (niente cronologia, niente prompt di sistema con la descrizione
+      // dei tool — solo una nota corta + il messaggio dell'utente) così il
+      // prefill è il più piccolo possibile, e con un timeout dedicato più
+      // corto del tetto del tunnel così un fallback destinato a fallire si
+      // arrende in fretta invece di attendere un secondo 524 pieno.
+      const fallbackConversation: HorusMessage[] = [
+        {
+          role: "system",
+          content:
+            `Ti chiami ${config.agentName}. Gli strumenti non sono disponibili in questo momento e il ` +
+            "tentativo precedente ha superato il tempo massimo del server. Rispondi in modo breve, utile " +
+            "e diretto usando solo ciò che già sai, senza fare riferimento a strumenti.",
+        },
+        { role: "user", content: message },
+      ];
+
+      try {
+        const fallback = await config.chatRaw(fallbackConversation, {
+          maxTokens: MAX_REPLY_TOKENS,
+          timeoutMs: FALLBACK_TIMEOUT_MS,
+          signal: abortController.signal,
+          onToken: (token) => {
+            sendEvent(res, "token", { token });
+          },
+        });
+        finalReply = fallback.content;
+        usedTools = false;
+      } catch (fallbackErr) {
+        // Abort del client durante il fallback: propaga (gestito fuori).
+        if (abortController.signal.aborted) throw fallbackErr;
+        // Anche il fallback (prompt minimo, timeout corto) non ce l'ha
+        // fatta: il server è davvero troppo lento adesso. Mostra subito il
+        // messaggio chiaro invece del timeout grezzo o di un secondo 524.
+        req.log.warn(
+          { err: fallbackErr },
+          `${config.logLabel}: anche il fallback senza tool è scaduto`
+        );
+        throw new Error(overloadedMessage(config.agentName));
+      }
+    }
+  }
+
+  return { finalReply, usedTools, missingTool };
+}
+
 /**
  * Handler generico per la chat diretta a un agente (Horus, Bowie o
  * Quebracho): stessi eventi SSE e stessa gestione di abort per tutti. Solo il
@@ -318,7 +574,10 @@ export interface DirectChatAgentConfig {
  * eventuali tool_calls → esegui tool → richiama modello" della CLI
  * (`scripts/src/horus-chat.ts`), fino a MAX_TOOL_ITERATIONS. Il client SSE
  * riceve eventi `tool_call`/`tool_progress`/`tool_result` per mostrare le
- * badge dei tool in corso (vedi `agent-chat-panel.tsx`).
+ * badge dei tool in corso (vedi `agent-chat-panel.tsx`). Task #179: se il
+ * modello dichiara di aver bisogno di un tool che la selezione contestuale
+ * non aveva allegato, il turno viene rieseguito UNA sola volta con l'intero
+ * set disponibile, in modo trasparente per l'utente.
  */
 export function createDirectChatHandler(config: DirectChatAgentConfig) {
   return async (req: express.Request, res: express.Response): Promise<void> => {
@@ -383,138 +642,36 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
       // dell'utente (o nessun tool per un messaggio conversazionale), così il
       // prefill su CPU resta minimo e "Ciao" non scade sul tunnel Cloudflare.
       const tools = await getHorusTools(message);
-      let usedTools = false;
-      let finalReply = "";
-      // Budget TOTALE di testo dei risultati-tool reinserito nel prompt in
-      // questo turno (vedi MAX_TOTAL_TOOL_RESULT_CHARS): si accumula tra tutte
-      // le iterazioni e i tool, non si resetta a ogni iterazione.
-      let toolResultCharsUsed = 0;
+      const primary = await runChatTurn(req, res, config, abortController, message, conversation, tools, true);
+      let finalReply = primary.finalReply;
+      let usedTools = primary.usedTools;
 
-      try {
-        for (
-          let iteration = 0;
-          iteration < MAX_TOOL_ITERATIONS && !abortController.signal.aborted;
-          iteration++
-        ) {
-          const { content, toolCalls: nativeToolCalls } = await config.chatRaw(conversation, {
-            tools,
-            maxTokens: usedTools ? MAX_REPLY_TOKENS_WITH_TOOLS : MAX_REPLY_TOKENS,
-            signal: abortController.signal,
-            onToken: (token) => {
-              sendEvent(res, "token", { token });
-            },
-          });
-
-          if (abortController.signal.aborted) break;
-
-          const toolCalls =
-            nativeToolCalls.length > 0 ? nativeToolCalls : (tryParseTextualToolCall(content, tools) ?? []);
-
-          if (toolCalls.length === 0) {
-            finalReply = content;
-            break;
-          }
-
-          usedTools = true;
-          conversation.push({ role: "assistant", content, tool_calls: toolCalls });
-
-          for (const call of toolCalls) {
-            if (abortController.signal.aborted) break;
-
-            const toolName = call.function.name;
-            sendEvent(res, "tool_call", { name: toolName });
-
-            const toolStartedAt = Date.now();
-            const progressTimer = setInterval(() => {
-              sendEvent(res, "tool_progress", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-            }, 4_000);
-
-            let result: string;
-            try {
-              result = await executeHorusTool(toolName, call.function.arguments, abortController.signal);
-            } finally {
-              clearInterval(progressTimer);
-            }
-
-            if (abortController.signal.aborted) break;
-
-            sendEvent(res, "tool_result", { name: toolName, elapsedMs: Date.now() - toolStartedAt });
-            const budgeted = budgetedToolResult(result, toolResultCharsUsed);
-            toolResultCharsUsed += budgeted.charsUsed;
-            conversation.push({ role: "tool", name: toolName, content: budgeted.content });
-          }
-        }
-      } catch (loopErr) {
-        // Se il turno con i tool ha superato il tetto ~100s del tunnel (HTTP 524
-        // sul prefill silenzioso del prompt post-tool, causa classica del
-        // "si blocca dopo il primo messaggio"), NON arrenderti subito: riprova
-        // UNA volta senza tool e col prompt pulito. Ogni altro errore, o un
-        // abort del client, si propaga com'era prima.
-        if (abortController.signal.aborted || !isGatewayTimeoutError(loopErr)) throw loopErr;
-
+      // Task #179: la selezione contestuale (Task #178) è un'euristica per
+      // parole chiave e può non riconoscere una richiesta formulata in modo
+      // insolito, lasciando il modello senza il tool che gli servirebbe. Se il
+      // sentinel è stato intercettato, riprova UNA sola volta lo stesso turno
+      // con l'intero set di tool disponibili (gating per capacità già
+      // applicato da getHorusTools()), ripartendo da una conversazione pulita:
+      // l'utente non vede né il tag né il tentativo iniziale, solo la
+      // risposta finale.
+      if (!abortController.signal.aborted && primary.missingTool) {
         req.log.warn(
-          { err: loopErr },
-          `${config.logLabel}: gateway timeout con tool, verifico raggiungibilità prima del fallback`
+          { missingTool: primary.missingTool },
+          `${config.logLabel}: tool mancante dichiarato ("${primary.missingTool}"), riprovo con l'intero set disponibile`
         );
-
-        // Prima di spendere un secondo round-trip a tempo pieno, fai un ping
-        // veloce (~6s): nella riproduzione reale (Task #176) sia il tentativo
-        // con tool sia il fallback scadevano a ~125s ciascuno (~250s totali)
-        // prima che l'utente vedesse lo stesso errore. Se il server non è
-        // nemmeno raggiungibile per un /api/version, non ha senso riprovare
-        // una generazione completa: fallisci subito con un messaggio chiaro.
-        const health = await config.checkHealth();
-
-        if (abortController.signal.aborted) {
-          // Il client se n'è andato durante il ping: niente da scrivere.
-        } else if (health.status !== "ok") {
-          req.log.warn(
-            { healthStatus: health.status },
-            `${config.logLabel}: agente non raggiungibile, salto il fallback`
-          );
-          throw new Error(overloadedMessage(config.agentName));
-        } else {
-          // Raggiungibile: riprova UNA volta senza tool con un prompt MINIMO
-          // (niente cronologia, niente prompt di sistema con la descrizione
-          // dei tool — solo una nota corta + il messaggio dell'utente) così il
-          // prefill è il più piccolo possibile, e con un timeout dedicato più
-          // corto del tetto del tunnel così un fallback destinato a fallire si
-          // arrende in fretta invece di attendere un secondo 524 pieno.
-          const fallbackConversation: HorusMessage[] = [
-            {
-              role: "system",
-              content:
-                `Ti chiami ${config.agentName}. Gli strumenti non sono disponibili in questo momento e il ` +
-                "tentativo precedente ha superato il tempo massimo del server. Rispondi in modo breve, utile " +
-                "e diretto usando solo ciò che già sai, senza fare riferimento a strumenti.",
-            },
-            { role: "user", content: message },
-          ];
-
-          try {
-            const fallback = await config.chatRaw(fallbackConversation, {
-              maxTokens: MAX_REPLY_TOKENS,
-              timeoutMs: FALLBACK_TIMEOUT_MS,
-              signal: abortController.signal,
-              onToken: (token) => {
-                sendEvent(res, "token", { token });
-              },
-            });
-            finalReply = fallback.content;
-            usedTools = false;
-          } catch (fallbackErr) {
-            // Abort del client durante il fallback: propaga (gestito fuori).
-            if (abortController.signal.aborted) throw fallbackErr;
-            // Anche il fallback (prompt minimo, timeout corto) non ce l'ha
-            // fatta: il server è davvero troppo lento adesso. Mostra subito il
-            // messaggio chiaro invece del timeout grezzo o di un secondo 524.
-            req.log.warn(
-              { err: fallbackErr },
-              `${config.logLabel}: anche il fallback senza tool è scaduto`
-            );
-            throw new Error(overloadedMessage(config.agentName));
-          }
-        }
+        const broadenedTools = await getHorusTools();
+        const escalated = await runChatTurn(
+          req,
+          res,
+          config,
+          abortController,
+          message,
+          [...baseConversation],
+          broadenedTools,
+          false
+        );
+        finalReply = escalated.finalReply;
+        usedTools = escalated.usedTools;
       }
 
       const finalContent = truncateReply(finalReply, usedTools);

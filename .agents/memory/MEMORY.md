@@ -34,3 +34,4 @@
 - [Weak-model textual tool calls](horus-textual-tool-call-fallback.md) — small models (Bowie/llama3.2:3b) sometimes emit a tool call as JSON text instead of native `tool_calls`; must detect and execute it, not display the raw JSON.
 - [Mode-gated JSX ternary chains](horus-chat-mode-leak-bug.md) — an unconditional tail ternary in a multi-mode page rendered a panel on every mode except the ones it explicitly checked; always gate the whole chain, not just the branches you added.
 - [Testing module-scope dependencies](module-scope-dependency-test-mocking.md) — use `node:test` `mock.module` (needs `--experimental-test-module-mocks`, spread real exports first) to fake deps imported directly, not via config.
+- [Missing-tool sentinel escalation](horus-missing-tool-sentinel.md) — when contextual tool selection guesses wrong, model emits a hidden sentinel and gets one silent retry with the full tool set.
