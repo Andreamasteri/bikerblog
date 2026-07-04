@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HorusChat } from "./horus-chat";
-import { agentsRegistryJson, HORUS_AGENT, BOWIE_AGENT } from "../test/agent-fixtures";
+import { agentsRegistryJson, healthResultJson, HORUS_AGENT, BOWIE_AGENT } from "../test/agent-fixtures";
 
 const SESSION_KEY = "horus-chat-password";
 
@@ -35,7 +35,7 @@ function healthOkResponse() {
   return Promise.resolve({
     status: 200,
     ok: true,
-    json: async () => ({ status: "ok" }),
+    json: async () => healthResultJson({ status: "ok" }),
   });
 }
 

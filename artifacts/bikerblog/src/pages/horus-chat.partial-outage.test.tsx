@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { HorusChat } from "./horus-chat";
-import { agentsRegistryJson, HORUS_AGENT, BOWIE_AGENT } from "../test/agent-fixtures";
+import { agentsRegistryJson, healthResultJson, HORUS_AGENT, BOWIE_AGENT } from "../test/agent-fixtures";
 
 const SESSION_KEY = "horus-chat-password";
 
@@ -31,7 +31,7 @@ describe("HorusChat - un solo agente su più giù", () => {
         return Promise.reject(new Error("network down"));
       }
       if (url.includes("horus/health")) {
-        return Promise.resolve({ status: 200, ok: true, json: async () => ({ status: "ok" }) });
+        return Promise.resolve({ status: 200, ok: true, json: async () => healthResultJson({ status: "ok" }) });
       }
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     }) as unknown as ReturnType<typeof vi.fn>;
