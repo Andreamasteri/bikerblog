@@ -16,7 +16,7 @@ export interface AgentHealthState {
   modelsByEndpoint: Record<string, string>;
 }
 
-interface HealthResult {
+export interface HealthResult {
   status?: "ok" | "not_configured" | "unreachable";
   message?: string;
   model?: string;

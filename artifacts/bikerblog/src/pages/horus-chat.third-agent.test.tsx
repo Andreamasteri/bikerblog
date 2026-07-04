@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HorusChat } from "./horus-chat";
+import { agentsRegistryJson, HORUS_AGENT, BOWIE_AGENT } from "../test/agent-fixtures";
 
 const SESSION_KEY = "horus-chat-password";
 
@@ -64,10 +65,7 @@ describe("HorusChat - terzo interlocutore generico", () => {
         return Promise.resolve({
           status: 200,
           ok: true,
-          json: async () => [
-            { id: "horus", displayName: "Horus", healthEndpoint: "api/horus/health", isConfigured: true },
-            { id: "bowie", displayName: "Bowie", healthEndpoint: "api/horus/bowie-health", isConfigured: true },
-          ],
+          json: async () => agentsRegistryJson([HORUS_AGENT, BOWIE_AGENT]),
         });
       }
       if (url.includes("health")) {
