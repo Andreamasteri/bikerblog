@@ -428,12 +428,84 @@ const NADIR_TOOL_SPECS: HorusToolSpec[] = [
   },
 ];
 
+// Cartella file condivisa su TC (horus-hub, deploy/horus-hub/), fase 1 della
+// migrazione descritta in .agents/memory: uno spazio dove Horus, Bowie e
+// futuri agenti (Ares, Nadir, Quebracho) possono leggere/scrivere file
+// persistenti in comune, senza passare da Replit. Agnostico rispetto
+// all'agente, come search_manual. Richiede HORUS_HUB_URL + HUB_GATE_TOKEN; se
+// non configurati, questi tool non vengono esposti al modello.
+const HUB_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "save_file",
+      description:
+        "Salva un file di testo nella cartella condivisa su TC, visibile a tutti gli agenti (Horus, Bowie, futuri agenti). Usalo per " +
+        "persistere qualcosa che deve sopravvivere a questa conversazione ed essere leggibile da un altro agente, non per note personali " +
+        "brevi (per quelle usa remember_note). Sovrascrive se il percorso esiste già.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Percorso relativo del file dentro la cartella condivisa (es. \"notes/idea.md\"). Le sottocartelle vengono create automaticamente.",
+          },
+          content: {
+            type: "string",
+            description: "Contenuto testuale da scrivere nel file.",
+          },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_file",
+      description:
+        "Legge un file di testo dalla cartella condivisa su TC, eventualmente scritto da un altro agente (Horus, Bowie, futuri agenti).",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Percorso relativo del file dentro la cartella condivisa (es. \"notes/idea.md\").",
+          },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_files",
+      description: "Elenca file e sottocartelle in un percorso della cartella condivisa su TC (radice se non specificato).",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Percorso relativo della cartella da elencare (default: radice della cartella condivisa).",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+];
+
 function isAnalysisServiceConfigured(): boolean {
   return Boolean(process.env["HORUS_ANALYSIS_URL"] && process.env["ANALYSIS_GATE_TOKEN"]);
 }
 
 function isNadirConfigured(): boolean {
   return Boolean(process.env["NADIR_URL"] && process.env["NADIR_GATE_TOKEN"]);
+}
+
+function isHubConfigured(): boolean {
+  return Boolean(process.env["HORUS_HUB_URL"] && process.env["HUB_GATE_TOKEN"]);
 }
 
 // SONARQUBE_TOKEN vive solo lato servizio su TC — invisibile a Replit — quindi
@@ -579,6 +651,16 @@ export function selectRelevantTools(
     wanted.add("web_search");
   }
 
+  // save_file/read_file/list_files — cartella condivisa su TC tra agenti.
+  if (has(/cartella condivisa|file condivis|salva (il )?file|leggi (il )?file|elenca (i )?file|scrivi (un )?file/)) {
+    if (has(/salva|scrivi/)) wanted.add("save_file");
+    if (has(/leggi/)) wanted.add("read_file");
+    if (has(/elenca|lista|quali file/)) wanted.add("list_files");
+    if (!wanted.has("save_file") && !wanted.has("read_file") && !wanted.has("list_files")) {
+      wanted.add("list_files");
+    }
+  }
+
   if (wanted.size === 0) return [];
   return available.filter((tool) => wanted.has(tool.function.name));
 }
@@ -605,9 +687,10 @@ export async function getHorusTools(message?: string): Promise<HorusToolSpec[]> 
   // sono sotto-configurazioni che possano variare indipendentemente.
   const nadirTools = isNadirConfigured() ? NADIR_TOOL_SPECS : [];
   const analysisCandidates = isAnalysisServiceConfigured() ? ANALYSIS_TOOL_SPECS : [];
+  const hubTools = isHubConfigured() ? HUB_TOOL_SPECS : [];
 
   // Insieme candidato PRIMA del capability-check live di sonar_scan.
-  const candidates = [...BASE_HORUS_TOOLS, ...nadirTools, ...analysisCandidates];
+  const candidates = [...BASE_HORUS_TOOLS, ...nadirTools, ...analysisCandidates, ...hubTools];
   const contextual = message === undefined ? candidates : selectRelevantTools(message, candidates);
 
   // sonar_scan richiede un capability-check live (il token vive solo su TC):
@@ -1396,6 +1479,148 @@ async function callNadirService(
   return data.result ?? "Nadir non ha restituito alcun risultato.";
 }
 
+interface HubWriteResponse {
+  ok?: boolean;
+  path?: string;
+  error?: string;
+}
+
+interface HubReadResponse {
+  ok?: boolean;
+  path?: string;
+  content?: string;
+  error?: string;
+}
+
+interface HubListEntry {
+  name: string;
+  type: "file" | "dir";
+}
+
+interface HubListResponse {
+  ok?: boolean;
+  path?: string;
+  entries?: HubListEntry[];
+  error?: string;
+}
+
+/**
+ * Chiama il servizio horus-hub su TC (deploy/horus-hub/) per leggere/scrivere
+ * nella cartella condivisa tra agenti. Come per callAnalysisService/
+ * callNadirService, tutto l'I/O reale (filesystem) avviene su TC, mai su
+ * Replit: qui inviamo solo la richiesta e riceviamo il risultato.
+ */
+async function callHubService(
+  path: string,
+  init: RequestInit,
+  signal?: AbortSignal
+): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+  const timeoutSignal = AbortSignal.timeout(30 * 1000);
+  const combinedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal;
+
+  const baseUrl = process.env["HORUS_HUB_URL"] as string;
+  const gateToken = process.env["HUB_GATE_TOKEN"] as string;
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
+      ...init,
+      headers: {
+        ...(init.headers ?? {}),
+        "X-Hub-Gate-Token": gateToken,
+      },
+      signal: combinedSignal,
+    });
+  } catch (err) {
+    if (signal?.aborted) {
+      throw new Error("__aborted__");
+    }
+    throw err;
+  }
+
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  return { ok: res.ok, status: res.status, data };
+}
+
+async function saveFileTool(relPath: string, content: string, signal?: AbortSignal): Promise<string> {
+  if (!isHubConfigured()) {
+    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+  }
+  if (!relPath.trim()) {
+    return "Percorso file mancante.";
+  }
+  try {
+    const { ok, status, data } = await callHubService(
+      "/files/write",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: relPath.trim(), content }),
+      },
+      signal
+    );
+    const parsed = data as HubWriteResponse;
+    if (!ok || parsed.error) {
+      return `La cartella condivisa ha risposto con errore (HTTP ${status}): ${parsed.error ?? "errore sconosciuto"}.`;
+    }
+    return `File salvato nella cartella condivisa: ${parsed.path ?? relPath.trim()}.`;
+  } catch (err) {
+    if (err instanceof Error && err.message === "__aborted__") return "Salvataggio interrotto dall'utente.";
+    throw err;
+  }
+}
+
+async function readFileTool(relPath: string, signal?: AbortSignal): Promise<string> {
+  if (!isHubConfigured()) {
+    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+  }
+  if (!relPath.trim()) {
+    return "Percorso file mancante.";
+  }
+  try {
+    const { ok, status, data } = await callHubService(
+      `/files/read?path=${encodeURIComponent(relPath.trim())}`,
+      { method: "GET" },
+      signal
+    );
+    const parsed = data as HubReadResponse;
+    if (!ok || parsed.error) {
+      return `La cartella condivisa ha risposto con errore (HTTP ${status}): ${parsed.error ?? "errore sconosciuto"}.`;
+    }
+    return parsed.content ?? "";
+  } catch (err) {
+    if (err instanceof Error && err.message === "__aborted__") return "Lettura interrotta dall'utente.";
+    throw err;
+  }
+}
+
+async function listFilesTool(relPath: string, signal?: AbortSignal): Promise<string> {
+  if (!isHubConfigured()) {
+    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+  }
+  try {
+    const { ok, status, data } = await callHubService(
+      `/files/list?path=${encodeURIComponent(relPath.trim())}`,
+      { method: "GET" },
+      signal
+    );
+    const parsed = data as HubListResponse;
+    if (!ok || parsed.error) {
+      return `La cartella condivisa ha risposto con errore (HTTP ${status}): ${parsed.error ?? "errore sconosciuto"}.`;
+    }
+    const entries = parsed.entries ?? [];
+    if (entries.length === 0) {
+      return `Nessun file in "${parsed.path ?? relPath.trim() ?? "."}".`;
+    }
+    return `Contenuto di "${parsed.path ?? "."}":\n${entries
+      .map((e) => `- ${e.name}${e.type === "dir" ? "/" : ""}`)
+      .join("\n")}`;
+  } catch (err) {
+    if (err instanceof Error && err.message === "__aborted__") return "Elenco interrotto dall'utente.";
+    throw err;
+  }
+}
+
 /**
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
  * da rimandare come messaggio role:"tool". `signal` è opzionale e permette al
@@ -1449,6 +1674,12 @@ export async function executeHorusTool(
           typeof args.limit === "number" ? args.limit : undefined,
           signal
         );
+      case "save_file":
+        return await saveFileTool(String(args.path ?? ""), String(args.content ?? ""), signal);
+      case "read_file":
+        return await readFileTool(String(args.path ?? ""), signal);
+      case "list_files":
+        return await listFilesTool(String(args.path ?? ""), signal);
       default:
         return `Tool sconosciuto: "${name}".`;
     }
