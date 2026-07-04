@@ -64,3 +64,5 @@ channel = "stable-25_05"
 [userenv.shared]
 INBOX_URL = "https://biker-link.replit.app/api/_internal/chat-export"
 INBOX_SOURCE = "bikerlink"
+TC_SSH_HOST = "ssh.biker-link.net"
+TC_SSH_USER = "replit-agent"
