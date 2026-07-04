@@ -38,3 +38,4 @@
 - [Ollama keep_alive duration format](horus-ollama-keep-alive-duration-format.md) — send `keep_alive: -1` as a number, not the string "-1" (no unit) — Ollama 400s on the bare string.
 - [Browser network-error leaks into chat](friendly-chat-error-browser-variants.md) — Chrome's mid-stream `TypeError: network error` (+ Safari "Load failed") don't contain "fetch"; friendlyChatErrorMessage must map EVERY TypeError, not just fetch-matching ones.
 - [Chat network-drop reply cache](horus-network-drop-reply-cache.md) — "network error" but server logged HTTP 200 = mobile network suspension (not the tunnel); recover via best-effort server reply cache + one-click client retry that reuses it.
+- [TC direct SSH access](tc-ssh-access.md) — real shell on TC via `cloudflared access ssh` ProxyCommand; verify key fingerprints and user match, watch for flattened-newline paste corruption.

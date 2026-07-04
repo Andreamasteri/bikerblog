@@ -158,6 +158,12 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **20:16** · Saved progress at the end of the loop <!-- ce5c697 -->
+  - _In parole semplici:_ Salva il progresso alla fine di ogni ciclo.
+- **20:13** · Update the website's social sharing image <!-- d16a1cb -->
+  - _In parole semplici:_ Abbiamo aggiornato l'immagine condivisa sui social media del nostro sito web.
+- **20:12** · Update project documentation with recent changes <!-- 5d9bed4 -->
+  - _In parole semplici:_ Aggiornamento della documentazione del progetto con le modifiche recenti
 - **20:04** · Update project documentation with recent changes <!-- e7ba95b -->
   - _In parole semplici:_ Aggiornamento della documentazione del progetto con le modifiche recenti
 - **19:58** · Add Cloudflared and update site image <!-- 75cbc4e -->
