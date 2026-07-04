@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #183** — Type chat test mocks against real AgentRegistryEntry shape <!-- b278cda -->
+  - _In parole semplici:_ Abbiamo migliorato il sistema di messaggi per una migliore compatibilità con i dati degli utenti.
 - **Task #182** — Restore the chat test suite so future breakages get caught <!-- e665d3e -->
   - _In parole semplici:_ Abbiamo ripristinato i test della chat per intercettare eventuali problemi futuri.
 - **Task #181** — Fix raw "network error" leaking into Horus/Bowie chat <!-- 78d48cc -->
@@ -152,6 +154,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **03:29** · Git commit prior to merge <!-- db7d8e1 -->
+  - _In parole semplici:_ Commit effettuato prima del merge.
 - **03:22** · Git commit prior to merge <!-- 9de01c2 -->
   - _In parole semplici:_ Commit git prima del merge.
 - **03:17** · Git commit prior to merge <!-- 2c6efa9 -->
