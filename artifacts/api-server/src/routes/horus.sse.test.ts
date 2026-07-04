@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { test } from "node:test";
 import express from "express";
-import type { HorusMessage, HorusRawResult, HorusChatOptions } from "@workspace/horus";
+import type {
+  HorusMessage,
+  HorusRawResult,
+  HorusChatOptions,
+  OllamaAgentHealth,
+} from "@workspace/horus";
 import { createDirectChatHandler } from "./horus.js";
 
 /**
@@ -50,7 +55,10 @@ function makeFakeChatRaw(opts: { tokenCount: number; tokenDelayMs: number }): Fa
   return controller;
 }
 
-async function startTestServer(chatRaw: FakeChatRawController["chatRaw"]): Promise<{
+async function startTestServer(
+  chatRaw: FakeChatRawController["chatRaw"],
+  checkHealth: () => Promise<OllamaAgentHealth> = async () => ({ status: "ok", model: "test-model" })
+): Promise<{
   url: string;
   close: () => Promise<void>;
 }> {
@@ -63,6 +71,7 @@ async function startTestServer(chatRaw: FakeChatRawController["chatRaw"]): Promi
       systemPrompt: { role: "system", content: "test" },
       chatRaw,
       isConfigured: () => true,
+      checkHealth,
       notConfiguredMessage: "not configured",
       logLabel: "test chat failed",
     })

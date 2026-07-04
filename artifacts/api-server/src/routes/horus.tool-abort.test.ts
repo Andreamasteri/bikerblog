@@ -113,6 +113,7 @@ async function startTestServer(
       systemPrompt: { role: "system", content: "test" },
       chatRaw,
       isConfigured: () => true,
+      checkHealth: async () => ({ status: "ok", model: "test-model" }),
       notConfiguredMessage: "not configured",
       logLabel: "test chat failed",
     })

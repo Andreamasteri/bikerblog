@@ -92,6 +92,18 @@ const MAX_REPLY_CHARS_WITH_TOOLS = 2400;
 const MAX_REPLY_TOKENS_WITH_TOOLS = 700;
 const MAX_TOOL_ITERATIONS = 3;
 
+// Timeout dedicato per il tentativo di fallback senza-tool (vedi il catch in
+// createDirectChatHandler). Deve restare comodamente sotto il tetto ~100s del
+// tunnel Cloudflare: nella riproduzione reale (Task #176) il primo tentativo
+// con tool scadeva a ~125s (HTTP 524) e il fallback col prompt pulito scadeva
+// a sua volta a ~125s con un secondo 524, portando l'attesa totale a ~250s
+// prima che l'utente vedesse lo stesso errore generico. Con un timeout più
+// corto del tetto del tunnel, un fallback destinato a fallire si arrende in
+// fretta (~60s invece di ~125s) e l'utente vede subito un messaggio chiaro,
+// mentre un fallback che invece può riuscire (prompt minimo → prefill rapido)
+// fa comunque in tempo a rispondere sotto la soglia.
+const FALLBACK_TIMEOUT_MS = 60_000;
+
 // Ogni risultato di un tool viene rimandato al modello come parte del prompt
 // dell'iterazione successiva. Su hardware CPU la fase (silenziosa) di prompt
 // processing/prefill cresce con la dimensione del prompt: un risultato molto
@@ -157,6 +169,19 @@ export function budgetedToolResult(
   const cap = Math.min(MAX_TOOL_RESULT_CHARS, remaining);
   const content = capToolResult(result, cap);
   return { content, charsUsed: content.length };
+}
+
+/** Messaggio mostrato quando né il turno con tool né il fallback senza-tool
+ * possono ragionevolmente riuscire (server/tunnel non raggiungibile o troppo
+ * lento anche per un prompt minimo). È volutamente chiaro e onesto: l'utente
+ * capisce che non è una sua richiesta troppo complessa ma un problema
+ * temporaneo lato server, e sa cosa fare (riprovare più tardi). */
+function overloadedMessage(agentName: string): string {
+  return (
+    `${agentName} non riesce a rispondere in questo momento: il server (Ollama sul tunnel) ` +
+    "è sovraccarico o troppo lento e non è riuscito a completare la risposta in tempo, nemmeno " +
+    "senza strumenti. Riprova tra qualche minuto, magari con una richiesta più semplice."
+  );
 }
 
 /** Taglia una risposta al limite di caratteri applicabile (esteso se in
@@ -272,6 +297,10 @@ export interface DirectChatAgentConfig {
   systemPrompt: HorusMessage;
   chatRaw: typeof horusChatRaw;
   isConfigured: () => boolean;
+  /** Ping veloce di raggiungibilità (~6s), usato prima del fallback senza-tool
+   * per non spendere un secondo round-trip a tempo pieno quando il server è
+   * proprio giù/irraggiungibile. */
+  checkHealth: () => Promise<OllamaAgentHealth>;
   notConfiguredMessage: string;
   logLabel: string;
 }
@@ -316,8 +345,8 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
 
     // Prompt "pulito" del turno (system + cronologia + messaggio utente), senza
     // i risultati-tool che il loop qui sotto vi accumula. Serve come base per il
-    // loop e, soprattutto, per il fallback senza-tool in caso di timeout del
-    // tunnel: quel prompt è piccolo e genera in fretta, restando sotto il tetto.
+    // loop con i tool. (Il fallback senza-tool in caso di timeout del tunnel usa
+    // invece un prompt MINIMO costruito nel catch — vedi sotto.)
     const baseConversation: HorusMessage[] = [
       config.systemPrompt,
       ...priorHistory.map((m) => ({ role: m.role, content: m.content }) satisfies HorusMessage),
@@ -416,37 +445,73 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
         // Se il turno con i tool ha superato il tetto ~100s del tunnel (HTTP 524
         // sul prefill silenzioso del prompt post-tool, causa classica del
         // "si blocca dopo il primo messaggio"), NON arrenderti subito: riprova
-        // UNA volta senza tool e col prompt pulito (senza i risultati-tool
-        // accumulati), che è piccolo, genera in fretta e resta sotto il tetto —
-        // così l'utente ottiene comunque una risposta best-effort invece di un
-        // errore secco. Ogni altro errore, o un abort del client, si propaga
-        // com'era prima. Se anche il fallback fallisce, l'errore raggiunge il
-        // catch esterno che mostra un messaggio chiaro.
+        // UNA volta senza tool e col prompt pulito. Ogni altro errore, o un
+        // abort del client, si propaga com'era prima.
         if (abortController.signal.aborted || !isGatewayTimeoutError(loopErr)) throw loopErr;
 
-        req.log.warn({ err: loopErr }, `${config.logLabel}: gateway timeout con tool, retry senza tool`);
+        req.log.warn(
+          { err: loopErr },
+          `${config.logLabel}: gateway timeout con tool, verifico raggiungibilità prima del fallback`
+        );
 
-        const fallbackConversation: HorusMessage[] = [
-          ...baseConversation.slice(0, -1),
-          {
-            role: "system",
-            content:
-              "Nota: gli strumenti non sono disponibili in questo momento e il tentativo precedente ha " +
-              "superato il tempo massimo del server. Rispondi comunque nel modo più utile e conciso " +
-              "possibile usando solo ciò che già sai, senza fare riferimento a strumenti.",
-          },
-          baseConversation[baseConversation.length - 1]!,
-        ];
+        // Prima di spendere un secondo round-trip a tempo pieno, fai un ping
+        // veloce (~6s): nella riproduzione reale (Task #176) sia il tentativo
+        // con tool sia il fallback scadevano a ~125s ciascuno (~250s totali)
+        // prima che l'utente vedesse lo stesso errore. Se il server non è
+        // nemmeno raggiungibile per un /api/version, non ha senso riprovare
+        // una generazione completa: fallisci subito con un messaggio chiaro.
+        const health = await config.checkHealth();
 
-        const fallback = await config.chatRaw(fallbackConversation, {
-          maxTokens: MAX_REPLY_TOKENS,
-          signal: abortController.signal,
-          onToken: (token) => {
-            sendEvent(res, "token", { token });
-          },
-        });
-        finalReply = fallback.content;
-        usedTools = false;
+        if (abortController.signal.aborted) {
+          // Il client se n'è andato durante il ping: niente da scrivere.
+        } else if (health.status !== "ok") {
+          req.log.warn(
+            { healthStatus: health.status },
+            `${config.logLabel}: agente non raggiungibile, salto il fallback`
+          );
+          throw new Error(overloadedMessage(config.agentName));
+        } else {
+          // Raggiungibile: riprova UNA volta senza tool con un prompt MINIMO
+          // (niente cronologia, niente prompt di sistema con la descrizione
+          // dei tool — solo una nota corta + il messaggio dell'utente) così il
+          // prefill è il più piccolo possibile, e con un timeout dedicato più
+          // corto del tetto del tunnel così un fallback destinato a fallire si
+          // arrende in fretta invece di attendere un secondo 524 pieno.
+          const fallbackConversation: HorusMessage[] = [
+            {
+              role: "system",
+              content:
+                `Ti chiami ${config.agentName}. Gli strumenti non sono disponibili in questo momento e il ` +
+                "tentativo precedente ha superato il tempo massimo del server. Rispondi in modo breve, utile " +
+                "e diretto usando solo ciò che già sai, senza fare riferimento a strumenti.",
+            },
+            { role: "user", content: message },
+          ];
+
+          try {
+            const fallback = await config.chatRaw(fallbackConversation, {
+              maxTokens: MAX_REPLY_TOKENS,
+              timeoutMs: FALLBACK_TIMEOUT_MS,
+              signal: abortController.signal,
+              onToken: (token) => {
+                sendEvent(res, "token", { token });
+              },
+            });
+            finalReply = fallback.content;
+            usedTools = false;
+          } catch (fallbackErr) {
+            // Abort del client durante il fallback: propaga (gestito fuori).
+            if (abortController.signal.aborted) throw fallbackErr;
+            // Anche il fallback (prompt minimo, timeout corto) non ce l'ha
+            // fatta: il server è davvero troppo lento adesso. Mostra subito il
+            // messaggio chiaro invece del timeout grezzo o di un secondo 524.
+            req.log.warn(
+              { err: fallbackErr },
+              `${config.logLabel}: anche il fallback senza tool è scaduto`
+            );
+            throw new Error(overloadedMessage(config.agentName));
+          }
+        }
       }
 
       const finalContent = truncateReply(finalReply, usedTools);
@@ -611,6 +676,7 @@ for (const def of AGENT_DEFINITIONS) {
       systemPrompt: buildDirectChatSystemPrompt(def.displayName),
       chatRaw: def.chatRaw,
       isConfigured: def.isConfigured,
+      checkHealth: def.checkHealth,
       notConfiguredMessage: def.notConfiguredMessage,
       logLabel: def.logLabel,
     })

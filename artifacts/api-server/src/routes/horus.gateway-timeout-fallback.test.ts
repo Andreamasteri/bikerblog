@@ -7,6 +7,7 @@ import {
   type HorusMessage,
   type HorusRawResult,
   type HorusChatOptions,
+  type OllamaAgentHealth,
 } from "@workspace/horus";
 
 /**
@@ -30,7 +31,8 @@ import {
 process.env["HORUS_CHAT_PASSWORD"] ??= "test-password-for-gateway-timeout-fallback";
 
 async function startTestServer(
-  chatRaw: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<HorusRawResult>
+  chatRaw: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<HorusRawResult>,
+  checkHealth: () => Promise<OllamaAgentHealth> = async () => ({ status: "ok", model: "test-model" })
 ): Promise<{ url: string; close: () => Promise<void> }> {
   const { createDirectChatHandler } = await import("./horus.js");
   const app = express();
@@ -54,6 +56,7 @@ async function startTestServer(
       systemPrompt: { role: "system", content: "test" },
       chatRaw,
       isConfigured: () => true,
+      checkHealth,
       notConfiguredMessage: "not configured",
       logLabel: "test chat failed",
     })
@@ -92,7 +95,10 @@ async function collectSseEvents(
   }
 }
 
-async function runChatRequest(url: string): Promise<Array<{ event: string; data: unknown }>> {
+async function runChatRequest(
+  url: string,
+  body: unknown = { message: "domanda che innesca un tool", history: [] }
+): Promise<Array<{ event: string; data: unknown }>> {
   const events: Array<{ event: string; data: unknown }> = [];
   await new Promise<void>((resolve, reject) => {
     const req = http.request(
@@ -111,9 +117,34 @@ async function runChatRequest(url: string): Promise<Array<{ event: string; data:
       }
     );
     req.on("error", reject);
-    req.end(JSON.stringify({ message: "domanda che innesca un tool", history: [] }));
+    req.end(JSON.stringify(body));
   });
   return events;
+}
+
+/** chatRaw finto per i test #176: il primo tentativo (con tool) lancia sempre
+ * un gateway timeout 524; il secondo (il fallback senza tool) o scade a sua
+ * volta o risponde, a seconda di `fallback`. Registra ogni chiamata così i
+ * test possono ispezionare il prompt e le opzioni del fallback. */
+function makeGatewayTimeoutThenFake(opts: { fallback: "timeout" | "success" }): {
+  chatRaw: (messages: HorusMessage[], options?: HorusChatOptions) => Promise<HorusRawResult>;
+  calls: Array<{ messages: HorusMessage[]; options: HorusChatOptions }>;
+} {
+  const calls: Array<{ messages: HorusMessage[]; options: HorusChatOptions }> = [];
+  return {
+    calls,
+    chatRaw: async (messages, options = {}) => {
+      calls.push({ messages, options });
+      if (calls.length === 1) {
+        throw new OllamaGatewayTimeoutError("gateway timeout with tools", 524);
+      }
+      if (opts.fallback === "timeout") {
+        throw new OllamaGatewayTimeoutError("gateway timeout fallback", 524);
+      }
+      options.onToken?.("ok-fallback");
+      return { content: "risposta di fallback", toolCalls: [] };
+    },
+  };
 }
 
 test("un gateway timeout nel giro-tool ripiega su una risposta senza tool (evento done, non error)", async () => {
@@ -178,6 +209,117 @@ test("se anche il fallback senza-tool fallisce, l'utente riceve un evento error"
       /524|gateway|tunnel/i,
       "il messaggio d'errore finale deve spiegare il timeout del tunnel"
     );
+  } finally {
+    await server.close();
+  }
+});
+
+/**
+ * Regressione Task #176 — "il fallback-senza-tool scade a sua volta".
+ *
+ * Il Task #171 (sopra) aggiungeva il retry-senza-tool, ma in produzione il
+ * fallback scadeva a sua volta: tentativo con-tool 524 (~125s) + fallback 524
+ * (~125s) = l'utente aspettava ~250s per lo stesso errore generico. Il fix:
+ * prima del fallback un ping veloce di raggiungibilità (se il server è giù,
+ * niente secondo round-trip → fail veloce), e se è raggiungibile un retry con
+ * prompt MINIMO (niente cronologia) e un timeout dedicato ben sotto il tetto
+ * ~100s del tunnel, così un fallback destinato a fallire si arrende in fretta
+ * con un messaggio chiaro.
+ */
+
+test("Task #176: gateway timeout + agente non raggiungibile → fail veloce senza un secondo round-trip", async () => {
+  // Il fallback SAREBBE un successo, ma non deve nemmeno essere tentato: il
+  // ping dice che l'agente è irraggiungibile, quindi niente seconda attesa.
+  const fake = makeGatewayTimeoutThenFake({ fallback: "success" });
+  const server = await startTestServer(fake.chatRaw, async () => ({
+    status: "unreachable",
+    detail: "HTTP 000",
+  }));
+
+  try {
+    const events = await runChatRequest(server.url, { message: "ciao", history: [] });
+
+    assert.equal(
+      fake.calls.length,
+      1,
+      "il fallback deve essere SALTATO quando il ping di raggiungibilità fallisce (niente seconda attesa piena)"
+    );
+    const errorEvent = events.find((e) => e.event === "error");
+    assert.ok(errorEvent, `atteso un evento "error", ricevuti: ${events.map((e) => e.event).join(", ")}`);
+    assert.match(
+      (errorEvent!.data as { message?: string }).message ?? "",
+      /sovraccarico o troppo lento/,
+      "atteso il messaggio chiaro di sovraccarico, non un timeout grezzo"
+    );
+    assert.ok(!events.some((e) => e.event === "done"), "nessun evento done sul fail veloce");
+  } finally {
+    await server.close();
+  }
+});
+
+test("Task #176: gateway timeout due volte → fallback con timeout limitato e un solo errore chiaro", async () => {
+  const fake = makeGatewayTimeoutThenFake({ fallback: "timeout" });
+  const server = await startTestServer(fake.chatRaw);
+
+  try {
+    const events = await runChatRequest(server.url, { message: "ciao", history: [] });
+
+    assert.equal(
+      fake.calls.length,
+      2,
+      "atteso esattamente un fallback senza-tool dopo il 524 con i tool"
+    );
+    const fallbackOptions = fake.calls[1]!.options;
+    assert.ok(
+      typeof fallbackOptions.timeoutMs === "number" && fallbackOptions.timeoutMs <= 60_000,
+      `il fallback deve usare un timeout limitato ben sotto il tetto ~100s del tunnel, ricevuto ${String(
+        fallbackOptions.timeoutMs
+      )}`
+    );
+    const errorEvents = events.filter((e) => e.event === "error");
+    assert.equal(errorEvents.length, 1, "esattamente un evento error chiaro (niente doppio errore generico)");
+    assert.match(
+      (errorEvents[0]!.data as { message?: string }).message ?? "",
+      /sovraccarico o troppo lento/
+    );
+    assert.ok(!events.some((e) => e.event === "done"), "nessun done quando anche il fallback fallisce");
+  } finally {
+    await server.close();
+  }
+});
+
+test("Task #176: gateway timeout con tool → fallback senza tool con prompt MINIMO (niente cronologia)", async () => {
+  const fake = makeGatewayTimeoutThenFake({ fallback: "success" });
+  const server = await startTestServer(fake.chatRaw);
+
+  try {
+    const events = await runChatRequest(server.url, {
+      message: "ciao",
+      history: [
+        { role: "user", content: "vecchio-messaggio-1" },
+        { role: "assistant", content: "vecchia-risposta-1" },
+      ],
+    });
+
+    assert.equal(fake.calls.length, 2);
+    const fallbackMessages = fake.calls[1]!.messages;
+    assert.equal(
+      fallbackMessages.length,
+      2,
+      `il prompt di fallback deve essere minimo (system + user), ricevuti ${fallbackMessages.length} messaggi`
+    );
+    assert.equal(fallbackMessages[0]!.role, "system");
+    assert.equal(fallbackMessages[1]!.role, "user");
+    assert.equal(fallbackMessages[1]!.content, "ciao");
+    assert.ok(
+      !fallbackMessages.some(
+        (m) => m.content.includes("vecchio-messaggio") || m.content.includes("vecchia-risposta")
+      ),
+      "il prompt di fallback NON deve trascinarsi la cronologia (tiene il prefill minimo)"
+    );
+    const doneEvent = events.find((e) => e.event === "done");
+    assert.ok(doneEvent, "atteso un evento done quando il fallback riesce");
+    assert.match((doneEvent!.data as { content?: string }).content ?? "", /fallback/);
   } finally {
     await server.close();
   }
