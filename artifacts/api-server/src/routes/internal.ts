@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { createNadirExportHandler } from "./nadir-export.js";
+import { writeVramAlertState } from "@workspace/horus";
 
 const router: IRouter = Router();
 
@@ -311,6 +312,54 @@ router.get(
     defaultComments: NADIR_EXPORT_DEFAULT_COMMENTS,
     maxComments: NADIR_EXPORT_MAX_COMMENTS,
   }),
+);
+
+// Riceve gli avvisi di congestione VRAM dal sampler su TC (deploy/horus-hub/
+// server.js, fuori da questo repo — Task #194). Riusa HUB_GATE_TOKEN, già
+// condiviso tra Replit e TC per gli altri endpoint dell'hub, invece di un
+// nuovo secret dedicato: TC chiama qui quando la soglia configurata viene
+// superata/rientra, e lo stato risultante viene letto da
+// loadActiveVramAlertPrompt() per allegarlo ai system prompt di chat.
+router.post(
+  "/_internal/vram-alert",
+  express.json({ limit: "10kb" }),
+  (req, res): void => {
+    const auth = req.headers["x-hub-gate-token"];
+    const hubToken = process.env["HUB_GATE_TOKEN"];
+    if (!hubToken || auth !== hubToken) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const active = body["active"] === true;
+
+    if (!active) {
+      writeVramAlertState({ active: false, resolvedAt: new Date().toISOString() });
+      req.log.info("vram-alert resolved");
+      res.json({ ok: true, active: false });
+      return;
+    }
+
+    const usedMiB = typeof body["usedMiB"] === "number" ? body["usedMiB"] : undefined;
+    const totalMiB = typeof body["totalMiB"] === "number" ? body["totalMiB"] : undefined;
+    const pct = typeof body["pct"] === "number" ? body["pct"] : undefined;
+    const thresholdPct = typeof body["thresholdPct"] === "number" ? body["thresholdPct"] : undefined;
+    const since = typeof body["since"] === "string" ? body["since"] : new Date().toISOString();
+
+    writeVramAlertState({
+      active: true,
+      usedMiB,
+      totalMiB,
+      pct,
+      thresholdPct,
+      since,
+      lastUpdated: new Date().toISOString(),
+    });
+
+    req.log.warn({ usedMiB, totalMiB, pct, thresholdPct }, "vram-alert active");
+    res.json({ ok: true, active: true });
+  },
 );
 
 export default router;

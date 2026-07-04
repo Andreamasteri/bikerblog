@@ -29,3 +29,10 @@ export {
 } from "./client.js";
 
 export { HORUS_TOOLS, getHorusTools, executeHorusTool, capToolResult, MAX_TOOL_RESULT_CHARS } from "./tools.js";
+
+export {
+  loadVramAlertState,
+  writeVramAlertState,
+  loadActiveVramAlertPrompt,
+  type VramAlertState,
+} from "./vram-alert.js";

@@ -19,6 +19,7 @@ import {
   MAX_TOOL_RESULT_CHARS,
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
+  loadActiveVramAlertPrompt,
   type HorusMessage,
   type HorusToolCall,
   type HorusToolSpec,
@@ -50,9 +51,11 @@ function requireHorusPassword(req: express.Request, res: express.Response): bool
 // GitHub e scrivi un manuale" devono funzionare da qui. Le conversazioni sono
 // comunque salvate nello storico/log a prescindere dai tool.
 function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
+  const vramAlert = loadActiveVramAlertPrompt();
   return {
     role: "system",
     content:
+      (vramAlert ? `${vramAlert} ` : "") +
       `Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. Ti chiami ${agentName}. ` +
       "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
       "NON riportare la conversazione su BikerLink, sviluppo software, moto o sul blog a meno che sia l'utente stesso a parlarne esplicitamente. " +
@@ -1043,7 +1046,11 @@ function buildConvoSystemPrompt(opts: {
       : `Rispondi in modo naturale e conciso a ciò che ${previousSpeakerName} ha appena detto, ` +
         `portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello ` +
         `che ha detto ${previousSpeakerName}, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.`;
-  return { role: "system", content: `${intro} ${body}${brevity}${toolsNote}` };
+  const vramAlert = loadActiveVramAlertPrompt();
+  return {
+    role: "system",
+    content: `${vramAlert ? `${vramAlert} ` : ""}${intro} ${body}${brevity}${toolsNote}`,
+  };
 }
 
 // Ridotto da 8 a 6 (Task #157): con Bowie su llama3.2:3b la latenza reale è

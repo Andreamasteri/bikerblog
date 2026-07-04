@@ -502,6 +502,17 @@ const HUB_TOOL_SPECS: HorusToolSpec[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "check_vram_usage",
+      description:
+        "Restituisce il carico di VRAM (memoria video) attuale sulla GPU di TC, il picco massimo registrato nelle ultime " +
+        "24 ore e, quando disponibile, quanto ne sta usando ciascuna IA residente (Horus, Bowie, Quebracho, Nadir). Usalo " +
+        "per capire se c'è margine per un'operazione pesante o per rispondere a domande dell'utente sul carico della GPU.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
 ];
 
 function isAnalysisServiceConfigured(): boolean {
@@ -667,6 +678,11 @@ export function selectRelevantTools(
     if (!wanted.has("save_file") && !wanted.has("read_file") && !wanted.has("list_files")) {
       wanted.add("list_files");
     }
+  }
+
+  // check_vram_usage — carico GPU/VRAM su TC.
+  if (has(/\bvram\b|memoria video|\bgpu\b|scheda video|quanta memoria (sta )?usa|carico della gpu/)) {
+    wanted.add("check_vram_usage");
   }
 
   if (wanted.size === 0) return [];
@@ -1629,6 +1645,61 @@ async function listFilesTool(relPath: string, signal?: AbortSignal): Promise<str
   }
 }
 
+interface HubVramBreakdownEntry {
+  pid?: string;
+  usedMiB?: number;
+  model?: string | null;
+  agent?: string | null;
+}
+
+interface HubVramResponse {
+  ok?: boolean;
+  current?: { usedMiB: number; totalMiB: number; pct: number };
+  peak24h?: { usedMiB: number; totalMiB: number; pct: number; at: string | null };
+  breakdown?: HubVramBreakdownEntry[];
+  breakdownConfidence?: string;
+  lastSampleAt?: string | null;
+  error?: string;
+}
+
+async function checkVramUsageTool(signal?: AbortSignal): Promise<string> {
+  if (!isHubConfigured()) {
+    return "Monitor VRAM su TC non configurato (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+  }
+  try {
+    const { ok, status, data } = await callHubService("/vram", { method: "GET" }, signal);
+    const parsed = data as HubVramResponse;
+    if (!ok || parsed.error) {
+      return `Il monitor VRAM ha risposto con errore (HTTP ${status}): ${parsed.error ?? "errore sconosciuto"}.`;
+    }
+    if (!parsed.current) {
+      return "Il monitor VRAM non ha ancora un campione disponibile (servizio appena partito?).";
+    }
+    const lines: string[] = [
+      `VRAM attuale su TC: ${parsed.current.usedMiB}MiB/${parsed.current.totalMiB}MiB (${parsed.current.pct.toFixed(0)}%).`,
+    ];
+    if (parsed.peak24h) {
+      const at = parsed.peak24h.at ? new Date(parsed.peak24h.at).toLocaleString("it-IT") : "sconosciuto";
+      lines.push(
+        `Picco ultime 24h: ${parsed.peak24h.usedMiB}MiB/${parsed.peak24h.totalMiB}MiB (${parsed.peak24h.pct.toFixed(0)}%) alle ${at}.`
+      );
+    }
+    if (parsed.breakdown && parsed.breakdown.length > 0) {
+      const breakdownLines = parsed.breakdown.map((b) => {
+        const label = b.agent ?? b.model ?? `pid ${b.pid ?? "?"}`;
+        return `  - ${label}: ${b.usedMiB ?? "?"}MiB`;
+      });
+      lines.push(
+        `Ripartizione per processo${parsed.breakdownConfidence === "heuristic-paired" ? " (stima)" : ""}:\n${breakdownLines.join("\n")}`
+      );
+    }
+    return lines.join("\n");
+  } catch (err) {
+    if (err instanceof Error && err.message === "__aborted__") return "Controllo VRAM interrotto dall'utente.";
+    throw err;
+  }
+}
+
 /**
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
  * da rimandare come messaggio role:"tool". `signal` è opzionale e permette al
@@ -1688,6 +1759,8 @@ export async function executeHorusTool(
         return await readFileTool(String(args.path ?? ""), signal);
       case "list_files":
         return await listFilesTool(String(args.path ?? ""), signal);
+      case "check_vram_usage":
+        return await checkVramUsageTool(signal);
       default:
         return `Tool sconosciuto: "${name}".`;
     }

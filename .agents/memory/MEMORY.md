@@ -1,3 +1,4 @@
+- [VRAM monitor on TC](vram-monitor-tc.md) — sampler+alerting split (TC decides threshold/hysteresis, Replit just stores state); alert surfaces via chat system prompt, not push.
 - [self-check staleEn](self-check-stale-en.md) — self-check now detects stale body_en (dev != prod); previously only compared IT excerpt.
 - [Pipeline gap catch-up](pipeline-gap-catchup.md) — step 3.8 recupera i diari mancanti degli ultimi 7 giorni; senza questo il cron offline lasciava buchi nel blog.
 - [Horus (Ollama) integration lessons](horus-integration.md) — Cloudflare Tunnel needs streaming for long generations; bash tool can't reliably read new secrets or host background processes; fine-grained GitHub PATs pasted as secrets can lose their `github_pat_` prefix (401s).

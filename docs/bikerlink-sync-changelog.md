@@ -141,6 +141,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #191** — Import BikerLink manuals (Nadir + local archive) <!-- e62a1f5 -->
 - **Task #188** — Mostra sempre "Riprova" quando l'agente va in timeout (chat diretta) <!-- 867a3a2 -->
   - _In parole semplici:_ In caso di timeout durante una chat diretta, l'app mostrerà sempre la scritta "Riprova".
 - **Task #184** — Type health-status mocks against HealthResult <!-- 26f3fe8 -->
@@ -158,6 +159,13 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **21:45** · Add file management tools for inter-agent collaboration <!-- 8ce47af -->
+- **21:30** · Update the project's open graph image for the blog <!-- 570b17a -->
+- **21:02** · Document the current state of the Bowie chat feature <!-- 1c6a254 -->
+- **21:00** · Make NVIDIA GPU persistence mode survive reboots automatically <!-- 5900a0a -->
+- **20:54** · Update project memory to reflect GPU resolution of latency issues <!-- 4975ed0 -->
+- **20:54** · Update memory to reflect GPU acceleration for faster responses <!-- 2a47ee2 -->
+- **20:18** · Add direct SSH access to user's TC box via Cloudflare tunnel <!-- 882c6fb -->
 - **20:16** · Saved progress at the end of the loop <!-- ce5c697 -->
   - _In parole semplici:_ Salva il progresso alla fine di ogni ciclo.
 - **20:13** · Update the website's social sharing image <!-- d16a1cb -->
