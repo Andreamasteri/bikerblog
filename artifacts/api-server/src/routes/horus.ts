@@ -314,12 +314,14 @@ export function tryParseTextualToolCall(content: string, tools: HorusToolSpec[])
 // Ogni messaggio rimanda l'intera cronologia a Ollama, che la rielabora da
 // zero (nessun riuso del contesto tra richieste HTTP separate). Su hardware
 // CPU questo tempo di "prompt processing" cresce con la lunghezza della
-// conversazione: 1 solo messaggio precedente rendeva le AI "senza memoria"
-// (non ricordavano nulla di prima), quindi la finestra è stata riportata a 5
-// messaggi precedenti come compromesso tra continuità della conversazione e
-// velocità di risposta. Le conversazioni restano comunque salvate per intero
-// nello storico/log a prescindere da questo limite.
-const MAX_HISTORY_MESSAGES = 5;
+// conversazione. Un tentativo di alzarla a 5 (per dare più continuità)
+// ha reso i timeout molto più frequenti dal 2° messaggio in poi (confermato
+// analizzando un caso reale in produzione): con 1 solo messaggio precedente
+// le AI risultano "senza memoria" tra un turno e l'altro, ma è il valore che
+// mantiene le risposte affidabili sull'hardware CPU attuale. Le conversazioni
+// restano comunque salvate per intero nello storico/log a prescindere da
+// questo limite.
+const MAX_HISTORY_MESSAGES = 1;
 
 interface ChatRequestMessage {
   role: "user" | "assistant";
