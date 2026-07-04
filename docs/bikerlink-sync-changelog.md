@@ -141,6 +141,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #178** — Contextual tool loading + always-resident Ollama models <!-- 62efe66 -->
 - **Task #176** — Fail fast when Horus/Bowie tool-free fallback also times out <!-- 171c7d7 -->
 
 ### 3 luglio 2026
