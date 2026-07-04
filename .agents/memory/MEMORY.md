@@ -39,3 +39,4 @@
 - [Browser network-error leaks into chat](friendly-chat-error-browser-variants.md) — Chrome's mid-stream `TypeError: network error` (+ Safari "Load failed") don't contain "fetch"; friendlyChatErrorMessage must map EVERY TypeError, not just fetch-matching ones.
 - [Chat network-drop reply cache](horus-network-drop-reply-cache.md) — "network error" but server logged HTTP 200 = mobile network suspension (not the tunnel); recover via best-effort server reply cache + one-click client retry that reuses it.
 - [TC direct SSH access](tc-ssh-access.md) — real shell on TC via `cloudflared access ssh` ProxyCommand; verify key fingerprints and user match, watch for flattened-newline paste corruption.
+- [Bowie chat known-good snapshot](bowie-chat-known-good-snapshot.md) — full file map of the working Bowie chat feature + checkpoint commit to restore from if it regresses/corrupts.
