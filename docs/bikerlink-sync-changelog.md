@@ -137,6 +137,12 @@ _Da qui in giù il contenuto è generato automaticamente ogni notte. Ogni voce
 corrisponde a una modifica registrata dopo il backfill iniziale._
 
 <!-- AUTO-CHANGELOG:START -->
+### 4 luglio 2026
+
+**Task completati:**
+
+- **Task #176** — Fail fast when Horus/Bowie tool-free fallback also times out <!-- 171c7d7 -->
+
 ### 3 luglio 2026
 
 **Task completati:**
