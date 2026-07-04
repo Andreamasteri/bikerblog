@@ -269,14 +269,26 @@ test("capToolResult spezza su un a-capo quando è ragionevolmente vicino alla fi
 const ANALYSIS_ONLY_TOOL_NAMES = ["typecheck_repo", "lint_repo", "search_code", "git_log", "architect"];
 const BASE_TOOL_NAMES = ["web_search", "github_read", "remember_note", "read_blog"];
 
-test("getHorusTools returns only the base tools when the analysis service env vars are unset", async (t) => {
+test("getHorusTools returns only the base tools when the analysis/nadir/hub service env vars are unset", async (t) => {
   const originalUrl = process.env["HORUS_ANALYSIS_URL"];
   const originalToken = process.env["ANALYSIS_GATE_TOKEN"];
+  const originalNadirUrl = process.env["NADIR_URL"];
+  const originalNadirToken = process.env["NADIR_GATE_TOKEN"];
+  const originalHubUrl = process.env["HORUS_HUB_URL"];
+  const originalHubToken = process.env["HUB_GATE_TOKEN"];
   delete process.env["HORUS_ANALYSIS_URL"];
   delete process.env["ANALYSIS_GATE_TOKEN"];
+  delete process.env["NADIR_URL"];
+  delete process.env["NADIR_GATE_TOKEN"];
+  delete process.env["HORUS_HUB_URL"];
+  delete process.env["HUB_GATE_TOKEN"];
   t.after(() => {
     process.env["HORUS_ANALYSIS_URL"] = originalUrl;
     process.env["ANALYSIS_GATE_TOKEN"] = originalToken;
+    process.env["NADIR_URL"] = originalNadirUrl;
+    process.env["NADIR_GATE_TOKEN"] = originalNadirToken;
+    process.env["HORUS_HUB_URL"] = originalHubUrl;
+    process.env["HUB_GATE_TOKEN"] = originalHubToken;
   });
   const calls = mockAnalysisFetch(t, { result: "should not be reached" });
 

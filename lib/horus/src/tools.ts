@@ -73,6 +73,14 @@
  *                     Horus, Bowie o un eventuale terzo agente lo usano allo
  *                     stesso modo. Richiede NADIR_URL + NADIR_GATE_TOKEN; se
  *                     non configurati, il tool non viene esposto al modello.
+ *  - save_file, read_file, list_files — cartella condivisa su TC
+ *                     ("agent-shared") accessibile a tutti gli agenti AI
+ *                     (Horus, Bowie, futuri Ares/Nadir/Quebracho), servita dal
+ *                     servizio horus-hub (repo GitHub "ai", versionato
+ *                     indipendentemente). Path relativi alla root condivisa,
+ *                     mai assoluti né con `..` (validato lato hub). Richiede
+ *                     HORUS_HUB_URL + HUB_GATE_TOKEN; se non configurati,
+ *                     questi tool non vengono esposti al modello.
  */
 
 import type { HorusToolSpec } from "./client.js";
