@@ -25,9 +25,9 @@ describe("HorusChat - due agenti su tre giù contemporaneamente", () => {
           status: 200,
           ok: true,
           json: async () => [
-            { id: "horus", displayName: "Horus", healthEndpoint: "api/horus/health" },
-            { id: "bowie", displayName: "Bowie", healthEndpoint: "api/horus/bowie-health" },
-            { id: "quebracho", displayName: "Quebracho", healthEndpoint: "api/horus/quebracho-health" },
+            { id: "horus", displayName: "Horus", healthEndpoint: "api/horus/health", isConfigured: true },
+            { id: "bowie", displayName: "Bowie", healthEndpoint: "api/horus/bowie-health", isConfigured: true },
+            { id: "quebracho", displayName: "Quebracho", healthEndpoint: "api/horus/quebracho-health", isConfigured: true },
           ],
         });
       }

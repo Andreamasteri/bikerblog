@@ -80,8 +80,8 @@ describe("HorusChat - conversazione salvata corrotta", () => {
           status: 200,
           ok: true,
           json: async () => [
-            { id: "horus", displayName: "Horus", healthEndpoint: "api/horus/health" },
-            { id: "bowie", displayName: "Bowie", healthEndpoint: "api/horus/bowie-health" },
+            { id: "horus", displayName: "Horus", healthEndpoint: "api/horus/health", isConfigured: true },
+            { id: "bowie", displayName: "Bowie", healthEndpoint: "api/horus/bowie-health", isConfigured: true },
           ],
         });
       }
