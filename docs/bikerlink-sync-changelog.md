@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #181** — Fix raw "network error" leaking into Horus/Bowie chat <!-- 78d48cc -->
+  - _In parole semplici:_ Abbiamo risolto un problema che causava l'errore di rete grezzo nella chat tra Horus e Bowie
 - **Task #178** — Contextual tool loading + always-resident Ollama models <!-- 62efe66 -->
   - _In parole semplici:_ Caricamento degli strumenti contestuali e modelli Ollama sempre attivi.
 - **Task #176** — Fail fast when Horus/Bowie tool-free fallback also times out <!-- 171c7d7 -->
@@ -148,6 +150,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **03:17** · Git commit prior to merge <!-- 2c6efa9 -->
+  - _In parole semplici:_ Commit git prima del merge.
 - **03:02** · Update Ollama chat to correctly format keep alive duration <!-- 3e34770 -->
   - _In parole semplici:_ Abbiamo aggiornato il sistema di chat Ollama per formattare correttamente la durata del keep alive.
 - **02:53** · Improve error handling for missing tools in direct chat interactions <!-- 8a526be -->
