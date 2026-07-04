@@ -158,6 +158,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:04** · Improve app response speed by increasing message history limit <!-- 14093de -->
+  - _In parole semplici:_ Abbiamo migliorato le prestazioni dell'app aumentando il limite di storia dei messaggi.
 - **16:01** · Improve app response speed by increasing message history limit <!-- 5abd63a -->
   - _In parole semplici:_ Abbiamo migliorato le prestazioni dell'app aumentando il limite della cronologia dei messaggi.
 - **15:57** · Improve app response speed by increasing message history limit <!-- 7b840bd -->
