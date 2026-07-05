@@ -146,6 +146,12 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **05:35** · Update models and labels for improved AI content generation <!-- bc3a407 -->
+- **05:31** · Add a health check endpoint for the AI Hub service <!-- 1364bf0 -->
+- **05:23** · Update documentation on Cloudflare API token permissions <!-- 1958a6d -->
+- **04:45** · Update project documentation and code for agent configurations and naming conventions <!-- 46ad72a -->
+- **04:07** · Document VRAM limits for running multiple AI models simultaneously <!-- e0c2a41 -->
+- **01:41** · Update AI Hub URL and rename related files <!-- d4fff78 -->
 - **01:23** · Update system to use new AI Hub URL and rename related files <!-- 687194d -->
   - _In parole semplici:_ Abbiamo aggiornato il sistema per utilizzare un nuovo indirizzo del nostro hub di intelligenza artificiale e rinominato i file correlati.
 - **01:05** · Task start baseline checkpoint for code review <!-- 794a0d4 -->
