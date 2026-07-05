@@ -141,11 +141,14 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #200** — Add structured tracing for the LLM tool-loop <!-- e0df4a9 -->
+- **Task #197** — Deliverable B: free cloud fallback for Quebracho <!-- 6d4931d -->
 - **Task #195** — Manuali BikerLink generati da Horus e Quebracho <!-- cc14724 -->
   - _In parole semplici:_ I manuali di BikerLink sono stati generati dai motori linguistici Horus e Quebracho
 
 **Altre modifiche:**
 
+- **05:42** · Update documentation to reflect recent AI model and service changes <!-- e9b65d3 -->
 - **05:35** · Update models and labels for improved AI content generation <!-- bc3a407 -->
 - **05:31** · Add a health check endpoint for the AI Hub service <!-- 1364bf0 -->
 - **05:23** · Update documentation on Cloudflare API token permissions <!-- 1958a6d -->
