@@ -1146,6 +1146,86 @@ let diaryPostCreatedThisRun = false;
   });
 }
 
+// ── Step 11: supervisione semantica (Fase 2f economy, Task #199) ────────────
+// Ronda notturna leggera: Quebracho (giudice CPU, mai un modello pesante)
+// campiona via query SQL un piccolo numero di turni recenti di Horus/Bowie da
+// `llm_traces` (Task #200) e valuta pertinenza/uso-tool/invenzioni/tono.
+// Niente auto-valutazione (mai i turni di Quebracho stesso). Alert SOLO su
+// anomalia reale di contenuto, riusando i canali già esistenti (fan-out
+// notifiche pipeline + iniezione nel system prompt, stesso schema già usato
+// per l'alert VRAM). Un guasto operativo della ronda stessa (Quebracho
+// irraggiungibile, JSON non valido) resta un warn silenzioso — stessa
+// tolleranza già usata per i guasti transitori di Nadir. Nessuna
+// autocorrezione automatica: il sistema segnala, la decisione resta
+// all'utente.
+
+{
+  const stepStart = Date.now();
+  console.log("[cluster-daily] step 11: supervisione semantica (Quebracho cross-check)");
+
+  const { runSemanticSupervision } = await import("./semantic-supervision.js");
+  const supervision = await runSemanticSupervision();
+
+  if (supervision.status === "skipped") {
+    console.log(`[cluster-daily] step 11: SKIP — ${supervision.detail}`);
+    report.addStep({
+      step: 11,
+      name: "semantic supervision (Quebracho cross-check)",
+      status: "skipped",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [],
+    });
+  } else if (supervision.status === "warn" && supervision.anomalies.length === 0) {
+    console.warn(`[cluster-daily] ⚠ step 11: ${supervision.detail}`);
+    report.addStep({
+      step: 11,
+      name: "semantic supervision (Quebracho cross-check)",
+      status: "warn",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [supervision.detail],
+    });
+  } else if (supervision.status === "warn") {
+    const anomalyLines = supervision.anomalies.map((a) => `${a.agent} (trace #${a.traceId}): ${a.reason}`);
+    console.warn(`[cluster-daily] ⚠ step 11: ${supervision.detail}`);
+    criticalWarnings.push(`step 11 (semantic supervision): ${supervision.detail} — ${anomalyLines.join("; ")}`);
+
+    const { writeSupervisionAlertState } = await import("@workspace/horus");
+    const now = new Date().toISOString();
+    writeSupervisionAlertState({
+      active: true,
+      since: now,
+      lastUpdated: now,
+      sampledCount: supervision.sampledCount,
+      anomalies: supervision.anomalies,
+    });
+
+    report.addStep({
+      step: 11,
+      name: "semantic supervision (Quebracho cross-check)",
+      status: "warn",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: anomalyLines,
+    });
+  } else {
+    console.log(`[cluster-daily] step 11: ${supervision.detail}`);
+    // Nessuna anomalia in questa ronda: risolve un eventuale alert attivo
+    // lasciato da una ronda precedente.
+    const { clearSupervisionAlertState } = await import("@workspace/horus");
+    clearSupervisionAlertState();
+    report.addStep({
+      step: 11,
+      name: "semantic supervision (Quebracho cross-check)",
+      status: "ok",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [],
+    });
+  }
+}
+
 // ── Scrivi il report ─────────────────────────────────────────────────────────
 
 const reportData = report.write();

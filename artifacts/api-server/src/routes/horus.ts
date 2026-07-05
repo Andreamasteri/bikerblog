@@ -22,6 +22,7 @@ import {
   QUEBRACHO_AGENT_NAME,
   QUEBRACHO_NICKNAME,
   loadActiveVramAlertPrompt,
+  loadActiveSupervisionAlertPrompt,
   recordLlmTrace,
   type HorusMessage,
   type HorusToolCall,
@@ -55,10 +56,12 @@ function requireHorusPassword(req: express.Request, res: express.Response): bool
 // comunque salvate nello storico/log a prescindere dai tool.
 function buildDirectChatSystemPrompt(agentName: string, personaNote?: string): HorusMessage {
   const vramAlert = loadActiveVramAlertPrompt();
+  const supervisionAlert = loadActiveSupervisionAlertPrompt();
   return {
     role: "system",
     content:
       (vramAlert ? `${vramAlert} ` : "") +
+      (supervisionAlert ? `${supervisionAlert} ` : "") +
       `Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. Ti chiami ${agentName}. ` +
       (personaNote ? `${personaNote} ` : "") +
       "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
@@ -1114,9 +1117,10 @@ function buildConvoSystemPrompt(opts: {
         `portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello ` +
         `che ha detto ${previousSpeakerName}, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.`;
   const vramAlert = loadActiveVramAlertPrompt();
+  const supervisionAlert = loadActiveSupervisionAlertPrompt();
   return {
     role: "system",
-    content: `${vramAlert ? `${vramAlert} ` : ""}${intro}${personaNote ? ` ${personaNote}` : ""} ${body}${brevity}${toolsNote}`,
+    content: `${vramAlert ? `${vramAlert} ` : ""}${supervisionAlert ? `${supervisionAlert} ` : ""}${intro}${personaNote ? ` ${personaNote}` : ""} ${body}${brevity}${toolsNote}`,
   };
 }
 

@@ -43,6 +43,15 @@ export {
 } from "./vram-alert.js";
 
 export {
+  loadSupervisionAlertState,
+  writeSupervisionAlertState,
+  clearSupervisionAlertState,
+  loadActiveSupervisionAlertPrompt,
+  type SupervisionAlertState,
+  type SupervisionAnomalyRecord,
+} from "./supervision-alert.js";
+
+export {
   recordLlmTrace,
   traceExcerpt,
   type LlmTraceInput,
