@@ -139,17 +139,22 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 <!-- AUTO-CHANGELOG:START -->
 ### 5 luglio 2026
 
+**Task completati:**
+
+- **Task #195** — Manuali BikerLink generati da Horus e Quebracho <!-- cc14724 -->
+  - _In parole semplici:_ I manuali di BikerLink sono stati generati dai motori linguistici Horus e Quebracho
+
 **Altre modifiche:**
 
-- **00:26** · Saved your changes before starting work <!-- 35f162c -->
-  - _In parole semplici:_ Abbiamo salvato le tue modifiche prima di iniziare il lavoro
+- **00:35** · Integrate Quebracho as a new AI assistant and improve existing agent capabilities <!-- 61927cd -->
+  - _In parole semplici:_ Abbiamo integrato un nuovo assistente intelligente chiamato Quebracho e migliorato le capacità del nostro agente esistente.
 
 ### 4 luglio 2026
 
 **Task completati:**
 
 - **Task #191** — Import BikerLink manuals (Nadir + local archive) <!-- e62a1f5 -->
-  - _In parole semplici:_ Abbiamo importato i manuali di BikerLink in modo da fornire informazioni utili agli utenti.
+  - _In parole semplici:_ Abbiamo importato i manuali di BikerLink in modo che gli utenti possano consultarli facilmente all'interno dell'app.
 - **Task #188** — Mostra sempre "Riprova" quando l'agente va in timeout (chat diretta) <!-- 867a3a2 -->
   - _In parole semplici:_ In caso di timeout durante una chat diretta, l'app mostrerà sempre la scritta "Riprova".
 - **Task #184** — Type health-status mocks against HealthResult <!-- 26f3fe8 -->
@@ -174,17 +179,17 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 - **21:45** · Add file management tools for inter-agent collaboration <!-- 8ce47af -->
   - _In parole semplici:_ Aggiunto strumenti di gestione dei file per collaborare tra gli agenti
 - **21:30** · Update the project's open graph image for the blog <!-- 570b17a -->
-  - _In parole semplici:_ Abbiamo aggiornato l'immagine dell'open graph per il nostro blog
+  - _In parole semplici:_ Abbiamo aggiornato l'immagine dell'open graph per il nostro blog.
 - **21:02** · Document the current state of the Bowie chat feature <!-- 1c6a254 -->
-  - _In parole semplici:_ Abbiamo documentato lo stato attuale della funzione di chat Bowie.
+  - _In parole semplici:_ Abbiamo registrato lo stato attuale della funzione di chat Bowie.
 - **21:00** · Make NVIDIA GPU persistence mode survive reboots automatically <!-- 5900a0a -->
-  - _In parole semplici:_ Abbiamo migliorato il modo in cui l'app utilizza la modalità di persistenza della GPU NVIDIA per farla sopravvivere ai riavvii automatici.
+  - _In parole semplici:_ Abbiamo migliorato il modo in cui l'app utilizza le GPU NVIDIA per garantire che la modalità di persistenza sopravviva ai riavvii automatici.
 - **20:54** · Update project memory to reflect GPU resolution of latency issues <!-- 4975ed0 -->
   - _In parole semplici:_ Abbiamo migliorato il modo in cui l'app gestisce le problematiche di latenza legate alla risoluzione della GPU.
 - **20:54** · Update memory to reflect GPU acceleration for faster responses <!-- 2a47ee2 -->
-  - _In parole semplici:_ Abbiamo migliorato le prestazioni dell'app per offrirti risposte più veloci grazie all'utilizzo della tua scheda grafica.
+  - _In parole semplici:_ Aggiornamento memoria per utilizzare l'accelerazione della GPU e migliorare le prestazioni dell'app
 - **20:18** · Add direct SSH access to user's TC box via Cloudflare tunnel <!-- 882c6fb -->
-  - _In parole semplici:_ Aggiunta dell'accesso diretto SSH alla scatola TC dell'utente tramite il tunnel di Cloudflare
+  - _In parole semplici:_ Aggiunta dell'accesso SSH diretto alla scatola di traffico dell'utente tramite il tunnel Cloudflare.
 - **20:16** · Saved progress at the end of the loop <!-- ce5c697 -->
   - _In parole semplici:_ Salva il progresso alla fine di ogni ciclo.
 - **20:13** · Update the website's social sharing image <!-- d16a1cb -->
