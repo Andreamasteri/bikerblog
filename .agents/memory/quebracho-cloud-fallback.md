@@ -50,8 +50,25 @@ consumer that needs tool-calling still needs the TC path to be up.
 ## Verification scope note
 
 Resilience is verified with deterministic unit tests that mock `fetch` to simulate an unreachable TC (see
-`lib/horus/src/client.test.ts`). A live "cold" test against the real TC being down was intentionally **not**
-performed automatically — it would require touching the `QUEBRACHO_OLLAMA_URL`/`HORUS_OLLAMA_URL` env vars
-shared with Horus/Bowie in the live environment, which risks interrupting real chat traffic without direct
-user coordination. Treat that as a joint verification to do together with the user, same session as any
-Deliverable A (on-demand coder) work.
+`lib/horus/src/client.test.ts`).
+
+## Live cold test result
+
+The joint live "cold" test was performed. Isolation trick: point **only** Quebracho at a dead endpoint via
+its dedicated `QUEBRACHO_OLLAMA_URL` (Horus/Bowie stay on `HORUS_OLLAMA_URL`/`BOWIE_OLLAMA_URL`), so the live
+chat is never touched — no need to take the real TC offline or change the shared var.
+
+Outcome:
+- **Routing, isolation, auto-recovery: correct.** TC down → wrapper takes the cloud path; next call with the
+  real URL → answers from TC again with no manual reset; Horus/Bowie chat unaffected throughout.
+- **The cloud answer itself failed:** `qwen/qwen3-coder:free` returned a **persistent** `429 Provider returned
+  error` (stable across several retries over ~40s), i.e. the free tier was throttled, so when TC is down the
+  fallback produced *no answer at all*.
+
+**Why it matters:** the mocked unit tests can't catch this — they simulate a *successful* cloud response. An
+OpenRouter `:free` model is not a reliable last resort (free models share an account-wide daily cap), so the
+fallback can be unavailable exactly when it's needed.
+
+**How to apply:** if fallback reliability matters, don't depend on a single `:free` model — either use a
+paid/low-cost OpenRouter model as the true last resort, or try a short chain of `:free` models in order.
+This is a product/cost decision, not a silent code change — confirm with the user before implementing.
