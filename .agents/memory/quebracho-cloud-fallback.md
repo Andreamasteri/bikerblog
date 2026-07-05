@@ -32,6 +32,13 @@ agent/model actually produced this reply") harder to trace? If yes, write the sw
   `scripts/src/generate-bikerlink-manuals.ts`, which does an explicit TC-vs-something A/B comparison and must
   never silently go through the cloud path.
 
+**Gotcha — `!options.tools` vs empty array:** the real chat route always passes a `tools` array (possibly
+`[]` when no tool matched the message), never `undefined`. A gate written as `!options.tools` treats `[]` as
+truthy and disables the cloud fallback for essentially every real conversational message, silently defeating
+Deliverable B in production while every unit test (which called the function without `options.tools` at all)
+still passed. The gate must check `!options.tools || options.tools.length === 0`. Any future "no tools
+requested" check on this codebase should assume callers pass `[]`, not omit the field.
+
 ## Scope limit: text-only, no tool-call parity
 
 The cloud fallback is deliberately **not** tool-capable. Ollama's `tool_calls`/tool-result message shape and

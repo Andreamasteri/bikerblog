@@ -709,7 +709,7 @@ export async function quebrachoChatRawResilient(
   messages: HorusMessage[],
   options: HorusChatOptions = {}
 ): Promise<HorusRawResult> {
-  const canUseCloud = !options.tools && isQuebrachoCloudFallbackConfigured();
+  const canUseCloud = (!options.tools || options.tools.length === 0) && isQuebrachoCloudFallbackConfigured();
 
   const health = await checkQuebrachoHealth();
   if (health.status === "ok") {

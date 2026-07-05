@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test, mock } from "node:test";
+import { test } from "node:test";
 import { createOllamaAgentClient, quebrachoChatRawResilient } from "./client.js";
 
 /**
@@ -149,7 +149,7 @@ test("quebrachoChatRawResilient uses the cloud fallback when TC is not configure
     yield { choices: [{ delta: { content: "dal cloud" } }] };
   }
   let createCalledWithModel: string | undefined;
-  mock.module("@workspace/integrations-openrouter-ai", {
+  t.mock.module("@workspace/integrations-openrouter-ai", {
     namedExports: {
       openrouter: {
         chat: {
@@ -168,6 +168,40 @@ test("quebrachoChatRawResilient uses the cloud fallback when TC is not configure
   assert.equal(result.content, "risposta dal cloud");
   assert.deepEqual(result.toolCalls, []);
   assert.equal(createCalledWithModel, "qwen/qwen3-coder:free");
+});
+
+test("quebrachoChatRawResilient uses the cloud fallback when options.tools is an empty array (real chat route shape)", async (t) => {
+  // Regressione: la route reale (runChatTurn in artifacts/api-server) passa
+  // sempre `tools: await getHorusTools(message)`, che per i messaggi senza
+  // tool pertinenti è `[]` (array vuoto), non `undefined`. Un controllo tipo
+  // `!options.tools` tratterebbe `[]` come "richiesti dei tool" perché un
+  // array è sempre truthy, disabilitando il fallback cloud nel percorso di
+  // chat reale — questo test lo blocca.
+  process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL = "https://openrouter.example.test";
+  process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY = "test-key";
+  t.after(() => {
+    delete process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL;
+    delete process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY;
+  });
+  mockFetchUnreachable(t);
+
+  async function* fakeStream() {
+    yield { choices: [{ delta: { content: "risposta dal cloud" } }] };
+  }
+  t.mock.module("@workspace/integrations-openrouter-ai", {
+    namedExports: {
+      openrouter: {
+        chat: {
+          completions: {
+            create: async () => fakeStream(),
+          },
+        },
+      },
+    },
+  });
+
+  const result = await quebrachoChatRawResilient([{ role: "user", content: "ciao" }], { tools: [] });
+  assert.equal(result.content, "risposta dal cloud");
 });
 
 test("quebrachoChatRawResilient does NOT use the cloud fallback when tools are requested (no tool-call parity)", async (t) => {
