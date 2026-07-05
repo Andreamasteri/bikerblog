@@ -47,3 +47,19 @@ custom, currently 3.7.x) to avoid tile-format incompatibility. If you rebuild th
 image from a newer master first, rebuild tiles with that same new image, then
 swap — and always verify `/status` + a sample route on the restarted serve BEFORE
 deleting the old graph, so a bad graph can be rolled back.
+
+## Swap mechanics confirmed (2026-07-05)
+
+The serve container's `tile_dir` (a docker volume) is essentially empty (4KB) —
+serve actually reads from `tile_extract` (the tar) only. So the swap is just:
+rename old `infra/self-host/data/valhalla_tiles.tar` to `.bak`, copy the new tar
+in, `docker restart` the serve container (back to healthy in ~15s). `timezone`
+config path (`/custom_files/timezone_data/timezones.sqlite`) is a **separate**
+static/global file untouched by tile rebuilds — a build script bug that fails to
+write `timezones.sqlite` into the build workdir is a red herring, not a real
+blocker; don't waste time chasing it into the swap path.
+
+**Always baseline-test the OLD graph before restarting** — in this run the old
+95MB tar was already returning `"No suitable edges near location"` for a real
+Milan-area route (pre-existing production breakage, not caused by the rebuild).
+Without a pre-restart baseline you'd wrongly blame the new build for an old bug.
