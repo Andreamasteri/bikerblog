@@ -53,6 +53,8 @@ Short summaries below; full rationale/history lives in `.agents/memory/` topic f
 - **Bowie** is a second Ollama agent sharing Horus's tunnel/tool infrastructure via a parametric client. Details: `.agents/memory/bowie-second-agent.md`.
 - **Horus requires `stream: true`**: the Cloudflare Tunnel closes idle connections after ~100s, but full generations can take 300s+. Details: `.agents/memory/horus-integration.md`.
 - **Horus persistent memory**: `inbox/horus-memory.md` is auto-loaded as system context on every call; add notes with `pnpm --filter @workspace/scripts run horus:remember -- "nota"`.
+- **Lineup modelli TC (Fase 2c economy)**: Horus = `qwen3:4b`, Bowie = `qwen3:1.7b`, Nadir = `all-minilm` restano sempre residenti in VRAM sul TC; Quebracho = `granite4:tiny-h` gira su CPU+RAM (`OllamaAgentConfig.forceCpu`) per non contendersi la GPU con gli altri tre. Details: `.agents/memory/vram-4way-coexistence-limit.md`.
+- **Convenzione di naming**: ogni env var, tag modello, tunnel/Access app/service token Cloudflare porta un'etichetta leggibile col nome che usiamo (Horus/Bowie/Quebracho/Nadir/Whisper) — mai etichette criptiche. Schema completo: `.agents/memory/naming-convention-agents-infra.md`.
 
 ## Product
 

@@ -139,16 +139,19 @@
 
 ## H. Eviction VRAM — NON è un comportamento da preservare
 
-- [ ] **H1 — `evictOthersBeforeRun` (solo Horus) NON va portato sul nuovo
-  motore.** È un workaround per la dimensione di `bikerlink:latest` (~7GB su
-  GPU 8GB), non una specifica.
-- [ ] **H2 — DEFERITO per decisione utente (2026-07-05).** La convivenza VRAM
-  (Horus + Bowie + Quebracho + Nadir co-residenti) e l'eventuale modello più
-  piccolo per Horus sono rimandati **a task completato**. Nel frattempo Horus
-  resta caricato in RAM da solo e l'eviction resta attiva com'è, per non
-  rompere la chat. Questo è un **drift esplicito** rispetto al "Done looks
-  like" originale del task (che chiedeva i 3 co-residenti e l'eviction
-  rimossa): va registrato alla chiusura del task e ripreso dopo.
+- [x] **H1 — `evictOthersBeforeRun` (solo Horus) NON va portato sul nuovo
+  motore.** Era un workaround per la dimensione di `bikerlink:latest` (~7GB su
+  GPU 8GB), non una specifica. **Risolto (2026-07-05, Fase 2c):** rimosso da
+  `lib/horus/src/client.ts` insieme a `evictOtherResidentModels`.
+- [x] **H2 — RISOLTO (2026-07-05, decisione utente).** Nuovo lineup: Horus
+  (`qwen3:4b`) + Bowie (`qwen3:1.7b`) + Nadir (`all-minilm`) restano
+  co-residenti "Forever" in VRAM (~6.1GB/8.19GB, confermato via smoke-test).
+  Quebracho (`granite4:tiny-h`) gira su **CPU+RAM** invece che GPU
+  (`OllamaAgentConfig.forceCpu`, `options.num_gpu:0` per-richiesta — nessun
+  ripull necessario per rimetterlo su GPU in futuro). Con questo schema
+  nessun agente compete per VRAM con un altro, quindi nessun meccanismo di
+  eviction reciproca serve più. Dettagli:
+  `.agents/memory/vram-4way-coexistence-limit.md`.
 
 ---
 

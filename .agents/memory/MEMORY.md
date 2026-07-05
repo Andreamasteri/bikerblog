@@ -48,3 +48,5 @@
 - [TC direct SSH access](tc-ssh-access.md) — real shell on TC via `cloudflared access ssh` ProxyCommand; verify key fingerprints and user match, watch for flattened-newline paste corruption.
 - [Bowie chat known-good snapshot](bowie-chat-known-good-snapshot.md) — full file map of the working Bowie chat feature + checkpoint commit to restore from if it regresses/corrupts.
 - [Script top-level execution vs testability](script-module-cli-guard.md) — a script mixing exported pure functions with a top-level `main()` needs an `import.meta.url` guard or importing it for unit tests runs the real thing.
+- [Naming convention — agenti/infra](naming-convention-agents-infra.md) — readable-label scheme for env vars, Ollama tags, Cloudflare tunnel/Access/service-token names; apply to every new infra resource.
+- [Cloudflare token scope blocker](cloudflare-token-scope-blocker.md) — `CLOUDFLARE_API_TOKEN` is DNS-only (no account/Zero Trust access); blocks any Tunnel/Access-app/service-token automation via API until rescoped.

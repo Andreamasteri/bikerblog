@@ -22,6 +22,12 @@ The task's original success criterion ("Horus, Bowie, Quebracho e Nadir coesisto
 
 **How to apply:** before declaring Fase 2c "done", re-check this budget against whatever final model sizes get chosen, and get the trade-off decision documented explicitly (which agent doesn't get permanent residency) rather than silently declaring success against an infeasible bar.
 
+## Final decision (2026-07-05, user-approved)
+
+Horus (`qwen3:4b`) + Bowie (`qwen3:1.7b`) + Nadir (`all-minilm`) stay resident "Forever" in VRAM (~6.1GB of 8.19GB, comfortable headroom). Whisper (`bikerlink-whisper` Docker, faster_whisper/large-v2) is CPU-only already — no `--gpus` device request, confirmed via `docker inspect`, so it never competes for VRAM at all.
+
+Quebracho (`granite4:tiny-h`) runs on **CPU+RAM instead of GPU**, forced via the Ollama request option `"options": {"num_gpu": 0}` (confirmed working: loads in ~3.1s, 4.5GB RAM, 100% CPU, correct output). This is a per-request option, not a model-level pin — so the same model can be moved back to GPU at any time by omitting/changing the option, with no re-pull needed. Keep this switch easily reachable (config flag) since the user said they may want Quebracho back on GPU later.
+
 ## Related: apparent "hang" during model swap was probably a tunnel/SSH artifact, not an Ollama bug
 
 While bikerlink:latest was resident (8.6GB), attempting to load qwen3:4b via both a backgrounded curl and `ollama run` appeared to hang indefinitely with zero GPU utilization and no corresponding request in `journalctl -u ollama`. But when checked later (after unrelated activity), the swap had actually completed successfully in the background. Likely cause: the `cloudflared access ssh` ProxyCommand connection itself has an idle-connection ceiling similar to the documented ~100s Cloudflare Tunnel HTTP idle-close (see `horus-integration.md`), unrelated to Ollama. **Reliable pattern**: call `ollama stop <model>` explicitly and poll `ollama ps`/`nvidia-smi` until VRAM is confirmed freed before loading the next model, rather than relying on implicit swap-on-demand within a single time-boxed SSH call.
