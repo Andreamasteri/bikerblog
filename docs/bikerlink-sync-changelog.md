@@ -148,6 +148,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **07:36** · Fase 2e (POWER): Whisper STT + route-planning tools per Horus/Bowie <!-- 565340e -->
+- **07:05** · Add new tools for geocoding, routing, and speech-to-text transcription <!-- 30a63b3 -->
 - **06:36** · Update task completion documentation with new tasks and changes <!-- fc2c32e -->
 - **05:42** · Update documentation to reflect recent AI model and service changes <!-- e9b65d3 -->
 - **05:35** · Update models and labels for improved AI content generation <!-- bc3a407 -->
