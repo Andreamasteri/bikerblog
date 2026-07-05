@@ -693,6 +693,9 @@ importers:
 
   lib/horus:
     dependencies:
+      '@workspace/db':
+        specifier: workspace:*
+        version: link:../db
       '@workspace/integrations-openrouter-ai':
         specifier: workspace:*
         version: link:../integrations-openrouter-ai

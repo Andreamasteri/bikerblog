@@ -27,6 +27,7 @@ import {
   getHorusTools,
   executeHorusTool,
   capToolResult,
+  recordLlmTrace,
   type HorusMessage,
 } from "@workspace/horus";
 
@@ -161,6 +162,11 @@ async function main(): Promise<void> {
     activeRequestController = requestController;
 
     stdout.write("horus> ");
+    // Task #200: una traccia per l'intero turno (tutte le iterazioni del
+    // tool-loop di questo messaggio utente), coerente con lo schema
+    // `llm_traces` usato anche dalla web chat diretta.
+    const traceStartedAt = Date.now();
+    const traceToolNames: string[] = [];
     try {
       let finalReply = "";
       for (
@@ -194,6 +200,7 @@ async function main(): Promise<void> {
           if (requestController.signal.aborted) break;
 
           const toolName = call.function.name;
+          traceToolNames.push(toolName);
           stdout.write(`\n  ↳ [tool: ${toolName}(${JSON.stringify(call.function.arguments)})...] `);
 
           // Tool come architect possono girare per diversi minuti su
@@ -233,14 +240,41 @@ async function main(): Promise<void> {
         // Rimuove il messaggio utente del turno interrotto per non sporcare
         // la cronologia con una risposta parziale/mancante.
         history.pop();
+        void recordLlmTrace({
+          agent: "Horus",
+          surface: "direct_chat",
+          latencyMs: Date.now() - traceStartedAt,
+          toolsUsed: traceToolNames,
+          outcome: "error",
+          errorMessage: "user_aborted",
+          input: userInput,
+        });
       } else {
         stdout.write("\n\n");
         if (finalReply) {
           history.push({ role: "assistant", content: finalReply });
           await maybeAutoRemember(userInput, finalReply);
+          void recordLlmTrace({
+            agent: "Horus",
+            surface: "direct_chat",
+            latencyMs: Date.now() - traceStartedAt,
+            toolsUsed: traceToolNames,
+            outcome: "success",
+            input: userInput,
+            output: finalReply,
+          });
         } else {
           // Troppe iterazioni di tool senza risposta finale: evita di sporcare la cronologia.
           console.error("⚠ Troppe chiamate a tool senza risposta finale.\n");
+          void recordLlmTrace({
+            agent: "Horus",
+            surface: "direct_chat",
+            latencyMs: Date.now() - traceStartedAt,
+            toolsUsed: traceToolNames,
+            outcome: "error",
+            errorMessage: "too_many_tool_iterations",
+            input: userInput,
+          });
         }
       }
     } catch (err) {
@@ -253,6 +287,19 @@ async function main(): Promise<void> {
       }
       // Rimuove il messaggio utente fallito per non sporcare la cronologia.
       history.pop();
+      void recordLlmTrace({
+        agent: "Horus",
+        surface: "direct_chat",
+        latencyMs: Date.now() - traceStartedAt,
+        toolsUsed: traceToolNames,
+        outcome: "error",
+        errorMessage: requestController.signal.aborted
+          ? "user_aborted"
+          : err instanceof Error
+            ? err.message
+            : String(err),
+        input: userInput,
+      });
     } finally {
       activeRequestController = null;
     }

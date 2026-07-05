@@ -43,6 +43,13 @@
       "when": 1751673600000,
       "tag": "0005_add_horus_bowie_conversation_status",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780000000000,
+      "tag": "0006_add_llm_traces",
+      "breakpoints": true
     }
   ]
 }

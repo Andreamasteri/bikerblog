@@ -22,6 +22,7 @@ import {
   QUEBRACHO_AGENT_NAME,
   QUEBRACHO_NICKNAME,
   loadActiveVramAlertPrompt,
+  recordLlmTrace,
   type HorusMessage,
   type HorusToolCall,
   type HorusToolSpec,
@@ -395,6 +396,8 @@ export interface DirectChatAgentConfig {
 interface ChatTurnResult {
   finalReply: string;
   usedTools: boolean;
+  /** Nomi dei tool effettivamente eseguiti in questo turno, in ordine (Task #200 — tracing). */
+  toolNames: string[];
   /** Nome del tool che il modello ha dichiarato mancante (Task #179), se il
    * sentinel `[TOOL_MANCANTE: ...]` è stato intercettato in questo turno. */
   missingTool?: string;
@@ -426,6 +429,7 @@ async function runChatTurn(
   let usedTools = false;
   let finalReply = "";
   let missingTool: string | undefined;
+  const toolNames: string[] = [];
   // Budget TOTALE di testo dei risultati-tool reinserito nel prompt in questo
   // turno (vedi MAX_TOTAL_TOOL_RESULT_CHARS): si accumula tra tutte le
   // iterazioni e i tool di QUESTA chiamata a runChatTurn. Un'eventuale riprova
@@ -474,6 +478,7 @@ async function runChatTurn(
         if (abortController.signal.aborted) break;
 
         const toolName = call.function.name;
+        toolNames.push(toolName);
         sendEvent(res, "tool_call", { name: toolName });
 
         const toolStartedAt = Date.now();
@@ -569,7 +574,7 @@ async function runChatTurn(
     }
   }
 
-  return { finalReply, usedTools, missingTool };
+  return { finalReply, usedTools, toolNames, missingTool };
 }
 
 // Cache best-effort delle risposte complete della chat diretta (Task #185).
@@ -742,12 +747,20 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     const abortController = new AbortController();
     res.on("close", () => abortController.abort());
 
+    // Task #200: una traccia per l'intero turno (tutte le iterazioni del
+    // tool-loop, inclusa un'eventuale riprova con tool estesi), non una per
+    // singola chiamata al modello — così una riga per turno resta coerente
+    // con lo schema `llm_traces` (agente + input/output del turno).
+    const traceStartedAt = Date.now();
+    const traceToolNames: string[] = [];
+
     try {
       // Task #178: allega solo il sottoinsieme di tool pertinente al messaggio
       // dell'utente (o nessun tool per un messaggio conversazionale), così il
       // prefill su CPU resta minimo e "Ciao" non scade sul tunnel Cloudflare.
       const tools = await getHorusTools(message);
       const primary = await runChatTurn(req, res, config, abortController, message, conversation, tools, true);
+      traceToolNames.push(...primary.toolNames);
       let finalReply = primary.finalReply;
       let usedTools = primary.usedTools;
 
@@ -775,6 +788,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
           broadenedTools,
           false
         );
+        traceToolNames.push(...escalated.toolNames);
         finalReply = escalated.finalReply;
         usedTools = escalated.usedTools;
       }
@@ -792,6 +806,16 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
       if (abortController.signal.aborted) {
         // Connessione già chiusa dal client: non ha senso scrivere altro sullo
         // stream (fallirebbe comunque).
+        void recordLlmTrace({
+          agent: config.agentName,
+          surface: "direct_chat",
+          latencyMs: Date.now() - traceStartedAt,
+          toolsUsed: traceToolNames,
+          outcome: "error",
+          errorMessage: "client_aborted",
+          input: message,
+          output: finalContent || undefined,
+        });
       } else if (!finalContent) {
         // Risposta vuota: rimandare la STESSA richiesta darebbe di nuovo vuoto.
         // recoverable: false → il client non offre "Riprova" (il messaggio
@@ -800,8 +824,26 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
           message: `${config.agentName} non ha restituito una risposta. Riprova con un'altra domanda.`,
           recoverable: false,
         });
+        void recordLlmTrace({
+          agent: config.agentName,
+          surface: "direct_chat",
+          latencyMs: Date.now() - traceStartedAt,
+          toolsUsed: traceToolNames,
+          outcome: "error",
+          errorMessage: "empty_reply",
+          input: message,
+        });
       } else {
         sendEvent(res, "done", { content: finalContent });
+        void recordLlmTrace({
+          agent: config.agentName,
+          surface: "direct_chat",
+          latencyMs: Date.now() - traceStartedAt,
+          toolsUsed: traceToolNames,
+          outcome: "success",
+          input: message,
+          output: finalContent,
+        });
       }
     } catch (err) {
       if (!abortController.signal.aborted) {
@@ -816,6 +858,15 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
           recoverable: true,
         });
       }
+      void recordLlmTrace({
+        agent: config.agentName,
+        surface: "direct_chat",
+        latencyMs: Date.now() - traceStartedAt,
+        toolsUsed: traceToolNames,
+        outcome: "error",
+        errorMessage: err instanceof Error ? err.message : String(err),
+        input: message,
+      });
     } finally {
       clearInterval(heartbeat);
       res.end();
@@ -1394,6 +1445,7 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
           agent
         );
 
+        const turnStartedAt = Date.now();
         const { content } = await agentConfig.chatRaw(messages, {
           ...agentConfig.chatOptions,
           maxTokens: MAX_REPLY_TOKENS,
@@ -1406,6 +1458,18 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
         const finalContent = truncateReply(content, false) || "(nessuna risposta)";
         transcript.push({ agent, content: finalContent });
         sendEvent(res, "turn_end", { agent, content: finalContent });
+        // Task #200: nessun tool in questa modalità (conversationToolsNote lo
+        // dichiara esplicitamente al modello), quindi toolsUsed resta vuoto.
+        void recordLlmTrace({
+          agent: agentConfig.displayName,
+          surface: "agent_conversation",
+          conversationId: conversationId ?? null,
+          turnNumber: i + 1,
+          latencyMs: Date.now() - turnStartedAt,
+          outcome: "success",
+          input: topic,
+          output: finalContent,
+        });
       }
 
       if (!abortController.signal.aborted) {
@@ -1443,6 +1507,17 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
             req.log.error({ err: persistErr }, "failed to persist interrupted horus-bowie conversation");
           }
         }
+
+        void recordLlmTrace({
+          agent: failingAgent?.displayName ?? "unknown",
+          surface: "agent_conversation",
+          conversationId: savedConversationId ?? conversationId ?? null,
+          turnNumber: transcript.length + 1,
+          latencyMs: 0,
+          outcome: "error",
+          errorMessage: baseMessage,
+          input: topic,
+        });
 
         // Attribuiamo l'errore all'agente che stava rispondendo in quel
         // momento (non genericamente "la conversazione"): il client usa

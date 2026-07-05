@@ -9,5 +9,5 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "references": [{ "path": "../integrations-openrouter-ai" }]
+  "references": [{ "path": "../db" }, { "path": "../integrations-openrouter-ai" }]
 }

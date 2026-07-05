@@ -10,6 +10,7 @@
     "test": "node --experimental-test-module-mocks --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
+    "@workspace/db": "workspace:*",
     "@workspace/integrations-openrouter-ai": "workspace:*"
   },
   "devDependencies": {

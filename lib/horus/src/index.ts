@@ -41,3 +41,11 @@ export {
   loadActiveVramAlertPrompt,
   type VramAlertState,
 } from "./vram-alert.js";
+
+export {
+  recordLlmTrace,
+  traceExcerpt,
+  type LlmTraceInput,
+  type LlmTraceSurface,
+  type LlmTraceOutcome,
+} from "./tracing.js";
