@@ -44,6 +44,7 @@
 - [BikerLink user-identity investigation](bikerlink-user-identity-investigation.md) — BikerLink resolves AI Assistant identity server-side from session (`sessionUser.id`), never client-sent; TC/Bowie side has no visibility into it yet.
 - [GitHub read subfolder traversal](horus-github-read-access.md) — github_read listing must show each entry's FULL path (not bare name) or the model re-requests a bare subfolder name and 404s, looking like it "can't go deeper".
 - [AI Hub shared files](ai-hub-shared-files.md) — cross-agent file tools on TC ("AI Hub", ex horus-hub); `AI_HUB_URL` canonical w/ `HORUS_HUB_URL` fallback; git push sandbox-blocked (GitHub Contents API); bash DNS to TC-tunnel hosts unreliable.
+- [VRAM 4-way coexistence limit](vram-4way-coexistence-limit.md) — Horus+Bowie+Quebracho+Nadir can't all stay resident "Forever" on TC's 8GB GPU with the economy lineup; needs an explicit trade-off decision, not silent success.
 - [TC direct SSH access](tc-ssh-access.md) — real shell on TC via `cloudflared access ssh` ProxyCommand; verify key fingerprints and user match, watch for flattened-newline paste corruption.
 - [Bowie chat known-good snapshot](bowie-chat-known-good-snapshot.md) — full file map of the working Bowie chat feature + checkpoint commit to restore from if it regresses/corrupts.
 - [Script top-level execution vs testability](script-module-cli-guard.md) — a script mixing exported pure functions with a top-level `main()` needs an `import.meta.url` guard or importing it for unit tests runs the real thing.
