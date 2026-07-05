@@ -49,14 +49,27 @@ domain suffix and fetched any URL, which the architect flagged as a blocking
 SSRF/credential-leak. If audio ever needs to come from another origin, add its
 exact host to the allowlist (and decide whether it needs CF creds).
 
-## Known broken: valhalla public ingress returns 502
+## Graphs/datasets not yet generated on TC — root cause of geo failures
 
-`valhalla.biker-link.net` returns **502** at the edge (Access passes, origin
-unreachable) even though `127.0.0.1:8002` on TC answers fine (container healthy,
-`/route` returns valid app-level responses locally). This is a **dashboard-side
-tunnel ingress misconfig** for that hostname — must be fixed by the user in
-Cloudflare Zero Trust → Tunnels (agent can't: DNS-only API token). Whisper and
-Nominatim ingress work.
+Live power-mode probe (2026-07-05) + user confirmation: **Valhalla and Nominatim
+error not because of code or Cloudflare ingress, but because their graphs/data
+have not been generated on TC yet.**
+
+- **Valhalla** → `/route` AND `/status` both return **502** at the edge (Access
+  passes, origin down): the container isn't serving because the **routing tiles
+  (graph) are missing**. It won't answer until tiles are built on TC.
+- **Nominatim** → reachable + authed (~0.5–1s) but loaded with only the
+  **Andorra sample extract**, not IT/EU: "Milano"/"Roma" match Andorran streets,
+  "Bormio"/"Stelvio" return 0 results, reverse-geocode of Italian coords returns
+  just "Italia". Geocoding-by-name is unusable until the correct OSM extract is
+  imported.
+- **Whisper** works end-to-end (verified live, ~9.2s on a short IT clip).
+
+**Why it matters:** don't re-diagnose this as a repo bug or a CF ingress
+misconfig. The BikerBlog code is correct and degrades with a clear error (no
+silent fallback). The fix is TC-side data provisioning (build Valhalla tiles,
+import the right Nominatim extract) — outside this repo and the agent's reach
+(DNS-only CF token). Re-run the geo end-to-end verification once graphs exist.
 
 ## Routing engine choice is open (Valhalla vs GraphHopper)
 
