@@ -274,12 +274,17 @@ test("getHorusTools returns only the base tools when the analysis/nadir/hub serv
   const originalToken = process.env["ANALYSIS_GATE_TOKEN"];
   const originalNadirUrl = process.env["NADIR_URL"];
   const originalNadirToken = process.env["NADIR_GATE_TOKEN"];
+  const originalAiHubUrl = process.env["AI_HUB_URL"];
   const originalHubUrl = process.env["HORUS_HUB_URL"];
   const originalHubToken = process.env["HUB_GATE_TOKEN"];
   delete process.env["HORUS_ANALYSIS_URL"];
   delete process.env["ANALYSIS_GATE_TOKEN"];
   delete process.env["NADIR_URL"];
   delete process.env["NADIR_GATE_TOKEN"];
+  // Il codice legge AI_HUB_URL (canonico) con fallback su HORUS_HUB_URL
+  // durante la transizione: per provare che i tool dell'hub NON vengono
+  // esposti quando l'hub non è configurato, vanno rimossi entrambi i nomi.
+  delete process.env["AI_HUB_URL"];
   delete process.env["HORUS_HUB_URL"];
   delete process.env["HUB_GATE_TOKEN"];
   t.after(() => {
@@ -287,6 +292,7 @@ test("getHorusTools returns only the base tools when the analysis/nadir/hub serv
     process.env["ANALYSIS_GATE_TOKEN"] = originalToken;
     process.env["NADIR_URL"] = originalNadirUrl;
     process.env["NADIR_GATE_TOKEN"] = originalNadirToken;
+    process.env["AI_HUB_URL"] = originalAiHubUrl;
     process.env["HORUS_HUB_URL"] = originalHubUrl;
     process.env["HUB_GATE_TOKEN"] = originalHubToken;
   });

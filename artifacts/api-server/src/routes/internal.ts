@@ -314,7 +314,7 @@ router.get(
   }),
 );
 
-// Riceve gli avvisi di congestione VRAM dal sampler su TC (deploy/horus-hub/
+// Riceve gli avvisi di congestione VRAM dal sampler su TC (deploy/ai-hub/
 // server.js, fuori da questo repo — Task #194). Riusa HUB_GATE_TOKEN, già
 // condiviso tra Replit e TC per gli altri endpoint dell'hub, invece di un
 // nuovo secret dedicato: TC chiama qui quando la soglia configurata viene

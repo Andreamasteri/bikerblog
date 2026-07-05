@@ -76,10 +76,10 @@
  *  - save_file, read_file, list_files — cartella condivisa su TC
  *                     ("agent-shared") accessibile a tutti gli agenti AI
  *                     (Horus, Bowie, futuri Ares/Nadir/Quebracho), servita dal
- *                     servizio horus-hub (repo GitHub "ai", versionato
+ *                     servizio AI Hub (repo GitHub "ai", versionato
  *                     indipendentemente). Path relativi alla root condivisa,
  *                     mai assoluti né con `..` (validato lato hub). Richiede
- *                     HORUS_HUB_URL + HUB_GATE_TOKEN; se non configurati,
+ *                     AI_HUB_URL + HUB_GATE_TOKEN; se non configurati,
  *                     questi tool non vengono esposti al modello.
  */
 
@@ -436,11 +436,11 @@ const NADIR_TOOL_SPECS: HorusToolSpec[] = [
   },
 ];
 
-// Cartella file condivisa su TC (horus-hub, deploy/horus-hub/), fase 1 della
+// Cartella file condivisa su TC (AI Hub, deploy/ai-hub/), fase 1 della
 // migrazione descritta in .agents/memory: uno spazio dove Horus, Bowie e
 // futuri agenti (Ares, Nadir, Quebracho) possono leggere/scrivere file
 // persistenti in comune, senza passare da Replit. Agnostico rispetto
-// all'agente, come search_manual. Richiede HORUS_HUB_URL + HUB_GATE_TOKEN; se
+// all'agente, come search_manual. Richiede AI_HUB_URL + HUB_GATE_TOKEN; se
 // non configurati, questi tool non vengono esposti al modello.
 const HUB_TOOL_SPECS: HorusToolSpec[] = [
   {
@@ -570,8 +570,17 @@ function isNadirConfigured(): boolean {
   return Boolean(process.env["NADIR_URL"] && process.env["NADIR_GATE_TOKEN"]);
 }
 
+// URL base del servizio AI Hub su TC. Nome canonico: AI_HUB_URL. Durante la
+// transizione senza downtime (Task #193) leggiamo ancora il vecchio nome
+// HORUS_HUB_URL come fallback, così il deploy resta funzionante prima/dopo che
+// il secret venga rinominato in entrambi gli ambienti. Rimuovere il fallback
+// una volta che AI_HUB_URL è impostato ovunque (dev + prod).
+function hubBaseUrl(): string | undefined {
+  return process.env["AI_HUB_URL"] ?? process.env["HORUS_HUB_URL"];
+}
+
 function isHubConfigured(): boolean {
-  return Boolean(process.env["HORUS_HUB_URL"] && process.env["HUB_GATE_TOKEN"]);
+  return Boolean(hubBaseUrl() && process.env["HUB_GATE_TOKEN"]);
 }
 
 // SONARQUBE_TOKEN vive solo lato servizio su TC — invisibile a Replit — quindi
@@ -1608,7 +1617,7 @@ interface HubListResponse {
 }
 
 /**
- * Chiama il servizio horus-hub su TC (deploy/horus-hub/) per leggere/scrivere
+ * Chiama il servizio AI Hub su TC (deploy/ai-hub/) per leggere/scrivere
  * nella cartella condivisa tra agenti. Come per callAnalysisService/
  * callNadirService, tutto l'I/O reale (filesystem) avviene su TC, mai su
  * Replit: qui inviamo solo la richiesta e riceviamo il risultato.
@@ -1621,7 +1630,7 @@ async function callHubService(
   const timeoutSignal = AbortSignal.timeout(30 * 1000);
   const combinedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal;
 
-  const baseUrl = process.env["HORUS_HUB_URL"] as string;
+  const baseUrl = hubBaseUrl() as string;
   const gateToken = process.env["HUB_GATE_TOKEN"] as string;
 
   let res: Response;
@@ -1647,7 +1656,7 @@ async function callHubService(
 
 async function saveFileTool(relPath: string, content: string, signal?: AbortSignal): Promise<string> {
   if (!isHubConfigured()) {
-    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+    return "Cartella condivisa su TC non configurata (AI_HUB_URL/HUB_GATE_TOKEN mancanti).";
   }
   if (!relPath.trim()) {
     return "Percorso file mancante.";
@@ -1675,7 +1684,7 @@ async function saveFileTool(relPath: string, content: string, signal?: AbortSign
 
 async function readFileTool(relPath: string, signal?: AbortSignal): Promise<string> {
   if (!isHubConfigured()) {
-    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+    return "Cartella condivisa su TC non configurata (AI_HUB_URL/HUB_GATE_TOKEN mancanti).";
   }
   if (!relPath.trim()) {
     return "Percorso file mancante.";
@@ -1699,7 +1708,7 @@ async function readFileTool(relPath: string, signal?: AbortSignal): Promise<stri
 
 async function listFilesTool(relPath: string, signal?: AbortSignal): Promise<string> {
   if (!isHubConfigured()) {
-    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+    return "Cartella condivisa su TC non configurata (AI_HUB_URL/HUB_GATE_TOKEN mancanti).";
   }
   try {
     const { ok, status, data } = await callHubService(
@@ -1741,7 +1750,7 @@ interface HubPdfWriteResponse {
 
 async function readPdfTool(relPath: string, signal?: AbortSignal): Promise<string> {
   if (!isHubConfigured()) {
-    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+    return "Cartella condivisa su TC non configurata (AI_HUB_URL/HUB_GATE_TOKEN mancanti).";
   }
   if (!relPath.trim()) {
     return "Percorso file PDF mancante.";
@@ -1771,7 +1780,7 @@ async function writePdfTool(
   signal?: AbortSignal
 ): Promise<string> {
   if (!isHubConfigured()) {
-    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+    return "Cartella condivisa su TC non configurata (AI_HUB_URL/HUB_GATE_TOKEN mancanti).";
   }
   if (!relPath.trim()) {
     return "Percorso file PDF mancante.";
@@ -1817,7 +1826,7 @@ interface HubVramResponse {
 
 async function checkVramUsageTool(signal?: AbortSignal): Promise<string> {
   if (!isHubConfigured()) {
-    return "Monitor VRAM su TC non configurato (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+    return "Monitor VRAM su TC non configurato (AI_HUB_URL/HUB_GATE_TOKEN mancanti).";
   }
   try {
     const { ok, status, data } = await callHubService("/vram", { method: "GET" }, signal);

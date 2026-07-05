@@ -1,6 +1,6 @@
 /**
  * Stato dell'allarme di congestione VRAM su TC (Task #194). Il campionatore
- * VRAM gira su TC (deploy/horus-hub/server.js, fuori da questo repo) e chiama
+ * VRAM gira su TC (deploy/ai-hub/server.js, fuori da questo repo) e chiama
  * `POST /_internal/vram-alert` sull'api-server quando la soglia configurabile
  * viene superata/rientra, gated dallo stesso `HUB_GATE_TOKEN` già condiviso
  * per gli altri tool dell'hub (nessun nuovo secret). Qui teniamo solo lo
