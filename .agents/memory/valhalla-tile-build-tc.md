@@ -63,3 +63,14 @@ blocker; don't waste time chasing it into the swap path.
 95MB tar was already returning `"No suitable edges near location"` for a real
 Milan-area route (pre-existing production breakage, not caused by the rebuild).
 Without a pre-restart baseline you'd wrongly blame the new build for an old bug.
+
+## Realistic build-time estimate (2026-07-05 run)
+
+A 34.7GB regional extract (`europe-ecuador.osm.pbf`, multi-country, not the
+whole planet) built end-to-end (`build_config` → `build_extract`) in **~1h48m**
+on TC's 16 threads. Don't default to "planet.pbf" style estimates (24-48h+) for
+a regional/multi-country extract — those figures come from full-OSM-planet
+builds (~80GB+), which is a very different scale. Time roughly tracks extract
+size and thread count, not a fixed multi-day floor. When estimating a future
+rebuild, scale from this data point (extract size ÷ 34.7GB × ~1h48m) rather than
+quoting a generic worst-case planet-scale number.
