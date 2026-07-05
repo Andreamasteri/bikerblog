@@ -146,6 +146,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **01:01** · Organize project documentation for better readability and maintenance <!-- 6e3778c -->
+  - _In parole semplici:_ Abbiamo organizzato la documentazione del progetto per renderla più leggibile e facile da mantenere
+- **00:38** · Update project changelog with recent task completions and improvements <!-- 1c6872e -->
+  - _In parole semplici:_ Aggiornamento del registro delle modifiche con i compiti recenti completati e miglioramenti
 - **00:35** · Integrate Quebracho as a new AI assistant and improve existing agent capabilities <!-- 61927cd -->
   - _In parole semplici:_ Abbiamo integrato un nuovo assistente intelligente chiamato Quebracho e migliorato le capacità del nostro agente esistente.
 
