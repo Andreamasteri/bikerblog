@@ -54,3 +54,4 @@
 - [Route planning deferred to BikerLink](route-planning-deferred-bikerlink.md) — combining GraphHopper+Valhalla(+telemetry+Nominatim) is intentionally NOT built here; BikerLink owns it. route_directions stays Valhalla-only. Confirm scope before building.
 - [Quebracho cloud fallback](quebracho-cloud-fallback.md) — LiteLLM rejected (hides "who answered" in an already-nontrivial tool loop); hand-written TC-first/cloud-fallback switch is text-only, no tool-call parity.
 - [LLM tracing schema](llm-tracing-schema.md) — `llm_traces` table records one row per tool-loop turn (not per model call); best-effort insert via lazy-loaded `@workspace/db` so a DB hiccup never breaks a chat turn.
+- [BikerLink TC clone refresh](bikerlink-tc-clone-refresh.md) — two unrelated bikerlink clones exist on TC (live-deploy vs analysis); analysis one self-refreshes per-call already; daily cron added since TC has no passwordless sudo for systemd.
