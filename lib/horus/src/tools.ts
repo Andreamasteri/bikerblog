@@ -81,6 +81,27 @@
  *                     mai assoluti né con `..` (validato lato hub). Richiede
  *                     AI_HUB_URL + HUB_GATE_TOKEN; se non configurati,
  *                     questi tool non vengono esposti al modello.
+ *  - geocode_place — geocoding diretto/inverso (nome luogo ⇄ coordinate) via
+ *                     Nominatim su TC. Sola lettura. Richiede NOMINATIM_URL; se
+ *                     non configurato, il tool non viene esposto (Fase 2e).
+ *  - route_directions — itinerario tra due punti (distanza, tempo, mezzo) via
+ *                     Valhalla su TC; `from`/`to` accettano "lat,lon" o nomi di
+ *                     luogo (geolocalizzati con Nominatim). Sola lettura.
+ *                     Richiede VALHALLA_URL; se non configurato, non compare.
+ *                     La ricerca del percorso resta comunque su BikerLink; qui
+ *                     Horus fa solo il calcolo puntuale di un tragitto (Fase 2e).
+ *  - transcribe_audio — speech-to-text via Whisper su TC. La lingua è SEMPRE
+ *                     quella del profilo utente (IT/EN), mai auto-detect (che a
+ *                     volte traduce invece di trascrivere); accuratezza sul
+ *                     dialetto non garantita. Richiede WHISPER_URL; se non
+ *                     configurato, non compare (Fase 2e).
+ *
+ * I tre tool geo/STT (Fase 2e) usano tcServiceAuthHeaders(): inviano un gate
+ * token per-servizio (X-<Servizio>-Gate-Token) se impostato E le credenziali
+ * Cloudflare Access se presenti, per essere robusti a entrambi gli schemi di
+ * protezione del TC. L'ossatura di route-planning "intelligente" (intento di
+ * viaggio + meteo via web_search + telemetria via read_file) è lasciata aperta
+ * finché non arriva il file di logica in studio dall'utente.
  */
 
 import type { HorusToolSpec } from "./client.js";
@@ -562,6 +583,112 @@ const HUB_TOOL_SPECS: HorusToolSpec[] = [
   },
 ];
 
+// --- Fase 2e (Task #198): tool geo/STT su TC ------------------------------
+// Tool ATOMICI: il modello li compone (geocode → route). L'ossatura di
+// route-planning "intelligente" (interpretare un intento di viaggio ed
+// arricchirlo con meteo via `web_search` e telemetria per-utente via `read_file`
+// dalla cartella condivisa) è lasciata deliberatamente APERTA finché non arriva
+// il file di logica ancora in studio dall'utente — non è un orchestratore qui.
+// La ricerca del percorso/itinerario resta comunque su BikerLink.
+const GEO_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "geocode_place",
+      description:
+        "Converte un luogo in coordinate geografiche (geocoding) o viceversa (reverse geocoding) usando Nominatim sul TC. " +
+        "Passa `query` con un nome di luogo/indirizzo per ottenere latitudine e longitudine, oppure `lat`+`lon` per ottenere " +
+        "l'indirizzo corrispondente. Usalo prima di route_directions quando hai nomi di luogo invece di coordinate. Sola lettura.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Nome del luogo o indirizzo da geolocalizzare (es. \"Passo dello Stelvio\"). Ometti se usi lat/lon.",
+          },
+          lat: { type: "number", description: "Latitudine per il reverse geocoding (richiede anche lon)." },
+          lon: { type: "number", description: "Longitudine per il reverse geocoding (richiede anche lat)." },
+          language: {
+            type: "string",
+            description: "Lingua dei risultati (\"it\" o \"en\"). Default: it.",
+            enum: ["it", "en"],
+          },
+          limit: {
+            type: "number",
+            description: "Numero massimo di risultati per il geocoding diretto (default 5, max 10).",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+];
+
+const ROUTE_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "route_directions",
+      description:
+        "Calcola un itinerario tra due punti usando Valhalla sul TC: distanza, tempo stimato e mezzo. `from` e `to` possono " +
+        "essere coordinate \"lat,lon\" oppure nomi di luogo (in tal caso vengono geolocalizzati con Nominatim). `costing` sceglie " +
+        "il mezzo (default \"motorcycle\", coerente con un blog di moto). Sola lettura: non prenota né salva nulla.",
+      parameters: {
+        type: "object",
+        properties: {
+          from: { type: "string", description: "Punto di partenza: \"lat,lon\" oppure nome di luogo." },
+          to: { type: "string", description: "Punto di arrivo: \"lat,lon\" oppure nome di luogo." },
+          costing: {
+            type: "string",
+            description: "Mezzo di trasporto. Default: motorcycle.",
+            enum: ["motorcycle", "auto", "bicycle", "pedestrian"],
+          },
+          language: {
+            type: "string",
+            description: "Lingua delle indicazioni (\"it\" o \"en\"). Default: it.",
+            enum: ["it", "en"],
+          },
+        },
+        required: ["from", "to"],
+      },
+    },
+  },
+];
+
+// Whisper STT su TC: trascrive audio→testo nella lingua del PROFILO utente
+// (IT/EN), MAI auto-detect — l'auto-detect di Whisper a volte traduce invece di
+// trascrivere. Rischio dialetto documentato nella descrizione: l'accuratezza sul
+// parlato dialettale non è garantita a prescindere dalla lingua impostata.
+const WHISPER_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "transcribe_audio",
+      description:
+        "Trascrive un file audio in testo (speech-to-text) usando Whisper sul TC. La lingua DEVE essere quella del profilo " +
+        "dell'utente (\"it\" o \"en\"): non usare l'auto-detect, che a volte traduce invece di trascrivere. Passa l'audio come " +
+        "`audioUrl` (URL) oppure `audioPath` (file nella cartella condivisa su TC). Nota: l'accuratezza sul parlato in dialetto " +
+        "non è garantita, indipendentemente dalla lingua impostata.",
+      parameters: {
+        type: "object",
+        properties: {
+          audioUrl: { type: "string", description: "URL dell'audio da trascrivere. Alternativo a audioPath." },
+          audioPath: {
+            type: "string",
+            description: "Percorso del file audio nella cartella condivisa su TC. Alternativo a audioUrl.",
+          },
+          language: {
+            type: "string",
+            description: "Lingua del parlato dal profilo utente (\"it\" o \"en\"). Obbligatoria: niente auto-detect.",
+            enum: ["it", "en"],
+          },
+        },
+        required: ["language"],
+      },
+    },
+  },
+];
+
 function isAnalysisServiceConfigured(): boolean {
   return Boolean(process.env["HORUS_ANALYSIS_URL"] && process.env["ANALYSIS_GATE_TOKEN"]);
 }
@@ -579,6 +706,58 @@ function hubBaseUrl(): string | undefined {
 
 function isHubConfigured(): boolean {
   return Boolean(hubBaseUrl() && process.env["HUB_GATE_TOKEN"]);
+}
+
+// --- Fase 2e (Task #198): servizi geo/STT su TC (Nominatim/Valhalla/Whisper) ---
+// Gating solo sulla presenza dell'URL (stesso spirito di AI_HUB/Nadir): il gate
+// token per-servizio è opzionale perché questi endpoint possono stare dietro un
+// gate nginx *oppure* dietro una Cloudflare Access application (vedi
+// tcServiceAuthHeaders). Se l'URL non è impostato, i relativi tool non vengono
+// esposti al modello.
+function nominatimBaseUrl(): string | undefined {
+  return process.env["NOMINATIM_URL"]?.trim() || undefined;
+}
+function isNominatimConfigured(): boolean {
+  return Boolean(nominatimBaseUrl());
+}
+function valhallaBaseUrl(): string | undefined {
+  return process.env["VALHALLA_URL"]?.trim() || undefined;
+}
+function isValhallaConfigured(): boolean {
+  return Boolean(valhallaBaseUrl());
+}
+function whisperBaseUrl(): string | undefined {
+  return process.env["WHISPER_URL"]?.trim() || undefined;
+}
+function isWhisperConfigured(): boolean {
+  return Boolean(whisperBaseUrl());
+}
+
+/**
+ * Header di autenticazione per i servizi HTTP su TC introdotti in Fase 2e
+ * (Whisper/Valhalla/Nominatim). Questi hostname stanno dietro lo stesso tunnel
+ * Cloudflare degli altri servizi TC, ma non è garantito quale schema di
+ * protezione usino, quindi inviamo entrambi quando disponibili:
+ *  - un gate token per-servizio (header nginx `X-<Servizio>-Gate-Token`) se
+ *    l'endpoint è protetto da un gate nginx (stesso schema di Nadir/Hub/SearXNG);
+ *  - le credenziali Cloudflare Access (CF-Access-Client-Id/Secret) se presenti,
+ *    nel caso l'endpoint sia protetto da un'Access application (come Ollama).
+ * Inviare entrambi è innocuo e rende i tool robusti a qualunque dei due schemi
+ * il TC adotti per questi endpoint (verificato dal vivo in modalità POWER).
+ */
+function tcServiceAuthHeaders(
+  gateTokenHeader: string,
+  gateToken: string | undefined
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (gateToken && gateToken.trim()) headers[gateTokenHeader] = gateToken.trim();
+  const cfId = process.env["CF_ACCESS_CLIENT_ID"];
+  const cfSecret = process.env["CF_ACCESS_CLIENT_SECRET"];
+  if (cfId && cfSecret) {
+    headers["CF-Access-Client-Id"] = cfId;
+    headers["CF-Access-Client-Secret"] = cfSecret;
+  }
+  return headers;
 }
 
 // SONARQUBE_TOKEN vive solo lato servizio su TC — invisibile a Replit — quindi
@@ -745,6 +924,28 @@ export function selectRelevantTools(
     wanted.add("check_vram_usage");
   }
 
+  // geocode_place — geolocalizzazione di un luogo/indirizzo (Fase 2e).
+  if (has(/geocod|coordinat|latitudin|longitudin|indirizzo|localizz|dov'?è (che )?si trova/)) {
+    wanted.add("geocode_place");
+  }
+
+  // route_directions — itinerari/distanze tra due punti (Fase 2e).
+  if (
+    has(
+      /percors|itinerar|come (ci )?(arrivo|si arriva|arrivare)|come raggiung|strada per|\broute\b|tragitto|quanto dista|distanza (da|tra|fra)|quanti km|quanto (ci )?(vuole|metto|si mette)|in quanto tempo/
+    )
+  ) {
+    wanted.add("route_directions");
+    // per i nomi di luogo, route_directions geolocalizza via Nominatim: rendi
+    // disponibile anche geocode_place così il modello può separare i due passi.
+    wanted.add("geocode_place");
+  }
+
+  // transcribe_audio — speech-to-text (Fase 2e).
+  if (has(/trascriv|trascrizion|speech.?to.?text|\bstt\b|audio in testo|sbobin|da audio a testo/)) {
+    wanted.add("transcribe_audio");
+  }
+
   if (wanted.size === 0) return [];
   return available.filter((tool) => wanted.has(tool.function.name));
 }
@@ -772,9 +973,21 @@ export async function getHorusTools(message?: string): Promise<HorusToolSpec[]> 
   const nadirTools = isNadirConfigured() ? NADIR_TOOL_SPECS : [];
   const analysisCandidates = isAnalysisServiceConfigured() ? ANALYSIS_TOOL_SPECS : [];
   const hubTools = isHubConfigured() ? HUB_TOOL_SPECS : [];
+  // Fase 2e (Task #198): geo/STT su TC, gated sulla presenza del rispettivo URL.
+  const geoTools = isNominatimConfigured() ? GEO_TOOL_SPECS : [];
+  const routeTools = isValhallaConfigured() ? ROUTE_TOOL_SPECS : [];
+  const whisperTools = isWhisperConfigured() ? WHISPER_TOOL_SPECS : [];
 
   // Insieme candidato PRIMA del capability-check live di sonar_scan.
-  const candidates = [...BASE_HORUS_TOOLS, ...nadirTools, ...analysisCandidates, ...hubTools];
+  const candidates = [
+    ...BASE_HORUS_TOOLS,
+    ...nadirTools,
+    ...analysisCandidates,
+    ...hubTools,
+    ...geoTools,
+    ...routeTools,
+    ...whisperTools,
+  ];
   const contextual = message === undefined ? candidates : selectRelevantTools(message, candidates);
 
   // sonar_scan richiede un capability-check live (il token vive solo su TC):
@@ -1860,6 +2073,227 @@ async function checkVramUsageTool(signal?: AbortSignal): Promise<string> {
   }
 }
 
+// --- Fase 2e (Task #198): geocoding (Nominatim), routing (Valhalla), STT
+// (Whisper) su TC. Tutto l'I/O reale gira su TC, mai su Replit: qui inviamo
+// solo la richiesta e riceviamo il risultato, come per Nadir/Hub/Analysis. -----
+
+type GeoLang = "it" | "en";
+
+/** La lingua per geo/STT è quella del profilo utente (IT/EN). Qualsiasi cosa
+ * che inizi per "en" → inglese; tutto il resto → italiano (default). Per STT in
+ * particolare NON facciamo mai auto-detect: passiamo sempre una lingua esplicita. */
+function normalizeGeoLang(raw: unknown): GeoLang {
+  return String(raw ?? "").toLowerCase().startsWith("en") ? "en" : "it";
+}
+
+interface NominatimResult {
+  display_name?: string;
+  lat?: string;
+  lon?: string;
+  type?: string;
+}
+
+function nominatimHeaders(): Record<string, string> {
+  return {
+    Accept: "application/json",
+    "User-Agent": "HorusBot/1.0 (BikerBlog)",
+    ...tcServiceAuthHeaders("X-Nominatim-Gate-Token", process.env["NOMINATIM_GATE_TOKEN"]),
+  };
+}
+
+async function geocodePlaceTool(args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+  const baseUrl = nominatimBaseUrl();
+  if (!baseUrl) {
+    return "Servizio di geocoding Nominatim non configurato (NOMINATIM_URL mancante).";
+  }
+  const lang = normalizeGeoLang(args.language);
+  const timeoutSignal = AbortSignal.timeout(20 * 1000);
+  const combinedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal;
+  const base = baseUrl.replace(/\/$/, "");
+  const hasCoords = typeof args.lat === "number" && typeof args.lon === "number";
+  try {
+    if (hasCoords) {
+      const url = `${base}/reverse?lat=${args.lat}&lon=${args.lon}&format=jsonv2&accept-language=${lang}`;
+      const res = await fetch(url, { headers: nominatimHeaders(), signal: combinedSignal });
+      if (!res.ok) return `Nominatim ha risposto con errore (HTTP ${res.status}).`;
+      const data = (await res.json().catch(() => ({}))) as NominatimResult;
+      if (!data.display_name) return `Nessun indirizzo trovato per ${args.lat},${args.lon}.`;
+      return `${data.display_name} (lat ${data.lat}, lon ${data.lon}).`;
+    }
+    const query = String(args.query ?? "").trim();
+    if (!query) {
+      return "Specifica `query` (nome del luogo) oppure `lat`+`lon` per il reverse geocoding.";
+    }
+    const limit =
+      typeof args.limit === "number" ? Math.max(1, Math.min(10, Math.trunc(args.limit))) : 5;
+    const url = `${base}/search?q=${encodeURIComponent(query)}&format=jsonv2&limit=${limit}&accept-language=${lang}`;
+    const res = await fetch(url, { headers: nominatimHeaders(), signal: combinedSignal });
+    if (!res.ok) return `Nominatim ha risposto con errore (HTTP ${res.status}).`;
+    const data = (await res.json().catch(() => [])) as NominatimResult[];
+    if (!Array.isArray(data) || data.length === 0) {
+      return `Nessun risultato di geocoding per "${query}".`;
+    }
+    return data
+      .map(
+        (r, i) =>
+          `${i + 1}. ${r.display_name ?? "(senza nome)"} — lat ${r.lat}, lon ${r.lon}${r.type ? ` [${r.type}]` : ""}`
+      )
+      .join("\n");
+  } catch (err) {
+    if (signal?.aborted) return "Geocoding interrotto dall'utente.";
+    throw err;
+  }
+}
+
+/** Risolve un input "from"/"to" in coordinate: se è già "lat,lon" lo parsa,
+ * altrimenti lo geolocalizza con Nominatim (primo risultato). Restituisce un
+ * oggetto con `error` invece di lanciare, così route_directions può riportare un
+ * messaggio amichevole. */
+async function resolveToCoords(
+  input: string,
+  lang: GeoLang,
+  signal: AbortSignal | undefined
+): Promise<{ lat: number; lon: number } | { error: string }> {
+  const trimmed = input.trim();
+  const m = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if (m) return { lat: Number(m[1]), lon: Number(m[2]) };
+  const baseUrl = nominatimBaseUrl();
+  if (!baseUrl) {
+    return {
+      error: `"${trimmed}" non è in formato "lat,lon" e Nominatim non è configurato per geolocalizzarlo (NOMINATIM_URL mancante).`,
+    };
+  }
+  const url = `${baseUrl.replace(/\/$/, "")}/search?q=${encodeURIComponent(trimmed)}&format=jsonv2&limit=1&accept-language=${lang}`;
+  const res = await fetch(url, { headers: nominatimHeaders(), signal });
+  if (!res.ok) return { error: `geocoding di "${trimmed}" fallito (HTTP ${res.status}).` };
+  const data = (await res.json().catch(() => [])) as NominatimResult[];
+  const first = Array.isArray(data) ? data[0] : undefined;
+  if (!first?.lat || !first?.lon) return { error: `nessuna coordinata trovata per "${trimmed}".` };
+  return { lat: Number(first.lat), lon: Number(first.lon) };
+}
+
+interface ValhallaSummary {
+  length?: number;
+  time?: number;
+}
+interface ValhallaResponse {
+  trip?: { summary?: ValhallaSummary };
+  error?: string;
+}
+
+const VALHALLA_COSTING = new Set(["motorcycle", "auto", "bicycle", "pedestrian"]);
+const COSTING_LABEL: Record<string, string> = {
+  motorcycle: "in moto",
+  auto: "in auto",
+  bicycle: "in bici",
+  pedestrian: "a piedi",
+};
+
+async function routeDirectionsTool(args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+  const baseUrl = valhallaBaseUrl();
+  if (!baseUrl) return "Servizio di routing Valhalla non configurato (VALHALLA_URL mancante).";
+  const from = String(args.from ?? "").trim();
+  const to = String(args.to ?? "").trim();
+  if (!from || !to) {
+    return "Servono sia `from` sia `to` (coordinate \"lat,lon\" o nomi di luogo).";
+  }
+  const lang = normalizeGeoLang(args.language);
+  const costingRaw = String(args.costing ?? "motorcycle").toLowerCase();
+  const costing = VALHALLA_COSTING.has(costingRaw) ? costingRaw : "motorcycle";
+  const timeoutSignal = AbortSignal.timeout(30 * 1000);
+  const combinedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal;
+  try {
+    const fromCoords = await resolveToCoords(from, lang, combinedSignal);
+    if ("error" in fromCoords) return `Partenza: ${fromCoords.error}`;
+    const toCoords = await resolveToCoords(to, lang, combinedSignal);
+    if ("error" in toCoords) return `Arrivo: ${toCoords.error}`;
+
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/route`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...tcServiceAuthHeaders("X-Valhalla-Gate-Token", process.env["VALHALLA_GATE_TOKEN"]),
+      },
+      body: JSON.stringify({
+        locations: [
+          { lat: fromCoords.lat, lon: fromCoords.lon },
+          { lat: toCoords.lat, lon: toCoords.lon },
+        ],
+        costing,
+        directions_options: { units: "kilometers", language: lang === "en" ? "en-US" : "it-IT" },
+      }),
+      signal: combinedSignal,
+    });
+    const data = (await res.json().catch(() => ({}))) as ValhallaResponse;
+    if (!res.ok || data.error) {
+      return `Valhalla ha risposto con errore (HTTP ${res.status}): ${data.error ?? "errore sconosciuto"}.`;
+    }
+    const summary = data.trip?.summary;
+    if (!summary || typeof summary.length !== "number" || typeof summary.time !== "number") {
+      return "Valhalla non ha restituito un riepilogo di percorso valido.";
+    }
+    const km = summary.length.toFixed(1);
+    const mins = Math.round(summary.time / 60);
+    const hours = Math.floor(mins / 60);
+    const durationText = hours > 0 ? `${hours}h ${mins % 60}min` : `${mins}min`;
+    return (
+      `Percorso ${COSTING_LABEL[costing] ?? costing} da (${fromCoords.lat},${fromCoords.lon}) ` +
+      `a (${toCoords.lat},${toCoords.lon}): ${km} km, ~${durationText}.`
+    );
+  } catch (err) {
+    if (signal?.aborted) return "Calcolo del percorso interrotto dall'utente.";
+    throw err;
+  }
+}
+
+interface WhisperResponse {
+  text?: string;
+  error?: string;
+}
+
+async function transcribeAudioTool(args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+  const baseUrl = whisperBaseUrl();
+  if (!baseUrl) return "Servizio di trascrizione Whisper non configurato (WHISPER_URL mancante).";
+  const language = normalizeGeoLang(args.language);
+  const audioUrl = String(args.audioUrl ?? "").trim();
+  const audioPath = String(args.audioPath ?? "").trim();
+  if (!audioUrl && !audioPath) {
+    return "Specifica `audioUrl` (URL dell'audio) oppure `audioPath` (file nella cartella condivisa su TC).";
+  }
+  // Whisper può metterci a lungo su file lunghi: budget generoso.
+  const timeoutSignal = AbortSignal.timeout(120 * 1000);
+  const combinedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal;
+  try {
+    // Contratto JSON `{ audioUrl|audioPath, language, task: "transcribe" }`:
+    // `language` sempre esplicita (mai auto-detect, che a volte traduce invece di
+    // trascrivere). La forma esatta va verificata dal vivo contro l'endpoint reale
+    // (POWER); se differisse, è l'unico punto da adattare.
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/transcribe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...tcServiceAuthHeaders("X-Whisper-Gate-Token", process.env["WHISPER_GATE_TOKEN"]),
+      },
+      body: JSON.stringify({
+        ...(audioUrl ? { audioUrl } : {}),
+        ...(audioPath ? { audioPath } : {}),
+        language,
+        task: "transcribe",
+      }),
+      signal: combinedSignal,
+    });
+    const data = (await res.json().catch(() => ({}))) as WhisperResponse;
+    if (!res.ok || data.error) {
+      return `Whisper ha risposto con errore (HTTP ${res.status}): ${data.error ?? "errore sconosciuto"}.`;
+    }
+    if (!data.text || !data.text.trim()) return "Whisper non ha restituito testo trascritto.";
+    return data.text.trim();
+  } catch (err) {
+    if (signal?.aborted) return "Trascrizione interrotta dall'utente.";
+    throw err;
+  }
+}
+
 /**
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
  * da rimandare come messaggio role:"tool". `signal` è opzionale e permette al
@@ -1930,6 +2364,12 @@ export async function executeHorusTool(
         );
       case "check_vram_usage":
         return await checkVramUsageTool(signal);
+      case "geocode_place":
+        return await geocodePlaceTool(args, signal);
+      case "route_directions":
+        return await routeDirectionsTool(args, signal);
+      case "transcribe_audio":
+        return await transcribeAudioTool(args, signal);
       default:
         return `Tool sconosciuto: "${name}".`;
     }
