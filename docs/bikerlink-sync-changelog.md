@@ -148,6 +148,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **14:03** · Defer route planning integration to BikerLink's dedicated task <!-- 7629f4c -->
+- **14:00** · Update project documentation with new route planning and transcription tools <!-- 716f3bb -->
 - **07:36** · Fase 2e (POWER): Whisper STT + route-planning tools per Horus/Bowie <!-- 565340e -->
 - **07:05** · Add new tools for geocoding, routing, and speech-to-text transcription <!-- 30a63b3 -->
 - **06:36** · Update task completion documentation with new tasks and changes <!-- fc2c32e -->
