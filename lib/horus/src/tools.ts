@@ -667,15 +667,14 @@ const WHISPER_TOOL_SPECS: HorusToolSpec[] = [
       description:
         "Trascrive un file audio in testo (speech-to-text) usando Whisper sul TC. La lingua DEVE essere quella del profilo " +
         "dell'utente (\"it\" o \"en\"): non usare l'auto-detect, che a volte traduce invece di trascrivere. Passa l'audio come " +
-        "`audioUrl` (URL) oppure `audioPath` (file nella cartella condivisa su TC). Nota: l'accuratezza sul parlato in dialetto " +
-        "non è garantita, indipendentemente dalla lingua impostata.",
+        "`audioUrl` (URL da cui scaricare l'audio; può essere un file servito dall'AI Hub su TC). Nota: l'accuratezza sul " +
+        "parlato in dialetto non è garantita, indipendentemente dalla lingua impostata.",
       parameters: {
         type: "object",
         properties: {
-          audioUrl: { type: "string", description: "URL dell'audio da trascrivere. Alternativo a audioPath." },
-          audioPath: {
+          audioUrl: {
             type: "string",
-            description: "Percorso del file audio nella cartella condivisa su TC. Alternativo a audioUrl.",
+            description: "URL dell'audio da trascrivere (scaricato e inviato a Whisper).",
           },
           language: {
             type: "string",
@@ -683,7 +682,7 @@ const WHISPER_TOOL_SPECS: HorusToolSpec[] = [
             enum: ["it", "en"],
           },
         },
-        required: ["language"],
+        required: ["audioUrl", "language"],
       },
     },
   },
@@ -2246,52 +2245,114 @@ async function routeDirectionsTool(args: Record<string, unknown>, signal?: Abort
   }
 }
 
-interface WhisperResponse {
-  text?: string;
-  error?: string;
-}
-
 async function transcribeAudioTool(args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
   const baseUrl = whisperBaseUrl();
   if (!baseUrl) return "Servizio di trascrizione Whisper non configurato (WHISPER_URL mancante).";
   const language = normalizeGeoLang(args.language);
   const audioUrl = String(args.audioUrl ?? "").trim();
-  const audioPath = String(args.audioPath ?? "").trim();
-  if (!audioUrl && !audioPath) {
-    return "Specifica `audioUrl` (URL dell'audio) oppure `audioPath` (file nella cartella condivisa su TC).";
+  if (!audioUrl) {
+    return "Specifica `audioUrl`: l'URL dell'audio da trascrivere.";
   }
   // Whisper può metterci a lungo su file lunghi: budget generoso.
   const timeoutSignal = AbortSignal.timeout(120 * 1000);
   const combinedSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal;
   try {
-    // Contratto JSON `{ audioUrl|audioPath, language, task: "transcribe" }`:
-    // `language` sempre esplicita (mai auto-detect, che a volte traduce invece di
-    // trascrivere). La forma esatta va verificata dal vivo contro l'endpoint reale
-    // (POWER); se differisse, è l'unico punto da adattare.
-    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/transcribe`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...tcServiceAuthHeaders("X-Whisper-Gate-Token", process.env["WHISPER_GATE_TOKEN"]),
-      },
-      body: JSON.stringify({
-        ...(audioUrl ? { audioUrl } : {}),
-        ...(audioPath ? { audioPath } : {}),
-        language,
-        task: "transcribe",
-      }),
+    // 1) Valida l'URL dell'audio contro SSRF PRIMA di qualunque fetch: la
+    //    tool-loop della chat è raggiungibile da internet (vedi threat_model),
+    //    quindi non scarichiamo URL arbitrari scelti dal modello — solo https,
+    //    niente IP/localhost, e host in allowlist esatta (i servizi TC
+    //    configurati). Poi scarica i byte; gli host in allowlist sono dietro
+    //    Cloudflare Access, quindi inoltriamo le credenziali CF solo a loro
+    //    (match esatto di hostname, mai per suffisso di dominio).
+    const check = validateAudioUrl(audioUrl);
+    if ("error" in check) {
+      return `Impossibile scaricare l'audio: ${check.error}`;
+    }
+    // Al download inoltriamo SOLO le credenziali CF Access (per passare il
+    //    bordo): niente gate-token di Whisper, che è specifico dell'endpoint
+    //    /asr e non va mandato a un origin diverso (l'AI Hub).
+    const audioRes = await fetch(check.url, {
+      headers: tcServiceAuthHeaders("", undefined),
       signal: combinedSignal,
     });
-    const data = (await res.json().catch(() => ({}))) as WhisperResponse;
-    if (!res.ok || data.error) {
-      return `Whisper ha risposto con errore (HTTP ${res.status}): ${data.error ?? "errore sconosciuto"}.`;
+    if (!audioRes.ok) {
+      return `Impossibile scaricare l'audio da audioUrl (HTTP ${audioRes.status}).`;
     }
-    if (!data.text || !data.text.trim()) return "Whisper non ha restituito testo trascritto.";
-    return data.text.trim();
+    const audioBytes = await audioRes.arrayBuffer();
+
+    // 2) Invia i byte a Whisper (immagine openai-whisper-asr-webservice):
+    //    POST /asr con l'audio come campo multipart `audio_file`. `language`
+    //    SEMPRE esplicita (mai auto-detect, che a volte traduce invece di
+    //    trascrivere); `output=txt` restituisce direttamente il testo.
+    const form = new FormData();
+    form.append("audio_file", new Blob([audioBytes]), "audio");
+    const query = new URLSearchParams({ task: "transcribe", language, output: "txt", encode: "true" });
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/asr?${query.toString()}`, {
+      method: "POST",
+      // Nessun Content-Type esplicito: FormData imposta il boundary multipart.
+      headers: tcServiceAuthHeaders("X-Whisper-Gate-Token", process.env["WHISPER_GATE_TOKEN"]),
+      body: form,
+      signal: combinedSignal,
+    });
+    if (!res.ok) {
+      return `Whisper ha risposto con errore (HTTP ${res.status}).`;
+    }
+    const text = (await res.text()).trim();
+    if (!text) return "Whisper non ha restituito testo trascritto.";
+    return text;
   } catch (err) {
     if (signal?.aborted) return "Trascrizione interrotta dall'utente.";
     throw err;
   }
+}
+
+// Host consentiti come sorgente audio per `transcribe_audio`. Volutamente
+// ristretto ai servizi TC configurati (oggi: l'AI Hub, dove vivono le note
+// vocali condivise): sono gli unici host verso cui inoltriamo anche le
+// credenziali Cloudflare Access, per match ESATTO di hostname (mai per suffisso
+// di dominio). Restringere qui è la difesa primaria contro l'SSRF.
+function approvedAudioHosts(): Set<string> {
+  const hosts = new Set<string>();
+  const hub = hubBaseUrl();
+  if (hub) {
+    try {
+      hosts.add(new URL(hub).hostname.toLowerCase());
+    } catch {
+      /* URL malformato → nessun host aggiunto */
+    }
+  }
+  return hosts;
+}
+
+// Riconosce host che sono letterali IP (IPv4 puntato o IPv6, che `URL`
+// restituisce coi due punti) per bloccarli a prescindere dall'allowlist.
+function isIpLiteralHost(host: string): boolean {
+  if (host.includes(":")) return true;
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
+}
+
+// Valida l'URL dell'audio contro SSRF: solo https, niente IP/localhost, e host
+// in allowlist esatta. Restituisce l'URL parsato o un messaggio d'errore.
+function validateAudioUrl(raw: string): { url: URL } | { error: string } {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return { error: "URL non valido." };
+  }
+  if (url.protocol !== "https:") {
+    return { error: "sono ammessi solo URL https." };
+  }
+  const host = url.hostname.toLowerCase();
+  if (!host || host === "localhost" || host.endsWith(".localhost") || isIpLiteralHost(host)) {
+    return { error: "indirizzi IP o locali non ammessi." };
+  }
+  if (!approvedAudioHosts().has(host)) {
+    return {
+      error: `host non consentito (${host}). L'audio deve provenire dall'AI Hub configurato.`,
+    };
+  }
+  return { url };
 }
 
 /**

@@ -276,12 +276,18 @@ test("getHorusTools returns only the base tools when the analysis/nadir/hub serv
   const originalNadirToken = process.env["NADIR_GATE_TOKEN"];
   const originalAiHubUrl = process.env["AI_HUB_URL"];
   const originalHubToken = process.env["HUB_GATE_TOKEN"];
+  const originalNominatimUrl = process.env["NOMINATIM_URL"];
+  const originalValhallaUrl = process.env["VALHALLA_URL"];
+  const originalWhisperUrl = process.env["WHISPER_URL"];
   delete process.env["HORUS_ANALYSIS_URL"];
   delete process.env["ANALYSIS_GATE_TOKEN"];
   delete process.env["NADIR_URL"];
   delete process.env["NADIR_GATE_TOKEN"];
   delete process.env["AI_HUB_URL"];
   delete process.env["HUB_GATE_TOKEN"];
+  delete process.env["NOMINATIM_URL"];
+  delete process.env["VALHALLA_URL"];
+  delete process.env["WHISPER_URL"];
   t.after(() => {
     process.env["HORUS_ANALYSIS_URL"] = originalUrl;
     process.env["ANALYSIS_GATE_TOKEN"] = originalToken;
@@ -289,6 +295,9 @@ test("getHorusTools returns only the base tools when the analysis/nadir/hub serv
     process.env["NADIR_GATE_TOKEN"] = originalNadirToken;
     process.env["AI_HUB_URL"] = originalAiHubUrl;
     process.env["HUB_GATE_TOKEN"] = originalHubToken;
+    process.env["NOMINATIM_URL"] = originalNominatimUrl;
+    process.env["VALHALLA_URL"] = originalValhallaUrl;
+    process.env["WHISPER_URL"] = originalWhisperUrl;
   });
   const calls = mockAnalysisFetch(t, { result: "should not be reached" });
 

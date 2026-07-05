@@ -50,5 +50,6 @@
 - [Script top-level execution vs testability](script-module-cli-guard.md) — a script mixing exported pure functions with a top-level `main()` needs an `import.meta.url` guard or importing it for unit tests runs the real thing.
 - [Naming convention — agenti/infra](naming-convention-agents-infra.md) — readable-label scheme for env vars, Ollama tags, Cloudflare tunnel/Access/service-token names; apply to every new infra resource.
 - [Cloudflare token scope blocker](cloudflare-token-scope-blocker.md) — `CLOUDFLARE_API_TOKEN` is DNS-only (no account/Zero Trust access); blocks any Tunnel/Access-app/service-token automation via API until rescoped.
+- [TC geo/STT services](tc-geo-stt-services.md) — whisper/nominatim/valhalla behind CF Access (not gate tokens); Whisper is `POST /asr` multipart; audio download SSRF-gated to an exact host allowlist; valhalla public ingress 502-broken.
 - [Quebracho cloud fallback](quebracho-cloud-fallback.md) — LiteLLM rejected (hides "who answered" in an already-nontrivial tool loop); hand-written TC-first/cloud-fallback switch is text-only, no tool-call parity.
 - [LLM tracing schema](llm-tracing-schema.md) — `llm_traces` table records one row per tool-loop turn (not per model call); best-effort insert via lazy-loaded `@workspace/db` so a DB hiccup never breaks a chat turn.

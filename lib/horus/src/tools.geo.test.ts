@@ -186,36 +186,75 @@ test("route_directions reports a friendly error when a place name can't be geoco
   assert.match(result, /Nominatim non è configurato/i);
 });
 
-test("transcribe_audio posts language explicitly (never auto-detect) and returns the text", async (t) => {
+test("transcribe_audio downloads the audio then posts it to /asr with an explicit language (never auto-detect)", async (t) => {
   t.after(restoreEnv);
   setEnv("WHISPER_URL", "https://whisper.example.test");
   setEnv("WHISPER_GATE_TOKEN", "whisper-gate-token");
+  // L'audioUrl deve stare nell'allowlist SSRF = host dell'AI Hub configurato.
+  setEnv("AI_HUB_URL", "https://hub.example.test");
 
   const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
   t.mock.method(globalThis, "fetch", async (url: string | URL, init?: RequestInit) => {
     calls.push({ url: String(url), init });
-    return new Response(JSON.stringify({ text: "  ciao dal passo dello stelvio  " }), {
+    // First call = audio download; second = Whisper /asr (returns plain text).
+    if (calls.length === 1) {
+      return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 });
+    }
+    return new Response("  ciao dal passo dello stelvio  ", {
       status: 200,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "text/plain" },
     });
   });
 
   const result = await executeHorusTool("transcribe_audio", {
-    audioUrl: "https://cdn.example.test/nota.mp3",
+    audioUrl: "https://hub.example.test/nota.mp3",
     language: "it",
   });
 
   assert.equal(result, "ciao dal passo dello stelvio");
-  assert.equal(calls.length, 1);
-  const call = calls[0]!;
-  assert.match(call.url, /\/transcribe$/);
-  assert.equal(call.init?.method, "POST");
-  const headers = call.init?.headers as Record<string, string>;
+  assert.equal(calls.length, 2);
+
+  // 1) audio download dall'host in allowlist, con le credenziali CF inoltrate
+  assert.equal(calls[0]!.url, "https://hub.example.test/nota.mp3");
+
+  // 2) Whisper /asr: language + task in the query, audio as multipart body
+  const asr = calls[1]!;
+  assert.match(asr.url, /\/asr\?/);
+  const asrQuery = new URL(asr.url).searchParams;
+  assert.equal(asrQuery.get("language"), "it");
+  assert.equal(asrQuery.get("task"), "transcribe");
+  assert.equal(asr.init?.method, "POST");
+  const headers = asr.init?.headers as Record<string, string>;
   assert.equal(headers["X-Whisper-Gate-Token"], "whisper-gate-token");
-  const body = JSON.parse(String(call.init?.body));
-  assert.equal(body.language, "it");
-  assert.equal(body.task, "transcribe");
-  assert.equal(body.audioUrl, "https://cdn.example.test/nota.mp3");
+  assert.ok(asr.init?.body instanceof FormData, "body must be multipart FormData");
+  assert.ok((asr.init?.body as FormData).has("audio_file"), "FormData must carry audio_file");
+});
+
+test("transcribe_audio rejects SSRF-prone audioUrl before any fetch (non-https, IP/loopback, off-allowlist)", async (t) => {
+  t.after(restoreEnv);
+  setEnv("WHISPER_URL", "https://whisper.example.test");
+  setEnv("AI_HUB_URL", "https://hub.example.test");
+
+  let fetchCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    fetchCalled = true;
+    return new Response("should not be reached", { status: 200 });
+  });
+
+  const blocked = [
+    "http://hub.example.test/nota.mp3", // non-https
+    "https://127.0.0.1/nota.mp3", // loopback literal
+    "https://169.254.169.254/latest/meta-data", // link-local metadata endpoint
+    "https://10.0.0.5/nota.mp3", // private range literal
+    "https://localhost/nota.mp3", // localhost
+    "https://evil.example.com/nota.mp3", // valid https but off-allowlist
+  ];
+
+  for (const audioUrl of blocked) {
+    const result = await executeHorusTool("transcribe_audio", { audioUrl, language: "it" });
+    assert.match(result, /Impossibile scaricare l'audio/, `expected rejection for ${audioUrl}`);
+    assert.equal(fetchCalled, false, `no fetch must happen for ${audioUrl}`);
+  }
 });
 
 test("transcribe_audio requires an audio reference", async (t) => {
@@ -229,7 +268,7 @@ test("transcribe_audio requires an audio reference", async (t) => {
   });
 
   const result = await executeHorusTool("transcribe_audio", { language: "it" });
-  assert.match(result, /audioUrl|audioPath/);
+  assert.match(result, /audioUrl/);
   assert.equal(fetchCalled, false);
 });
 
