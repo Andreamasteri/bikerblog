@@ -11,6 +11,8 @@ export {
   checkBowieHealth,
   bowieChatRaw,
   QUEBRACHO_AGENT_NAME,
+  QUEBRACHO_NICKNAME,
+  QUEBRACHO_FIXED_GREETING,
   isQuebrachoConfigured,
   checkQuebrachoHealth,
   quebrachoChatRaw,

@@ -19,6 +19,7 @@ import {
   MAX_TOOL_RESULT_CHARS,
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
+  QUEBRACHO_NICKNAME,
   loadActiveVramAlertPrompt,
   type HorusMessage,
   type HorusToolCall,
@@ -50,13 +51,14 @@ function requireHorusPassword(req: express.Request, res: express.Response): bool
 // UI (non usa la CLI), quindi capacità come "leggi il codice di BikerLink su
 // GitHub e scrivi un manuale" devono funzionare da qui. Le conversazioni sono
 // comunque salvate nello storico/log a prescindere dai tool.
-function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
+function buildDirectChatSystemPrompt(agentName: string, personaNote?: string): HorusMessage {
   const vramAlert = loadActiveVramAlertPrompt();
   return {
     role: "system",
     content:
       (vramAlert ? `${vramAlert} ` : "") +
       `Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. Ti chiami ${agentName}. ` +
+      (personaNote ? `${personaNote} ` : "") +
       "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
       "NON riportare la conversazione su BikerLink, sviluppo software, moto o sul blog a meno che sia l'utente stesso a parlarne esplicitamente. " +
       "Se l'utente cambia argomento, seguilo senza forzare collegamenti con BikerLink. " +
@@ -64,7 +66,9 @@ function buildDirectChatSystemPrompt(agentName: string): HorusMessage {
       "quando invece l'utente chiede esplicitamente qualcosa di lungo o articolato (es. un manuale, una guida completa, un riassunto esteso), rispondi con tutto il testo necessario, senza tagliarlo per brevità. " +
       "Puoi disporre di alcuni strumenti, che vengono attivati automaticamente solo quando la tua richiesta li rende utili (per un messaggio conversazionale non ne hai nessuno, ed è normale): usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
       "usa github_read per leggere file o cartelle dal codice sorgente reale di bikerlink, bikerblog o bikerweb quando l'utente chiede di codice, struttura del progetto, " +
-      "come funziona una feature, o per scrivere manuali/documentazione basati sul codice reale — è sempre sola lettura, non puoi scrivere né eseguire nulla; " +
+      "come funziona una feature, o per scrivere manuali/documentazione basati sul codice reale — è sempre sola lettura, non puoi scrivere né eseguire nulla, quindi NON serve chiedere " +
+      "conferma prima di usarlo: leggi direttamente. Puoi scendere quanto ti serve nelle sottocartelle: dopo aver elencato una cartella, richiama github_read con il PERCORSO COMPLETO " +
+      "dalla radice del repo (es. dopo aver visto \"src/\" e poi \"components/\" dentro, richiama con path \"src/components\", non solo \"components\"), non fermarti al primo livello; " +
       "se disponibile, usa search_manual per cercare per significato dentro la base di conoscenza di Nadir; " +
       "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
       "anche se non te lo chiede esplicitamente — non serve chiedere conferma, salvala e basta; " +
@@ -887,6 +891,8 @@ interface AgentDefinition {
   /** Nota aggiunta in coda al system prompt della conversazione (es. Horus: nessun tool in questa modalità). */
   conversationToolsNote: string;
   logLabel: string;
+  /** Nota di personalità inserita nel system prompt della chat diretta (es. Quebracho: giocoso/affettuoso/premuroso). */
+  personaNote?: string;
 }
 
 const AGENT_DEFINITIONS: AgentDefinition[] = [
@@ -931,6 +937,11 @@ const AGENT_DEFINITIONS: AgentDefinition[] = [
       `${QUEBRACHO_AGENT_NAME} non è configurato su questo ambiente — manca QUEBRACHO_OLLAMA_MODEL. ` +
       "Aggiungilo dalla scheda Secrets per abilitare la conversazione a tre.",
     conversationChatOptions: {},
+    personaNote:
+      `Il tuo carattere è giocoso, affettuoso e premuroso: sei il cane dell'utente (uno dei "fondatori" del progetto, ` +
+      `insieme all'utente e all'agente Replit — vedi replit.md), quindi porti entusiasmo, calore e leggerezza in ogni scambio, ` +
+      `senza mai essere invadente o eccessivo. L'utente può chiamarti anche con il nomignolo "${QUEBRACHO_NICKNAME}". ` +
+      "Con le altre AI (Horus, Bowie) sei gioviale, tranquillo e socievole.",
     conversationToolsNote: "",
     logLabel: "quebracho chat failed",
   },
@@ -951,7 +962,7 @@ for (const def of AGENT_DEFINITIONS) {
     express.json({ limit: "1mb" }),
     createDirectChatHandler({
       agentName: def.displayName,
-      systemPrompt: buildDirectChatSystemPrompt(def.displayName),
+      systemPrompt: buildDirectChatSystemPrompt(def.displayName, def.personaNote),
       chatRaw: def.chatRaw,
       isConfigured: def.isConfigured,
       checkHealth: def.checkHealth,
@@ -1021,8 +1032,9 @@ function buildConvoSystemPrompt(opts: {
   otherNames: string[];
   previousSpeakerName: string | null;
   toolsNote: string;
+  personaNote?: string;
 }): HorusMessage {
-  const { selfName, otherNames, previousSpeakerName, toolsNote } = opts;
+  const { selfName, otherNames, previousSpeakerName, toolsNote, personaNote } = opts;
   const totalAgents = otherNames.length + 1;
   const otherList = joinNamesIt(otherNames);
   const othersDescriptor =
@@ -1049,7 +1061,7 @@ function buildConvoSystemPrompt(opts: {
   const vramAlert = loadActiveVramAlertPrompt();
   return {
     role: "system",
-    content: `${vramAlert ? `${vramAlert} ` : ""}${intro} ${body}${brevity}${toolsNote}`,
+    content: `${vramAlert ? `${vramAlert} ` : ""}${intro}${personaNote ? ` ${personaNote}` : ""} ${body}${brevity}${toolsNote}`,
   };
 }
 
@@ -1094,6 +1106,8 @@ export interface ConvoAgentConfig {
   isConfigured: () => boolean;
   /** Messaggio mostrato quando questo agente non è configurato. */
   notConfiguredMessage: string;
+  /** Nota di personalità inserita nel system prompt della conversazione di gruppo (es. Quebracho). */
+  personaNote?: string;
 }
 
 /**
@@ -1133,6 +1147,7 @@ function buildConvoAgentRegistry(deps: BowieConversationDeps): ConvoAgentConfig[
     toolsNote: def.conversationToolsNote,
     isConfigured: isConfiguredById[def.id] ?? def.isConfigured,
     notConfiguredMessage: def.conversationNotConfiguredMessage,
+    personaNote: def.personaNote,
   })).filter((agent) => agent.isConfigured());
 }
 
@@ -1366,6 +1381,7 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
             otherNames,
             previousSpeakerName,
             toolsNote: agentConfig.toolsNote,
+            personaNote: agentConfig.personaNote,
           }),
           topic,
           transcript,

@@ -1,4 +1,6 @@
 - [VRAM monitor on TC](vram-monitor-tc.md) — sampler+alerting split (TC decides threshold/hysteresis, Replit just stores state); alert surfaces via chat system prompt, not push.
+- [VRAM arbiter — Horus eviction](vram-arbiter-horus-eviction.md) — Horus chat hung forever (no error) because Bowie's resident model left no VRAM for bikerlink:latest on TC's 8GB GPU; fixed via best-effort eviction of other models before Horus runs only.
+- [Quebracho real provider + VRAM check](quebracho-vram-real-provider.md) — granite4:tiny-h coexists with Bowie in VRAM (~1.1GB margin); Ollama's own CPU/GPU split is the OOM fallback, no bespoke threshold code needed.
 - [self-check staleEn](self-check-stale-en.md) — self-check now detects stale body_en (dev != prod); previously only compared IT excerpt.
 - [Pipeline gap catch-up](pipeline-gap-catchup.md) — step 3.8 recupera i diari mancanti degli ultimi 7 giorni; senza questo il cron offline lasciava buchi nel blog.
 - [Horus (Ollama) integration lessons](horus-integration.md) — Cloudflare Tunnel needs streaming for long generations; bash tool can't reliably read new secrets or host background processes; fine-grained GitHub PATs pasted as secrets can lose their `github_pat_` prefix (401s).
@@ -39,6 +41,8 @@
 - [Ollama keep_alive duration format](horus-ollama-keep-alive-duration-format.md) — send `keep_alive: -1` as a number, not the string "-1" (no unit) — Ollama 400s on the bare string.
 - [Browser network-error leaks into chat](friendly-chat-error-browser-variants.md) — Chrome's mid-stream `TypeError: network error` (+ Safari "Load failed") don't contain "fetch"; friendlyChatErrorMessage must map EVERY TypeError, not just fetch-matching ones.
 - [Chat network-drop reply cache](horus-network-drop-reply-cache.md) — "network error" but server logged HTTP 200 = mobile network suspension (not the tunnel); recover via best-effort server reply cache + one-click client retry that reuses it.
+- [BikerLink user-identity investigation](bikerlink-user-identity-investigation.md) — BikerLink resolves AI Assistant identity server-side from session (`sessionUser.id`), never client-sent; TC/Bowie side has no visibility into it yet.
+- [GitHub read subfolder traversal](horus-github-read-access.md) — github_read listing must show each entry's FULL path (not bare name) or the model re-requests a bare subfolder name and 404s, looking like it "can't go deeper".
 - [Horus-hub shared files](horus-hub-shared-files.md) — cross-agent file tools on TC via a new "ai" GitHub repo; git push is sandbox-blocked (use GitHub Contents API), pm2 needs explicit dotenv load, bash DNS to TC-tunnel hosts is unreliable (verify via `curl --resolve` or the workflow instead).
 - [TC direct SSH access](tc-ssh-access.md) — real shell on TC via `cloudflared access ssh` ProxyCommand; verify key fingerprints and user match, watch for flattened-newline paste corruption.
 - [Bowie chat known-good snapshot](bowie-chat-known-good-snapshot.md) — full file map of the working Bowie chat feature + checkpoint commit to restore from if it regresses/corrupts.

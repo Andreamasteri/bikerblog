@@ -860,7 +860,7 @@ export function HorusChat() {
           onUnauthorized={handleUnauthorized}
           agentIcon={<Bot className="w-4 h-4" />}
           agentAvatarClassName="bg-primary text-primary-foreground"
-          emptyStateText="Scrivi un messaggio per iniziare a chattare con Quebracho."
+          emptyStateText="Qq: «Bentornato. Sono sempre contento di vederti. Usciamo?»"
           placeholderText="Scrivi a Quebracho... (Invio per inviare, Shift+Invio per andare a capo)"
           agentName="quebracho"
         />

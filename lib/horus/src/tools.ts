@@ -505,6 +505,53 @@ const HUB_TOOL_SPECS: HorusToolSpec[] = [
   {
     type: "function",
     function: {
+      name: "read_pdf",
+      description:
+        "Estrae il testo da un file PDF nella cartella condivisa su TC (letto anche se scritto da un altro agente). " +
+        "Utile per riassumere, analizzare o riscrivere manuali/documenti in PDF.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Percorso relativo del file PDF dentro la cartella condivisa (es. \"manuali/bikerlink.pdf\").",
+          },
+        },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "write_pdf",
+      description:
+        "Crea o sovrascrive un file PDF nella cartella condivisa su TC a partire da testo semplice (impaginazione automatica " +
+        "su più pagine A4). Usalo per produrre una versione PDF di un documento riscritto/aggiornato, non per editing " +
+        "grafico complesso.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Percorso relativo del file PDF dentro la cartella condivisa (es. \"manuali/bikerlink.pdf\"). Le sottocartelle vengono create automaticamente.",
+          },
+          content: {
+            type: "string",
+            description: "Testo semplice da scrivere nel PDF (verrà impaginato automaticamente su una o più pagine).",
+          },
+          title: {
+            type: "string",
+            description: "Titolo opzionale mostrato in cima alla prima pagina.",
+          },
+        },
+        required: ["path", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "check_vram_usage",
       description:
         "Restituisce il carico di VRAM (memoria video) attuale sulla GPU di TC, il picco massimo registrato nelle ultime " +
@@ -678,6 +725,12 @@ export function selectRelevantTools(
     if (!wanted.has("save_file") && !wanted.has("read_file") && !wanted.has("list_files")) {
       wanted.add("list_files");
     }
+  }
+
+  // read_pdf/write_pdf — file PDF nella cartella condivisa su TC.
+  if (has(/\bpdf\b/)) {
+    if (has(/scrivi|crea|genera|salva|riscriv/)) wanted.add("write_pdf");
+    if (has(/leggi|estrai|riassum|analizza|apri/) || !wanted.has("write_pdf")) wanted.add("read_pdf");
   }
 
   // check_vram_usage — carico GPU/VRAM su TC.
@@ -942,8 +995,22 @@ async function githubRead(repoArg: string, path: string): Promise<string> {
 
   const { repo } = GITHUB_REPOS[repoKey];
   const token = resolveGithubToken(repoKey);
-  const cleanPath = path.trim().replace(/^\/+/, "");
-  const apiPath = cleanPath && cleanPath !== "." ? `/${cleanPath}` : "";
+  // Il modello passa a volte percorsi con slash iniziali/finali o segmenti
+  // ancora non codificati (es. spazi): normalizziamo prima di costruire l'URL
+  // così la navigazione nelle sottocartelle non si rompe al primo livello con
+  // slash superflui, e ogni segmento va codificato singolarmente (encodeURI
+  // sull'intero percorso non basta, es. spazi restano invariati).
+  const cleanPath = path
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+  const apiPath =
+    cleanPath && cleanPath !== "."
+      ? `/${cleanPath
+          .split("/")
+          .map((segment) => encodeURIComponent(segment))
+          .join("/")}`
+      : "";
   const res = await fetch(
     `${GITHUB_API}/repos/${repo}/contents${apiPath}`,
     {
@@ -970,10 +1037,22 @@ async function githubRead(repoArg: string, path: string): Promise<string> {
     | { type: string; encoding?: string; content?: string; size?: number };
 
   if (Array.isArray(data)) {
+    // Mostriamo il percorso COMPLETO di ogni entry (non solo il nome): il
+    // modello deve richiamare github_read con questo percorso esatto per
+    // scendere di livello, non con il solo nome della sottocartella (causa
+    // originale del "si ferma al primo livello" — un path relativo al nome
+    // nudo risulta quasi sempre 404 se non siamo già alla radice).
+    const basePath = cleanPath && cleanPath !== "." ? cleanPath : "";
     const entries = data
-      .map((e) => `${e.type === "dir" ? "📁" : "📄"} ${e.name}`)
+      .map((e) => {
+        const fullPath = basePath ? `${basePath}/${e.name}` : e.name;
+        return `${e.type === "dir" ? "📁" : "📄"} ${fullPath}`;
+      })
       .join("\n");
-    return `Contenuto della cartella "${cleanPath || "/"}" in ${repo}:\n${entries}`;
+    return (
+      `Contenuto della cartella "${cleanPath || "/"}" in ${repo}:\n${entries}\n\n` +
+      `Per scendere in una sottocartella, richiama github_read con il percorso completo mostrato sopra (es. "${basePath ? `${basePath}/<nome-cartella>` : "<nome-cartella>"}"), non solo il nome.`
+    );
   }
 
   if (data.type === "file") {
@@ -1645,6 +1724,80 @@ async function listFilesTool(relPath: string, signal?: AbortSignal): Promise<str
   }
 }
 
+interface HubPdfReadResponse {
+  ok?: boolean;
+  path?: string;
+  text?: string;
+  numPages?: number;
+  error?: string;
+}
+
+interface HubPdfWriteResponse {
+  ok?: boolean;
+  path?: string;
+  pages?: number;
+  error?: string;
+}
+
+async function readPdfTool(relPath: string, signal?: AbortSignal): Promise<string> {
+  if (!isHubConfigured()) {
+    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+  }
+  if (!relPath.trim()) {
+    return "Percorso file PDF mancante.";
+  }
+  try {
+    const { ok, status, data } = await callHubService(
+      `/files/pdf/read?path=${encodeURIComponent(relPath.trim())}`,
+      { method: "GET" },
+      signal
+    );
+    const parsed = data as HubPdfReadResponse;
+    if (!ok || parsed.error) {
+      return `La cartella condivisa ha risposto con errore (HTTP ${status}) leggendo il PDF: ${parsed.error ?? "errore sconosciuto"}.`;
+    }
+    const pagesNote = typeof parsed.numPages === "number" ? ` (${parsed.numPages} pagine)` : "";
+    return `Testo estratto da "${parsed.path ?? relPath.trim()}"${pagesNote}:\n${parsed.text ?? ""}`;
+  } catch (err) {
+    if (err instanceof Error && err.message === "__aborted__") return "Lettura PDF interrotta dall'utente.";
+    throw err;
+  }
+}
+
+async function writePdfTool(
+  relPath: string,
+  content: string,
+  title: string | undefined,
+  signal?: AbortSignal
+): Promise<string> {
+  if (!isHubConfigured()) {
+    return "Cartella condivisa su TC non configurata (HORUS_HUB_URL/HUB_GATE_TOKEN mancanti).";
+  }
+  if (!relPath.trim()) {
+    return "Percorso file PDF mancante.";
+  }
+  try {
+    const { ok, status, data } = await callHubService(
+      "/files/pdf/write",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: relPath.trim(), content, title }),
+      },
+      signal
+    );
+    const parsed = data as HubPdfWriteResponse;
+    if (!ok || parsed.error) {
+      return `La cartella condivisa ha risposto con errore (HTTP ${status}) scrivendo il PDF: ${parsed.error ?? "errore sconosciuto"}.`;
+    }
+    const pagesNote = typeof parsed.pages === "number" ? ` (${parsed.pages} pagine)` : "";
+    return `PDF salvato nella cartella condivisa: ${parsed.path ?? relPath.trim()}${pagesNote}.`;
+  } catch (err) {
+    if (err instanceof Error && err.message === "__aborted__") return "Scrittura PDF interrotta dall'utente.";
+    throw err;
+  }
+}
+
 interface HubVramBreakdownEntry {
   pid?: string;
   usedMiB?: number;
@@ -1759,6 +1912,15 @@ export async function executeHorusTool(
         return await readFileTool(String(args.path ?? ""), signal);
       case "list_files":
         return await listFilesTool(String(args.path ?? ""), signal);
+      case "read_pdf":
+        return await readPdfTool(String(args.path ?? ""), signal);
+      case "write_pdf":
+        return await writePdfTool(
+          String(args.path ?? ""),
+          String(args.content ?? ""),
+          typeof args.title === "string" ? args.title : undefined,
+          signal
+        );
       case "check_vram_usage":
         return await checkVramUsageTool(signal);
       default:

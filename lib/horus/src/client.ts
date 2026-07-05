@@ -164,6 +164,19 @@ export interface OllamaAgentConfig {
   model: string;
   /** Se true, allega la memoria persistente di Horus (inbox/horus-memory.md) di default. */
   useHorusMemoryByDefault: boolean;
+  /**
+   * Se true, prima di generare scarica (keep_alive:0) qualsiasi ALTRO modello
+   * risultante residente su Ollama (via /api/ps). Necessario per Horus
+   * (bikerlink:latest, ~8.6GB GPU+CPU) sulla GPU da 8GB di TC: se un altro
+   * modello resta residente "Forever" (keep_alive -1, es. Bowie/llama3.2:3b),
+   * bikerlink:latest non ha VRAM libera a sufficienza e la generazione non si
+   * completa mai (confermato: 80s+ senza risposta, nessun token, nessun
+   * errore — nemmeno una richiesta locale su TC senza tunnel completa).
+   * Con la GPU libera bikerlink:latest carica in ~11s. Bowie/Quebracho NON
+   * impostano questo flag: sono piccoli e coesistono tra loro senza
+   * conflitto, e non vogliamo scaricarli a vicenda a ogni turno.
+   */
+  evictOthersBeforeRun?: boolean;
 }
 
 export interface OllamaAgentClient {
@@ -177,6 +190,12 @@ export interface OllamaAgentClient {
  * del timeout di chat (5 minuti) perché qui vogliamo solo sapere in fretta
  * se il server risponde, non aspettare una generazione. */
 const HEALTH_CHECK_TIMEOUT_MS = 6_000;
+
+/** Timeout per il best-effort di scaricamento degli altri modelli residenti
+ * prima di far generare Horus — deve essere breve: se /api/ps o /api/generate
+ * non rispondono in questo tempo, si procede comunque con la generazione
+ * normale invece di aggiungere latenza indefinita a ogni chat. */
+const EVICT_CHECK_TIMEOUT_MS = 8_000;
 
 /** Status code tipici di un gateway/tunnel che ha interrotto la richiesta
  * prima che Ollama potesse rispondere (es. Cloudflare Tunnel 524 dopo un
@@ -270,11 +289,61 @@ export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentC
     }
   }
 
+  function ollamaHeaders(): Record<string, string> {
+    return config.cfAccessClientId && config.cfAccessClientSecret
+      ? {
+          "CF-Access-Client-Id": config.cfAccessClientId,
+          "CF-Access-Client-Secret": config.cfAccessClientSecret,
+        }
+      : {};
+  }
+
+  /**
+   * Scarica (keep_alive:0) qualsiasi modello risultante residente su Ollama
+   * diverso da `config.model`, best-effort e con un timeout corto: la GPU di
+   * TC (8GB) non ha spazio per bikerlink:latest (~8.6GB GPU+CPU) insieme a un
+   * altro modello residente "Forever". Non lancia mai errore — se /api/ps non
+   * risponde in tempo si procede comunque con la generazione normale (che
+   * fallirà con il suo timeout dedicato se davvero non c'è spazio).
+   */
+  async function evictOtherResidentModels(): Promise<void> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), EVICT_CHECK_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${config.ollamaUrl!.replace(/\/$/, "")}/api/ps`, {
+        headers: ollamaHeaders(),
+        signal: controller.signal,
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { models?: { name: string }[] };
+      const others = (data.models ?? []).filter((m) => m.name !== config.model);
+      if (others.length === 0) return;
+      await Promise.all(
+        others.map((m) =>
+          fetch(`${config.ollamaUrl!.replace(/\/$/, "")}/api/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...ollamaHeaders() },
+            body: JSON.stringify({ model: m.name, keep_alive: 0 }),
+            signal: controller.signal,
+          }).catch(() => {})
+        )
+      );
+    } catch {
+      // Best-effort: nessun altro modello scaricato, si procede comunque.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function chatRaw(
     messages: HorusMessage[],
     options: HorusChatOptions = {}
   ): Promise<HorusRawResult> {
     assertConfigured();
+
+    if (config.evictOthersBeforeRun) {
+      await evictOtherResidentModels();
+    }
 
     const attachMemory = options.skipMemory === undefined
       ? config.useHorusMemoryByDefault
@@ -459,6 +528,7 @@ const horusClient = createOllamaAgentClient({
   cfAccessClientSecret: process.env.CF_ACCESS_CLIENT_SECRET,
   model: HORUS_MODEL,
   useHorusMemoryByDefault: true,
+  evictOthersBeforeRun: true,
 });
 
 /**
@@ -535,6 +605,16 @@ export function bowieChatRaw(
 }
 
 export const QUEBRACHO_AGENT_NAME = "Quebracho";
+
+/** Nomignolo con cui Quebracho si presenta e con cui l'utente può chiamarlo. */
+export const QUEBRACHO_NICKNAME = "Qq";
+
+/**
+ * Frase di benvenuto FISSA di Quebracho: non generata dal modello, mostrata
+ * lato client all'apertura di una conversazione nuova (vedi `/AI`), così
+ * resta sempre identica indipendentemente da cosa risponde Ollama.
+ */
+export const QUEBRACHO_FIXED_GREETING = "Bentornato. Sono sempre contento di vederti. Usciamo?";
 
 /**
  * Client di Quebracho, il terzo interlocutore della conversazione osservabile
