@@ -5,15 +5,15 @@ description: Cross-agent shared file tools (save_file/read_file/list_files) back
 
 ## What it is
 
-The **AI Hub** (formerly "horus-hub", renamed in Task #193) is a small Express service running on the user's own TC (thinkcentre) box, exposed via the existing Cloudflare Tunnel at `https://hub.biker-link.net`. It serves a shared directory (`sharedRoot`, e.g. `/home/andrea/agent-shared`) that any AI agent (Horus, Bowie, future Ares/Nadir/Quebracho) can read/write through gated HTTP endpoints (`/files/read`, `/files/write`, `/files/list`), auth'd with a single shared `HUB_GATE_TOKEN` (same pattern as the existing Nadir/analysis services). On TC it now lives in `~/ai-hub/` under pm2 process `ai-hub` (the old `~/horus-hub/` dir is left in place as a backup). The service's own source lives in a GitHub repo (`Andreamasteri/ai`) — separate from bikerblog/bikerlink — so its commit history doubles as a restore-point log, with secrets excluded.
+The **AI Hub** (formerly "horus-hub") is a small Express service running on the user's own TC (thinkcentre) box, exposed via the existing Cloudflare Tunnel at `https://hub.biker-link.net`. It serves a shared directory (`sharedRoot`, e.g. `/home/andrea/agent-shared`) that any AI agent (Horus, Bowie, future Ares/Nadir/Quebracho) can read/write through gated HTTP endpoints (`/files/read`, `/files/write`, `/files/list`), auth'd with a single shared `HUB_GATE_TOKEN` (same pattern as the existing Nadir/analysis services). On TC it now lives in `~/ai-hub/` under pm2 process `ai-hub` (the old `~/horus-hub/` dir is left in place as a backup). The service's own source lives in a GitHub repo (`Andreamasteri/ai`) — separate from bikerblog/bikerlink — so its commit history doubles as a restore-point log, with secrets excluded.
 
 On the Replit side, `lib/horus/src/tools.ts` mirrors the existing `callNadirService`/`isNadirConfigured` pattern: `isHubConfigured()` gates on the hub URL + `HUB_GATE_TOKEN` both being present, and `save_file`/`read_file`/`list_files` are added to `getHorusTools()`'s candidate set and to the contextual keyword selector alongside a dispatcher case in `executeHorusTool`.
 
 ## Env var name: `AI_HUB_URL` (canonical), `HORUS_HUB_URL` (transitional fallback)
 
-The hub base URL is read via `hubBaseUrl()` = `process.env.AI_HUB_URL ?? process.env.HORUS_HUB_URL`. Canonical name is **`AI_HUB_URL`**; the old `HORUS_HUB_URL` is kept only as a no-downtime fallback so the deploy keeps working before/after the secret is renamed in both dev and prod.
+The hub base URL is read via `hubBaseUrl()`, which prefers `AI_HUB_URL` (canonical, blank treated as absent) and falls back to the old `HORUS_HUB_URL` only during transition, so the deploy keeps working before/after the rename in both dev and prod.
 
-**Why:** the rename had to be no-downtime — the deployed api-server must not lose its hub connectivity during the transition. **How to apply:** once `AI_HUB_URL` is set (same value) in dev + prod and verified, remove the `?? HORUS_HUB_URL` fallback in `hubBaseUrl()` and the paired var in `tools.test.ts`, then delete the old secret. Until then, do not delete `HORUS_HUB_URL`.
+**Why:** the rename had to be no-downtime — the deployed api-server must not lose its hub connectivity during the transition. **How to apply:** once `AI_HUB_URL` is set (same value) in dev + prod and verified, remove the `HORUS_HUB_URL` fallback in `hubBaseUrl()` and the paired var in `tools.test.ts`, then delete the old secret. Until then, do not delete `HORUS_HUB_URL`. Note: env vars and secrets share one key namespace here — defining the same key as both collides, and deleting one wipes the other.
 
 ## Sandbox quirks hit while building this (reusable lessons)
 

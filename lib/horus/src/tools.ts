@@ -576,7 +576,9 @@ function isNadirConfigured(): boolean {
 // il secret venga rinominato in entrambi gli ambienti. Rimuovere il fallback
 // una volta che AI_HUB_URL è impostato ovunque (dev + prod).
 function hubBaseUrl(): string | undefined {
-  return process.env["AI_HUB_URL"] ?? process.env["HORUS_HUB_URL"];
+  const primary = process.env["AI_HUB_URL"]?.trim();
+  if (primary) return primary;
+  return process.env["HORUS_HUB_URL"]?.trim() || undefined;
 }
 
 function isHubConfigured(): boolean {

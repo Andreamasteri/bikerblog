@@ -146,6 +146,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **01:23** · Update system to use new AI Hub URL and rename related files <!-- 687194d -->
+  - _In parole semplici:_ Abbiamo aggiornato il sistema per utilizzare un nuovo indirizzo del nostro hub di intelligenza artificiale e rinominato i file correlati.
+- **01:05** · Task start baseline checkpoint for code review <!-- 794a0d4 -->
+  - _In parole semplici:_ Iniziato il processo di revisione del codice.
 - **01:01** · Organize project documentation for better readability and maintenance <!-- 6e3778c -->
   - _In parole semplici:_ Abbiamo organizzato la documentazione del progetto per renderla più leggibile e facile da mantenere
 - **00:38** · Update project changelog with recent task completions and improvements <!-- 1c6872e -->
