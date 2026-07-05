@@ -46,3 +46,4 @@
 - [Horus-hub shared files](horus-hub-shared-files.md) — cross-agent file tools on TC via a new "ai" GitHub repo; git push is sandbox-blocked (use GitHub Contents API), pm2 needs explicit dotenv load, bash DNS to TC-tunnel hosts is unreliable (verify via `curl --resolve` or the workflow instead).
 - [TC direct SSH access](tc-ssh-access.md) — real shell on TC via `cloudflared access ssh` ProxyCommand; verify key fingerprints and user match, watch for flattened-newline paste corruption.
 - [Bowie chat known-good snapshot](bowie-chat-known-good-snapshot.md) — full file map of the working Bowie chat feature + checkpoint commit to restore from if it regresses/corrupts.
+- [Script top-level execution vs testability](script-module-cli-guard.md) — a script mixing exported pure functions with a top-level `main()` needs an `import.meta.url` guard or importing it for unit tests runs the real thing.

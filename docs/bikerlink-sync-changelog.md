@@ -137,11 +137,19 @@ _Da qui in giù il contenuto è generato automaticamente ogni notte. Ogni voce
 corrisponde a una modifica registrata dopo il backfill iniziale._
 
 <!-- AUTO-CHANGELOG:START -->
+### 5 luglio 2026
+
+**Altre modifiche:**
+
+- **00:26** · Saved your changes before starting work <!-- 35f162c -->
+  - _In parole semplici:_ Abbiamo salvato le tue modifiche prima di iniziare il lavoro
+
 ### 4 luglio 2026
 
 **Task completati:**
 
 - **Task #191** — Import BikerLink manuals (Nadir + local archive) <!-- e62a1f5 -->
+  - _In parole semplici:_ Abbiamo importato i manuali di BikerLink in modo da fornire informazioni utili agli utenti.
 - **Task #188** — Mostra sempre "Riprova" quando l'agente va in timeout (chat diretta) <!-- 867a3a2 -->
   - _In parole semplici:_ In caso di timeout durante una chat diretta, l'app mostrerà sempre la scritta "Riprova".
 - **Task #184** — Type health-status mocks against HealthResult <!-- 26f3fe8 -->
@@ -159,13 +167,24 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **23:40** · Add VRAM usage monitoring and alerting integration <!-- 15f9206 -->
+  - _In parole semplici:_ Aggiunta del monitoraggio e dell'allerta sull'utilizzo della memoria video
+- **21:53** · Add shared file tools for cross-agent communication <!-- 9e9cd1e -->
+  - _In parole semplici:_ Aggiunta di strumenti per file condivisi per la comunicazione tra agenti
 - **21:45** · Add file management tools for inter-agent collaboration <!-- 8ce47af -->
+  - _In parole semplici:_ Aggiunto strumenti di gestione dei file per collaborare tra gli agenti
 - **21:30** · Update the project's open graph image for the blog <!-- 570b17a -->
+  - _In parole semplici:_ Abbiamo aggiornato l'immagine dell'open graph per il nostro blog
 - **21:02** · Document the current state of the Bowie chat feature <!-- 1c6a254 -->
+  - _In parole semplici:_ Abbiamo documentato lo stato attuale della funzione di chat Bowie.
 - **21:00** · Make NVIDIA GPU persistence mode survive reboots automatically <!-- 5900a0a -->
+  - _In parole semplici:_ Abbiamo migliorato il modo in cui l'app utilizza la modalità di persistenza della GPU NVIDIA per farla sopravvivere ai riavvii automatici.
 - **20:54** · Update project memory to reflect GPU resolution of latency issues <!-- 4975ed0 -->
+  - _In parole semplici:_ Abbiamo migliorato il modo in cui l'app gestisce le problematiche di latenza legate alla risoluzione della GPU.
 - **20:54** · Update memory to reflect GPU acceleration for faster responses <!-- 2a47ee2 -->
+  - _In parole semplici:_ Abbiamo migliorato le prestazioni dell'app per offrirti risposte più veloci grazie all'utilizzo della tua scheda grafica.
 - **20:18** · Add direct SSH access to user's TC box via Cloudflare tunnel <!-- 882c6fb -->
+  - _In parole semplici:_ Aggiunta dell'accesso diretto SSH alla scatola TC dell'utente tramite il tunnel di Cloudflare
 - **20:16** · Saved progress at the end of the loop <!-- ce5c697 -->
   - _In parole semplici:_ Salva il progresso alla fine di ogni ciclo.
 - **20:13** · Update the website's social sharing image <!-- d16a1cb -->
