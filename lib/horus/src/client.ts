@@ -1,8 +1,8 @@
 /**
  * Client generico per un "agente Ollama" raggiunto tramite tunnel Cloudflare
  * (URL + Cloudflare Access Service Token) sullo stesso server ThinkCentre
- * "TC" di BikerLink. Usato sia da Horus (`bikerlink:latest`, generazione
- * contenuti + chat interattiva) sia da Bowie (chat osservabile Horus↔Bowie).
+ * "TC" di BikerLink. Usato sia da Horus (`qwen3:4b`, generazione contenuti +
+ * chat interattiva) sia da Bowie (chat osservabile Horus↔Bowie).
  *
  * Horus resta il client di default esportato da questo modulo (stesso
  * comportamento e stessi export di sempre): sostituisce Claude per
@@ -47,7 +47,7 @@ generazione di contenuti per BikerBlog. Aggiunte con:
 \`pnpm --filter @workspace/scripts run horus:remember -- "nota"\`
 `;
 
-export const HORUS_MODEL = "bikerlink:latest";
+export const HORUS_MODEL = "qwen3:4b";
 
 /** Legge la memoria persistente di Horus (vuota se il file non esiste ancora). */
 export function loadHorusMemory(): string {

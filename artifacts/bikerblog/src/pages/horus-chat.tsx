@@ -348,7 +348,7 @@ export function HorusChat() {
     return entry ? agentModels[entry.healthEndpoint] : undefined;
   }
 
-  const horusModelLabel = modelLabelForAgent("horus") ?? "bikerlink:latest";
+  const horusModelLabel = modelLabelForAgent("horus") ?? "qwen3:4b";
   const bowieModelLabel = modelLabelForAgent("bowie");
   const quebrachoModelLabel = modelLabelForAgent("quebracho");
 
