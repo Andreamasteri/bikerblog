@@ -7,6 +7,7 @@ import {
   horusChatRaw,
   bowieChatRaw,
   quebrachoChatRaw,
+  quebrachoChatRawResilient,
   isBowieConfigured,
   isQuebrachoConfigured,
   checkHorusHealth,
@@ -930,7 +931,10 @@ const AGENT_DEFINITIONS: AgentDefinition[] = [
     healthPath: "horus/quebracho-health",
     chatPath: "horus/quebracho-chat",
     checkHealth: checkQuebrachoHealth,
-    chatRaw: quebrachoChatRaw,
+    // Task #197 (Fase 2d): la chat reale usa il wrapper resiliente (TC
+    // primario, riserva cloud gratuita se il TC è irraggiungibile). La
+    // firma è identica a `quebrachoChatRaw`, quindi drop-in qui.
+    chatRaw: quebrachoChatRawResilient,
     isConfigured: isQuebrachoConfigured,
     notConfiguredMessage: `${QUEBRACHO_AGENT_NAME} non è configurato su questo ambiente — manca QUEBRACHO_OLLAMA_MODEL. Aggiungilo dalla scheda Secrets per abilitare la conversazione con Quebracho.`,
     conversationNotConfiguredMessage:
@@ -1194,7 +1198,9 @@ const defaultBowieConversationDeps: BowieConversationDeps = {
   horusChatRaw,
   bowieChatRaw,
   isBowieConfigured,
-  quebrachoChatRaw,
+  // Task #197 (Fase 2d): conversazione a tre usa anch'essa il wrapper
+  // resiliente per Quebracho (vedi nota su AGENT_DEFINITIONS sopra).
+  quebrachoChatRaw: quebrachoChatRawResilient,
   isQuebrachoConfigured,
   saveBowieConversation,
 };

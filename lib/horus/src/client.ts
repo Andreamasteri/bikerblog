@@ -618,6 +618,118 @@ export function quebrachoChatRaw(
 }
 
 /**
+ * Modello cloud gratuito usato come riserva quando il TC di Quebracho è
+ * irraggiungibile (Fase 2d power, Task #197). `qwen3-coder:free` è scelto tra
+ * i modelli `:free` di OpenRouter perché è nella stessa famiglia già in uso
+ * per Horus/Bowie (Qwen3) e il nome "coder" è coerente col futuro percorso di
+ * escalation Quebracho→coder pesante (Deliverable B dello stesso task,
+ * ancora da fare). Cambiarlo qui non richiede altre modifiche.
+ */
+export const QUEBRACHO_CLOUD_FALLBACK_MODEL = "qwen/qwen3-coder:free";
+
+/**
+ * True se la riserva cloud di Quebracho è disponibile: le env var
+ * `AI_INTEGRATIONS_OPENROUTER_*` sono provisionate automaticamente da Replit
+ * AI Integrations (nessun secret da gestire), quindi qui verifichiamo solo la
+ * presenza — non serve un ping di rete separato come per Ollama.
+ */
+export function isQuebrachoCloudFallbackConfigured(): boolean {
+  return Boolean(
+    process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL && process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY
+  );
+}
+
+/**
+ * Invia la conversazione al modello cloud di riserva (OpenRouter, via Replit
+ * AI Integrations) invece che al Granite sul TC. Usato SOLO quando `options`
+ * non richiede tool: la riserva cloud copre la conversazione semplice (lo
+ * scopo di questo fallback — "non interrompere il servizio" quando il TC è
+ * giù), non la parità di function-calling con Ollama (mappare i tool_call_id
+ * di OpenAI e i risultati dei tool non è nello scope di questo task; se in
+ * futuro serve, va trattato come lavoro a parte).
+ *
+ * L'import di `@workspace/integrations-openrouter-ai` è dinamico apposta:
+ * quel modulo lancia un errore già al caricamento se le env var
+ * `AI_INTEGRATIONS_OPENROUTER_*` non sono presenti (comportamento corretto
+ * per un uso diretto dell'integrazione). Un `import` statico in cima a
+ * questo file romperebbe l'intero modulo `@workspace/horus` — quindi anche
+ * Horus e Bowie — in qualunque ambiente senza l'integrazione provisionata
+ * (es. test, CI, o un fork senza cloud fallback configurato). Il chiamante
+ * arriva qui solo dopo `isQuebrachoCloudFallbackConfigured()` ha già
+ * verificato che le env var esistono, quindi l'import dinamico è sicuro.
+ */
+async function quebrachoCloudChatRaw(
+  messages: HorusMessage[],
+  options: HorusChatOptions = {}
+): Promise<HorusRawResult> {
+  const { openrouter } = await import("@workspace/integrations-openrouter-ai");
+  const stream = await openrouter.chat.completions.create(
+    {
+      model: QUEBRACHO_CLOUD_FALLBACK_MODEL,
+      messages: messages.map((m) => ({
+        role: m.role === "tool" ? "user" : m.role,
+        content: m.content,
+      })),
+      max_tokens: options.maxTokens ?? 4096,
+      stream: true,
+    },
+    { signal: options.signal }
+  );
+
+  let full = "";
+  for await (const chunk of stream) {
+    const token = chunk.choices[0]?.delta?.content;
+    if (token) {
+      full += token;
+      options.onToken?.(token);
+    }
+  }
+  return { content: full.trim(), toolCalls: [] };
+}
+
+/**
+ * Wrapper resiliente su `quebrachoChatRaw`: prova prima il Granite sul TC
+ * (primario) e, solo se non risponde (o smette di rispondere a metà
+ * generazione) e non sono richiesti tool, passa alla riserva cloud gratuita
+ * — vedi `quebrachoCloudChatRaw`. Torna al TC automaticamente al prossimo
+ * turno (ogni chiamata riprova prima il TC: nessuno stato "modalità cloud"
+ * persistente da resettare a mano). Se la riserva cloud non è configurata,
+ * il comportamento è identico a `quebrachoChatRaw` di sempre (stesso
+ * messaggio "non configurato" quando applicabile).
+ *
+ * Usare questa funzione (non `quebrachoChatRaw` direttamente) in ogni punto
+ * che serve conversazioni reali con l'utente (chat diretta, conversazione a
+ * tre). `quebrachoChatRaw` resta invariata per usi che confrontano
+ * esplicitamente l'output grezzo del TC (es.
+ * `scripts/src/generate-bikerlink-manuals.ts`, che fa un A/B Horus↔Quebracho
+ * e non deve mai silenziosamente ricevere una risposta cloud al posto di
+ * quella del TC).
+ */
+export async function quebrachoChatRawResilient(
+  messages: HorusMessage[],
+  options: HorusChatOptions = {}
+): Promise<HorusRawResult> {
+  const canUseCloud = !options.tools && isQuebrachoCloudFallbackConfigured();
+
+  const health = await checkQuebrachoHealth();
+  if (health.status === "ok") {
+    try {
+      return await quebrachoChatRaw(messages, options);
+    } catch (err) {
+      if (!canUseCloud) throw err;
+      return await quebrachoCloudChatRaw(messages, options);
+    }
+  }
+
+  if (!canUseCloud) {
+    // Nessuna riserva disponibile: comportamento invariato, incluso il
+    // messaggio "non configurato" quando applicabile.
+    return await quebrachoChatRaw(messages, options);
+  }
+  return await quebrachoCloudChatRaw(messages, options);
+}
+
+/**
  * Estrae il primo blocco JSON da un testo, tollerando eventuali fence markdown
  * o testo esplicativo intorno (i modelli locali sono meno disciplinati di Claude
  * nel rispettare "solo JSON, nessun altro testo").

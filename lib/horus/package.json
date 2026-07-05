@@ -7,9 +7,11 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "node --experimental-test-module-mocks --import tsx --test src/**/*.test.ts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@workspace/integrations-openrouter-ai": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsx": "catalog:"

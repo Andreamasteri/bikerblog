@@ -50,3 +50,4 @@
 - [Script top-level execution vs testability](script-module-cli-guard.md) — a script mixing exported pure functions with a top-level `main()` needs an `import.meta.url` guard or importing it for unit tests runs the real thing.
 - [Naming convention — agenti/infra](naming-convention-agents-infra.md) — readable-label scheme for env vars, Ollama tags, Cloudflare tunnel/Access/service-token names; apply to every new infra resource.
 - [Cloudflare token scope blocker](cloudflare-token-scope-blocker.md) — `CLOUDFLARE_API_TOKEN` is DNS-only (no account/Zero Trust access); blocks any Tunnel/Access-app/service-token automation via API until rescoped.
+- [Quebracho cloud fallback](quebracho-cloud-fallback.md) — LiteLLM rejected (hides "who answered" in an already-nontrivial tool loop); hand-written TC-first/cloud-fallback switch is text-only, no tool-call parity.
