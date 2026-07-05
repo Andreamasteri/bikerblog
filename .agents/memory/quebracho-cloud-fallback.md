@@ -72,3 +72,7 @@ fallback can be unavailable exactly when it's needed.
 **How to apply:** if fallback reliability matters, don't depend on a single `:free` model — either use a
 paid/low-cost OpenRouter model as the true last resort, or try a short chain of `:free` models in order.
 This is a product/cost decision, not a silent code change — confirm with the user before implementing.
+
+**Deferred decision:** the user wants to revisit this together with BikerLink work later, leaning toward
+**Groq** (not OpenRouter) as the more reliable fallback provider. Don't preempt this by swapping the fallback
+provider/model unilaterally — wait for that combined session.
