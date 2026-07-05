@@ -141,6 +141,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #203** — Clone locale BikerLink su TC con refresh automatico ogni 24h <!-- d958b02 -->
 - **Task #200** — Add structured tracing for the LLM tool-loop <!-- e0df4a9 -->
 - **Task #197** — Deliverable B: free cloud fallback for Quebracho <!-- 6d4931d -->
 - **Task #195** — Manuali BikerLink generati da Horus e Quebracho <!-- cc14724 -->
