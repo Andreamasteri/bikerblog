@@ -6,6 +6,7 @@ import metaRouter from "./meta";
 import internalRouter from "./internal";
 import podcastRouter from "./podcast";
 import horusRouter from "./horus";
+import aiHubRouter from "./ai-hub";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(metaRouter);
 router.use(internalRouter);
 router.use(podcastRouter);
 router.use(horusRouter);
+router.use(aiHubRouter);
 
 export default router;

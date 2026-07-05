@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiHubHealthStatus';
 export * from './author';
 export * from './authorSummary';
 export * from './blogStats';

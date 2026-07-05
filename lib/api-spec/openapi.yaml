@@ -18,6 +18,8 @@ tags:
     description: Tag operations
   - name: stats
     description: Aggregate stats and discovery
+  - name: ai-hub
+    description: AI Hub (TC) proxy skeleton — Fase 2b (Task #193) fills this in
 paths:
   /healthz:
     get:
@@ -31,6 +33,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /ai-hub/health:
+    get:
+      operationId: aiHubHealth
+      tags: [ai-hub]
+      summary: Reachability check for the AI Hub service on TC (skeleton, no chat proxying yet)
+      responses:
+        "200":
+          description: AI Hub reachability status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiHubHealthStatus"
 
   /posts:
     get:
@@ -275,6 +290,13 @@ components:
       properties:
         status: { type: string }
       required: [status]
+
+    AiHubHealthStatus:
+      type: object
+      properties:
+        configured: { type: boolean, description: "AI_HUB_URL and HUB_GATE_TOKEN are both set" }
+        reachable: { type: boolean, nullable: true, description: "null when not configured" }
+      required: [configured, reachable]
 
     ErrorResponse:
       type: object

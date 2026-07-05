@@ -9,6 +9,13 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface AiHubHealthStatus {
+  /** AI_HUB_URL and HUB_GATE_TOKEN are both set */
+  configured: boolean;
+  /** null when not configured */
+  reachable: boolean | null;
+}
+
 export interface ErrorResponse {
   error: string;
 }

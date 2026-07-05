@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AiHubHealthStatus,
   AuthorSummary,
   BlogStats,
   Comment,
@@ -110,6 +111,83 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getAiHubHealthUrl = () => {
+
+
+
+
+  return `/api/ai-hub/health`
+}
+
+/**
+ * @summary Reachability check for the AI Hub service on TC (skeleton, no chat proxying yet)
+ */
+export const aiHubHealth = async ( options?: RequestInit): Promise<AiHubHealthStatus> => {
+
+  return customFetch<AiHubHealthStatus>(getAiHubHealthUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAiHubHealthQueryKey = () => {
+    return [
+    `/api/ai-hub/health`
+    ] as const;
+    }
+
+
+export const getAiHubHealthQueryOptions = <TData = Awaited<ReturnType<typeof aiHubHealth>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof aiHubHealth>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAiHubHealthQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof aiHubHealth>>> = ({ signal }) => aiHubHealth({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof aiHubHealth>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type AiHubHealthQueryResult = NonNullable<Awaited<ReturnType<typeof aiHubHealth>>>
+export type AiHubHealthQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Reachability check for the AI Hub service on TC (skeleton, no chat proxying yet)
+ */
+
+export function useAiHubHealth<TData = Awaited<ReturnType<typeof aiHubHealth>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof aiHubHealth>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getAiHubHealthQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

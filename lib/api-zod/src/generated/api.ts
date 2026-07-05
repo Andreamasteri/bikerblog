@@ -17,6 +17,15 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Reachability check for the AI Hub service on TC (skeleton, no chat proxying yet)
+ */
+export const AiHubHealthResponse = zod.object({
+  "configured": zod.boolean().describe('AI_HUB_URL and HUB_GATE_TOKEN are both set'),
+  "reachable": zod.boolean().nullable().describe('null when not configured')
+})
+
+
+/**
  * @summary List blog posts
  */
 export const ListPostsQueryParams = zod.object({

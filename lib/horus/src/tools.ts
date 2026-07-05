@@ -570,15 +570,11 @@ function isNadirConfigured(): boolean {
   return Boolean(process.env["NADIR_URL"] && process.env["NADIR_GATE_TOKEN"]);
 }
 
-// URL base del servizio AI Hub su TC. Nome canonico: AI_HUB_URL. Durante la
-// transizione senza downtime (Task #193) leggiamo ancora il vecchio nome
-// HORUS_HUB_URL come fallback, così il deploy resta funzionante prima/dopo che
-// il secret venga rinominato in entrambi gli ambienti. Rimuovere il fallback
-// una volta che AI_HUB_URL è impostato ovunque (dev + prod).
+// URL base del servizio AI Hub su TC. Nome canonico: AI_HUB_URL (impostato
+// ovunque, dev + prod). Il vecchio nome HORUS_HUB_URL è stato rimosso in
+// Fase 2c economy (Task #196, Step 6 — set minimo secret).
 function hubBaseUrl(): string | undefined {
-  const primary = process.env["AI_HUB_URL"]?.trim();
-  if (primary) return primary;
-  return process.env["HORUS_HUB_URL"]?.trim() || undefined;
+  return process.env["AI_HUB_URL"]?.trim() || undefined;
 }
 
 function isHubConfigured(): boolean {
