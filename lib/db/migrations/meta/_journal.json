@@ -50,6 +50,13 @@
       "when": 1780000000000,
       "tag": "0006_add_llm_traces",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780100000000,
+      "tag": "0007_add_supervision_backlog",
+      "breakpoints": true
     }
   ]
 }

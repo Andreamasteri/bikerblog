@@ -12,7 +12,17 @@ import {
 } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { createNadirExportHandler } from "./nadir-export.js";
-import { writeVramAlertState } from "@workspace/horus";
+import {
+  writeVramAlertState,
+  listSupervisionBacklog,
+  updateBacklogStatus,
+  countOpenBacklog,
+  runAresAnalysis,
+  isAresConfigured,
+  isAresRunning,
+  aresModel,
+} from "@workspace/horus";
+import type { SupervisionBacklogStatus } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -360,6 +370,147 @@ router.post(
     req.log.warn({ usedMiB, totalMiB, pct, thresholdPct }, "vram-alert active");
     res.json({ ok: true, active: true });
   },
+);
+
+// ── Backlog di supervisione semantica (Task #201, Ares) ─────────────────────
+// Lista e ciclo di vita del backlog dei problemi rilevati dalla ronda notturna
+// (#199) e classificati da Horus. ADMIN-ONLY: stesso bearer token interno
+// (derivato da SESSION_SECRET) delle altre rotte /_internal/*. Coerente col
+// threat model — la lista dei problemi NON è pubblica e non è esposta come tool
+// di chat: la consulta solo chi ha il token interno.
+
+const BACKLOG_STATUSES: SupervisionBacklogStatus[] = ["open", "in_review", "resolved", "dismissed"];
+
+function isBacklogStatus(value: unknown): value is SupervisionBacklogStatus {
+  return typeof value === "string" && (BACKLOG_STATUSES as string[]).includes(value);
+}
+
+router.get("/_internal/supervision-backlog", async (req, res): Promise<void> => {
+  const auth = req.headers.authorization;
+  if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+
+  const statusParam = req.query["status"];
+  if (statusParam !== undefined && !isBacklogStatus(statusParam)) {
+    res.status(400).json({ error: `status non valido (ammessi: ${BACKLOG_STATUSES.join(", ")})` });
+    return;
+  }
+  const limitRaw = Number(req.query["limit"]);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined;
+
+  try {
+    const items = await listSupervisionBacklog({
+      status: statusParam as SupervisionBacklogStatus | undefined,
+      limit,
+    });
+    const openCount = await countOpenBacklog();
+    res.json({ ok: true, openCount, count: items.length, items });
+  } catch (err) {
+    req.log.error({ err }, "supervision-backlog list failed");
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+router.post(
+  "/_internal/supervision-backlog/:id/status",
+  express.json({ limit: "10kb" }),
+  async (req, res): Promise<void> => {
+    const auth = req.headers.authorization;
+    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+
+    const id = Number(req.params["id"]);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "id non valido" });
+      return;
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    if (!isBacklogStatus(body["status"])) {
+      res.status(400).json({ error: `status richiesto (ammessi: ${BACKLOG_STATUSES.join(", ")})` });
+      return;
+    }
+    const aresNotes = typeof body["aresNotes"] === "string" ? body["aresNotes"] : undefined;
+
+    try {
+      const updated = await updateBacklogStatus(id, body["status"], aresNotes);
+      if (!updated) {
+        res.status(404).json({ ok: false, error: "voce di backlog non trovata" });
+        return;
+      }
+      req.log.info({ id, status: body["status"] }, "supervision-backlog status updated");
+      res.json({ ok: true, item: updated });
+    } catch (err) {
+      req.log.error({ id, err }, "supervision-backlog status update failed");
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+// ── Trigger di Ares (agente heavy on-demand, Task #201) ─────────────────────
+// Avvia UN ciclo Ares su una voce del backlog: sfratta la lineup residente,
+// carica il modello pesante (devstral), analizza e PROPONE ~2 percorsi (mai
+// applica modifiche), poi scarica Ares e ripristina la lineup. ADMIN-ONLY:
+// stesso bearer interno delle altre /_internal/* — è un'operazione pesante che
+// sfratta gli agenti residenti, quindi NON è un tool di chat né una rotta
+// pubblica (coerente col threat model — Elevation of Privilege / DoS). Il lock
+// a ciclo singolo (in `runAresAnalysis`) impedisce avvii concorrenti.
+router.post(
+  "/_internal/ares/analyze/:id",
+  express.json({ limit: "10kb" }),
+  async (req, res): Promise<void> => {
+    const auth = req.headers.authorization;
+    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+
+    if (!isAresConfigured()) {
+      res.status(503).json({ error: "Ares non configurato (manca ARES_OLLAMA_MODEL o un URL Ollama)" });
+      return;
+    }
+    if (isAresRunning()) {
+      res.status(409).json({ error: "un ciclo Ares è già in corso" });
+      return;
+    }
+
+    const id = Number(req.params["id"]);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "id non valido" });
+      return;
+    }
+
+    req.log.info({ id, model: aresModel() }, "ares analyze triggered");
+    try {
+      const result = await runAresAnalysis(id);
+      if (!result.ok) {
+        req.log.warn({ id, error: result.error }, "ares analyze failed");
+        // 404 se la voce non esiste, 409 se già in corso/chiusa, 502 per il resto.
+        const status = result.error?.includes("non trovata")
+          ? 404
+          : result.error?.includes("già")
+            ? 409
+            : 502;
+        res.status(status).json(result);
+        return;
+      }
+      if (result.restoreFailures.length > 0) {
+        req.log.error(
+          { id, restoreFailures: result.restoreFailures },
+          "ares restore incompleto: lineup residente da controllare"
+        );
+      }
+      req.log.info({ id, snapshot: result.snapshot }, "ares analyze completed");
+      res.json(result);
+    } catch (err) {
+      req.log.error({ id, err }, "ares analyze threw");
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
 );
 
 export default router;

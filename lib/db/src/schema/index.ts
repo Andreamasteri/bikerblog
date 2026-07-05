@@ -6,3 +6,4 @@ export * from "./comment-likes";
 export * from "./site-stats";
 export * from "./horus-conversations";
 export * from "./llm-traces";
+export * from "./supervision-backlog";

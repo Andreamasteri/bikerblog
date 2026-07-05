@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
-    "@workspace/integrations-openrouter-ai": "workspace:*"
+    "@workspace/integrations-openrouter-ai": "workspace:*",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

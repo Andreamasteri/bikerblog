@@ -16,10 +16,12 @@ confusione in passato durante l'indagine sull'eviction VRAM.
 **Convenzione (già in vigore per gli env var, estesa a Cloudflare):**
 
 1. **Env var per-agente**: prefisso `<AGENT>_` (`HORUS_`, `BOWIE_`,
-   `QUEBRACHO_`) + suffisso che descrive il ruolo: `_OLLAMA_URL`,
+   `QUEBRACHO_`, `ARES_`) + suffisso che descrive il ruolo: `_OLLAMA_URL`,
    `_OLLAMA_MODEL`, `_CF_ACCESS_CLIENT_ID`, `_CF_ACCESS_CLIENT_SECRET`.
-   Bowie/Quebracho fanno fallback sulle var di Horus se non impostate
+   Bowie/Quebracho/Ares fanno fallback sulle var di Horus se non impostate
    (stesso tunnel condiviso) — pattern già in `lib/horus/src/client.ts`.
+   Ares (heavy on-demand, `ARES_OLLAMA_MODEL` = `devstral:24b`) segue lo
+   stesso schema pur non essendo residente in VRAM.
 2. **Env var di infrastruttura condivisa** (non specifiche di un agente):
    nome descrittivo del servizio, non un codename — `AI_HUB_URL`,
    `HUB_GATE_TOKEN`, `CLOUDFLARE_API_TOKEN`, `TC_SSH_KEY`. Mai abbreviare in

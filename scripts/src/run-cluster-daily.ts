@@ -1191,7 +1191,11 @@ let diaryPostCreatedThisRun = false;
     console.warn(`[cluster-daily] ⚠ step 11: ${supervision.detail}`);
     criticalWarnings.push(`step 11 (semantic supervision): ${supervision.detail} — ${anomalyLines.join("; ")}`);
 
-    const { writeSupervisionAlertState } = await import("@workspace/horus");
+    const {
+      writeSupervisionAlertState,
+      persistSupervisionAnomalies,
+      classifyOpenBacklogWithHorus,
+    } = await import("@workspace/horus");
     const now = new Date().toISOString();
     writeSupervisionAlertState({
       active: true,
@@ -1200,6 +1204,18 @@ let diaryPostCreatedThisRun = false;
       sampledCount: supervision.sampledCount,
       anomalies: supervision.anomalies,
     });
+
+    // Task #201 (Ares): oltre all'alert effimero, le anomalie diventano un
+    // backlog DURATURO nel DB (idempotente su traceId) e Horus le classifica
+    // (dove/cosa/perché). Entrambe best-effort: un guasto DB/Horus non fa
+    // fallire la ronda né questo step. Il backlog è poi consultabile dall'admin
+    // e consumato dall'agente heavy on-demand Ares.
+    const persisted = await persistSupervisionAnomalies(supervision.anomalies);
+    console.log(
+      `[cluster-daily] step 11: backlog — ${persisted.inserted} nuove voci, ${persisted.skipped} già presenti`
+    );
+    const classified = await classifyOpenBacklogWithHorus();
+    console.log(`[cluster-daily] step 11: classificazione Horus — ${classified.detail}`);
 
     report.addStep({
       step: 11,

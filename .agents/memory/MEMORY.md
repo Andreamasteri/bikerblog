@@ -55,4 +55,5 @@
 - [Quebracho cloud fallback](quebracho-cloud-fallback.md) — LiteLLM rejected (hides "who answered" in an already-nontrivial tool loop); hand-written TC-first/cloud-fallback switch is text-only, no tool-call parity.
 - [Semantic supervision (Quebracho cross-check)](semantic-supervision-quebracho.md) — nightly llm_traces sample, one batched judge call (not per-row), infra-failure vs real-anomaly distinction before alerting.
 - [LLM tracing schema](llm-tracing-schema.md) — `llm_traces` table records one row per tool-loop turn (not per model call); best-effort insert via lazy-loaded `@workspace/db` so a DB hiccup never breaks a chat turn.
+- [Ares heavy on-demand agent](ares-heavy-agent.md) — 4th, non-resident agent (devstral); admin-only trigger evicts the economy lineup, analyzes ONE backlog item propose-only, restores in `finally`; snapshot via /api/ps, cache-bust import in tests.
 - [BikerLink TC clone refresh](bikerlink-tc-clone-refresh.md) — two unrelated bikerlink clones exist on TC (live-deploy vs analysis); analysis one self-refreshes per-call already; daily cron added since TC has no passwordless sudo for systemd.

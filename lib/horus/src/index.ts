@@ -58,3 +58,30 @@ export {
   type LlmTraceSurface,
   type LlmTraceOutcome,
 } from "./tracing.js";
+
+export {
+  persistSupervisionAnomalies,
+  classifyOpenBacklogWithHorus,
+  listSupervisionBacklog,
+  getSupervisionBacklogItem,
+  countOpenBacklog,
+  updateBacklogStatus,
+  setAresNotes,
+  BACKLOG_CATEGORIES,
+  type SupervisionBacklogAnomaly,
+  type ListBacklogOptions,
+  type BacklogCategory,
+} from "./supervision-backlog.js";
+
+export {
+  ARES_AGENT_NAME,
+  isAresConfigured,
+  checkAresHealth,
+  aresModel,
+  isAresRunning,
+  listResidentModels,
+  unloadModel,
+  warmupModel,
+  runAresAnalysis,
+  type AresAnalysisResult,
+} from "./ares.js";
