@@ -149,6 +149,14 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:57** · Document Valhalla tile build process and address cleanup issues <!-- 174d633 -->
+- **19:30** · Saved progress at the end of the loop <!-- 928e60c -->
+- **17:45** · Defer decision on cloud fallback model until BikerLink work <!-- 68a4839 -->
+- **17:37** · Document live test results for cloud fallback resilience <!-- 97d9836 -->
+- **17:23** · Ares: agente heavy on-demand (POWER mode) — Task #201 <!-- cc5755d -->
+- **16:53** · Add nightly semantic supervision and alerting for AI interactions <!-- 8e3041e -->
+- **16:42** · Update documentation regarding service failures <!-- 3c1623d -->
+- **16:36** · Update project changelog to reflect task completion <!-- 3ae4120 -->
 - **15:43** · Update project documentation with new route planning and transcription tools <!-- 6ed185d -->
 - **14:03** · Defer route planning integration to BikerLink's dedicated task <!-- 7629f4c -->
 - **14:00** · Update project documentation with new route planning and transcription tools <!-- 716f3bb -->
