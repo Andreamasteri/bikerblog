@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **20:06** · Fix issue where timezone database was not being correctly created <!-- aee3be8 -->
+- **19:32** · Update project changelog to reflect recent task completions <!-- d066975 -->
 - **16:34** · Update project changelog to reflect recent task completions <!-- 2c83677 -->
 - **13:41** · Update project changelog to reflect recent task completions <!-- 23ff375 -->
 - **12:11** · Update firewall configuration to remove outdated Tailscale references <!-- c9f0a54 -->
