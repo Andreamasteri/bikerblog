@@ -61,3 +61,4 @@
 - [nginx sites-enabled backup gotcha](nginx-sites-enabled-backup-gotcha.md) — leaving a `.bak` file inside sites-enabled/sites-available/snippets breaks `nginx -t` with a misleading duplicate-server error; back up outside the config tree.
 - [Valhalla elevation build quirks](valhalla-elevation-build-quirks.md) — `-t` needs the loose-tile volume (not the tile_extract tar) populated; `bikerlink/valhalla:latest` has no python lz4, use gzip.
 - [Valhalla tile build on TC](valhalla-tile-build-tc.md) — no-downtime = out-of-place manual docker-run binary pipeline (custom image has no gis-ops entrypoint) + docker-as-root cleanup (no passwordless sudo); swap tar into self-host/data at end.
+- [TC firewall hardening](tc-firewall-hardening.md) — TC is dual-homed (.35 wired / .36 wifi, use /24 subnet not a single IP); dead "Anywhere" ufw rules for 80/443/6380 removed, SSH scoped to LAN — Cloudflare Tunnel is the only intended public path.
