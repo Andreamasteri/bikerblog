@@ -33,6 +33,16 @@ ports are a common way an accidental future bind becomes an unauthenticated
 internet-reachable service.
 
 **How to apply:** any new *legitimate* need for external non-Cloudflare
-access should be added back deliberately and scoped (LAN subnet, tailscale,
-or a specific docker-bridge subnet like the existing `3010`/`11434` rules),
-never as a bare "Anywhere" rule.
+access should be added back deliberately and scoped (LAN subnet, or a
+specific docker-bridge subnet like the existing `3010`/`11434` rules), never
+as a bare "Anywhere" rule.
+
+**Tailscale is fully decommissioned on TC (2026-07-06)** — do not reference it
+or re-add ufw rules for a `tailscale0` interface. It was removed at the
+network level earlier, but the ufw `tailscale0` allow rules (v4+v6) and the
+leftover `tailscale-archive-keyring` package + `/etc/apt/sources.list.d/tailscale.list`
+apt source survived until this cleanup; all three are now gone. The only
+remaining "tailscale" mentions on TC live inside the BikerLink app repo itself
+(scripts, docs, a migration note `MIGRA-DA-TAILSCALE.md`) — that repo's code
+is off-limits for the agent to edit directly (per user instruction), so those
+are reported to the user rather than changed here.
