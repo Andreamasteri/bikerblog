@@ -30,6 +30,7 @@
     "pipeline:status": "tsx src/read-last-run.ts",
     "pipeline:summary": "tsx src/pipeline-summary.ts",
     "pipeline:notify-test": "tsx src/notify-test.ts",
+    "tc:ssh-setup": "tsx src/tc-ssh-setup.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
