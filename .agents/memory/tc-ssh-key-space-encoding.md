@@ -25,10 +25,19 @@ looked like "the login broke again" rather than a one-time formatting bug.
   / `-----END ...-----`) before splitting
 - treats every other whitespace run as a line break between base64 body
   chunks
-- writes to `/tmp/tc_ssh/key` with `0600` permissions
+- writes to `.local/tc_ssh/key` (not `/tmp`) with `0600` permissions
 
-**How to apply:** always run this script (not manual `printf`/`echo`) at
-the start of any session needing TC SSH access. If `TC_SSH_KEY` is ever
-re-set with real newlines instead of spaces, the script's header/footer
-split still works (splitting on any whitespace run), so it's safe either
-way.
+**Why `.local/` and not `/tmp`:** `/tmp` is wiped every agent session, so a
+key written there had to be rebuilt every single session — this is what
+the user meant by "temporary logins" and asked to be eliminated. `.local/`
+is gitignored but persists across sessions for the life of the repl, so
+running `tc:ssh-setup` once is enough; it never needs to be regenerated
+again unless the repl's persistent storage itself is wiped or `TC_SSH_KEY`
+is rotated. SSH commands must reference `.local/tc_ssh/key` (relative to
+repo root), not `/tmp/tc_ssh/key`.
+
+**How to apply:** run this script once (or whenever in doubt) instead of
+manual `printf`/`echo` reconstruction, and always point `ssh -i` at
+`.local/tc_ssh/key`. If `TC_SSH_KEY` is ever re-set with real newlines
+instead of spaces, the script's header/footer split still works (splitting
+on any whitespace run), so it's safe either way.

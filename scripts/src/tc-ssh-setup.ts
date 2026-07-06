@@ -1,7 +1,10 @@
 import { mkdirSync, writeFileSync, chmodSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 
-const KEY_DEST = "/tmp/tc_ssh/key";
+// .local/ persists across agent sessions (unlike /tmp, which is wiped each
+// session) and is already gitignored, so the key only needs to be written
+// once per repl lifetime instead of once per session.
+const KEY_DEST = resolve(import.meta.dirname, "../../.local/tc_ssh/key");
 
 const HEADER = "-----BEGIN OPENSSH PRIVATE KEY-----";
 const FOOTER = "-----END OPENSSH PRIVATE KEY-----";
