@@ -149,6 +149,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **23:15** · Add documentation for Valhalla build quirks <!-- 3773323 -->
+- **22:15** · Update project changelog to reflect task completion <!-- e00482a -->
+- **22:03** · Update documentation with realistic build times <!-- 294e8f4 -->
+- **21:56** · Update documentation on Valhalla tile swap process <!-- 70dee85 -->
 - **19:57** · Document Valhalla tile build process and address cleanup issues <!-- 174d633 -->
 - **19:30** · Saved progress at the end of the loop <!-- 928e60c -->
 - **17:45** · Defer decision on cloud fallback model until BikerLink work <!-- 68a4839 -->
