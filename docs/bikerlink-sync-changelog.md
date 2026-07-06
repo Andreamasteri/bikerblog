@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **10:46** · Update project changelog to reflect task completion <!-- b1ad2dc -->
+- **10:40** · Add documentation for nginx configuration backup errors <!-- 845bf33 -->
 - **00:52** · Update project changelog to reflect task completion <!-- a9077cf -->
 
 ### 5 luglio 2026
