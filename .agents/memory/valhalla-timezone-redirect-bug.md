@@ -46,3 +46,21 @@ empty stub, not the finished artifact.
 closed its file descriptor), never on `CREATE`/`ATTRIB`/`MODIFY`. Any
 future "protect a file being built inside a container" watcher should key
 off `close_write` exclusively.
+
+## Leftover tar blocks the final extract step
+
+`valhalla_build_extract` writes `/custom_files/valhalla_tiles.tar`, which
+docker-compose maps to `infra/self-host/data/valhalla_tiles.tar` on the
+host (a bind mount, NOT the `valhalladata` named volume that holds
+`0/`,`1/`,`2/`,`admins.sqlite`,`timezones.sqlite`). It refuses to overwrite
+an existing tar (`CRITICAL: File exists. Specify --overwrite`). A tar left
+over from a prior, incomplete/wrong build attempt silently blocks this
+final step on the next run.
+
+**How to apply:** before the extract step (or when resuming after a
+failed prior run), check/clear `infra/self-host/data/valhalla_tiles.tar`
+on the host — it lives outside the volume that gets cleaned when you wipe
+`0/1/2/*.sqlite`. If only this final step failed, you can safely rerun
+just `docker compose run --rm -T valhalla valhalla_build_extract -c
+/custom_files/valhalla.json -v` directly — no need to redo the multi-hour
+`valhalla_build_tiles` stage.

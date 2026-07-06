@@ -141,6 +141,9 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **21:15** · Make SSH key login persistent across sessions <!-- b000252 -->
+- **21:03** · Add script to properly format SSH keys from environment variables <!-- 60ab139 -->
+- **21:01** · Update project changelog to reflect recent task completions <!-- 709a062 -->
 - **20:06** · Fix issue where timezone database was not being correctly created <!-- aee3be8 -->
 - **19:32** · Update project changelog to reflect recent task completions <!-- d066975 -->
 - **16:34** · Update project changelog to reflect recent task completions <!-- 2c83677 -->
