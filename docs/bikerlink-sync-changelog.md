@@ -137,6 +137,12 @@ _Da qui in giù il contenuto è generato automaticamente ogni notte. Ogni voce
 corrisponde a una modifica registrata dopo il backfill iniziale._
 
 <!-- AUTO-CHANGELOG:START -->
+### 6 luglio 2026
+
+**Altre modifiche:**
+
+- **00:52** · Update project changelog to reflect task completion <!-- a9077cf -->
+
 ### 5 luglio 2026
 
 **Task completati:**
