@@ -62,3 +62,4 @@
 - [Valhalla elevation build quirks](valhalla-elevation-build-quirks.md) — `-t` needs the loose-tile volume (not the tile_extract tar) populated; `bikerlink/valhalla:latest` has no python lz4, use gzip.
 - [Valhalla tile build on TC](valhalla-tile-build-tc.md) — no-downtime = out-of-place manual docker-run binary pipeline (custom image has no gis-ops entrypoint) + docker-as-root cleanup (no passwordless sudo); swap tar into self-host/data at end.
 - [TC firewall hardening](tc-firewall-hardening.md) — TC is dual-homed (.35 wired / .36 wifi, use /24 subnet not a single IP); dead "Anywhere" ufw rules for 80/443/6380 removed, SSH scoped to LAN — Cloudflare Tunnel is the only intended public path.
+- [Valhalla timezone redirect bug](valhalla-timezone-redirect-bug.md) — `valhalla_build_timezones` writes to stdout not a file; missing redirect silently lost the db across 3 rebuilds; also chattr+i must key on CLOSE_WRITE only, never CREATE/ATTRIB.
