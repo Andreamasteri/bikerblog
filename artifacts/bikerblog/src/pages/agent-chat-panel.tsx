@@ -94,6 +94,27 @@ function downloadAsFile(content: string, filenamePrefix: string): void {
 
 type ChatMode = "default" | "architect";
 
+const HORUS_CHAT_MODE_STORAGE_KEY = "horus-chat-mode";
+
+function loadStoredChatMode(enabled: boolean): ChatMode {
+  if (!enabled) return "default";
+  try {
+    const stored = localStorage.getItem(HORUS_CHAT_MODE_STORAGE_KEY);
+    if (stored === "default" || stored === "architect") return stored;
+  } catch {
+    // localStorage non disponibile (es. modalità privata): usa il default.
+  }
+  return "default";
+}
+
+function storeChatMode(mode: ChatMode): void {
+  try {
+    localStorage.setItem(HORUS_CHAT_MODE_STORAGE_KEY, mode);
+  } catch {
+    // localStorage non disponibile: la preferenza semplicemente non persiste.
+  }
+}
+
 export interface AgentChatPanelProps {
   /** Endpoint relativo alla base dell'app (es. "api/horus/chat" o "api/horus/bowie-chat"). */
   endpoint: string;
@@ -141,7 +162,7 @@ export function AgentChatPanel({
   const [notConfigured, setNotConfigured] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [chatMode, setChatMode] = useState<ChatMode>("default");
+  const [chatMode, setChatMode] = useState<ChatMode>(() => loadStoredChatMode(showModeSelector));
   // Task #185: la connessione fetch/SSE su mobile può cadere mentre il server
   // sta ancora generando (Chrome sospende la rete a schermo bloccato/tab in
   // background). In quel caso il server completa comunque la risposta e la
@@ -171,8 +192,10 @@ export function AgentChatPanel({
 
   // Cambiare modalità (default ↔ architect) azzera la cronologia: il prompt
   // di sistema cambia e tenere la history precedente confonde il modello.
+  // Persiste anche la scelta in localStorage così sopravvive al reload.
   useEffect(() => {
     if (!showModeSelector) return;
+    storeChatMode(chatMode);
     setMessages([]);
     setError(null);
     setCanRetry(false);
