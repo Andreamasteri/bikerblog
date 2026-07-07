@@ -139,8 +139,35 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 <!-- AUTO-CHANGELOG:START -->
 ### 7 luglio 2026
 
+**Task completati:**
+
+- **Task #201** — Ares — agente heavy on-demand per analisi e risoluzione complesse <!-- a531fbc -->
+  - _In parole semplici:_ Okay, the user wants me to rewrite this technical changelog entry into a single short sentence in Italian that's easy for non-programmers to understand. Let me read the original text first.
+
 **Altre modifiche:**
 
+- **10:30** · Add ability to plan motorcycle trips and routes <!-- 4d2b086 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short Italian sentence that's easy to understand for non-programmers. The original text is "Add ability to plan motorcycle trips and routes".
+- **10:27** · Improve Horus routing and retry logic for better user experience <!-- 640fa3a -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Improve Horus routing and retry logic for better user experience".
+- **10:25** · Fix(tools): call_horus auto-selected for routing in Bowie context <!-- e5197c8 -->
+  - _In parole semplici:_ Okay, let me try to work through this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They specified no technical jargon without explanation, don't add details, and just respond with the sentence.
+- **10:22** · Add personalized route suggestions based on rider style <!-- 87877e1 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Add personalized route suggestions based on rider style".
+- **10:08** · Feat(horus): add get_weather, get_traffic, route_via_graphhopper tools (trigger-abilitabili) <!-- a3fb9b8 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me see.
+- **09:47** · Add navigation chat endpoint for BikerLink integration <!-- 6f1129a -->
+  - _In parole semplici:_ Okay, I need to rewrite this tech changelog entry into a short, simple Italian sentence that's understandable for non-programmers. The original text is "Add navigation chat endpoint for BikerLink integration". Let me break it down.
+- **09:38** · Add Ares tool to analyze backlog items and improve agent prompts <!-- 3de3df6 -->
+  - _In parole semplici:_ Okay, I need to translate this technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. The original text is: "Add Ares tool to analyze backlog items and improve agent prompts".
+- **09:30** · Expand agent capabilities for GitHub access and coordination <!-- 121a82e -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Expand agent capabilities for GitHub access and coordination".
+- **09:27** · Add inter-agent communication tools and capabilities for Bowie <!-- 3fd4057 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry in a short, simple Italian sentence that's easy for non-programmers to understand. The original text is: "Add inter-agent communication tools and capabilities for Bowie".
+- **09:03** · Make API server logs persistent across sessions <!-- 4b9cb86 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Make API server logs persistent across sessions". Let me break this down.
+- **08:59** · Update documentation to simplify changelog entries <!-- b5acb8a -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text says: "Update documentation to simplify changelog entries".
 - **07:38** · Update page title to reflect selected agent <!-- 0e8c183 -->
   - _In parole semplici:_ Okay, the user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
 - **07:19** · Fix Horus (qwen3:4b) empty responses — add think:false <!-- 900008a -->
