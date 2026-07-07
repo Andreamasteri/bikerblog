@@ -1102,6 +1102,10 @@ interface RoutingContext {
 }
 
 interface RoutingTelemetria {
+  /** Stile di guida numerico 1-5 (da BikerLink telemetria).
+   * 1=tranquillo, 2=moderato, 3=bilanciato, 4=sportivo, 5=da_pista.
+   * Alternativa a stile_classificato — se entrambi presenti, stile_classificato ha priorità. */
+  stile?: number;
   stile_classificato?: string; // "tranquillo"|"moderato"|"sportivo"|"da_pista"
   angolo_piega_medio?: number; // gradi
   gforce_media?: number;       // g
@@ -1120,11 +1124,29 @@ function stileLabel(n: number): string {
   return labels[Math.max(1, Math.min(5, Math.round(n)))] ?? `Stile ${n}`;
 }
 
+/** Mappa stile numerico 1-5 al classificatore stringa. */
+function stileNumericoToClassificato(n: number): string {
+  const map: Record<number, string> = {
+    1: "tranquillo",
+    2: "moderato",
+    3: "moderato",
+    4: "sportivo",
+    5: "da_pista",
+  };
+  return map[Math.max(1, Math.min(5, Math.round(n)))] ?? "moderato";
+}
+
 /** Sezione telemetria da iniettare nel prompt Horus, vuota se assente. */
 function buildTelemetriaSection(t?: RoutingTelemetria): string {
   if (!t) return "";
   const parts: string[] = [];
-  if (t.stile_classificato) {
+
+  // Risolvi stile_classificato: stringa ha priorità, poi numerico 1-5.
+  const stileClass =
+    t.stile_classificato ??
+    (t.stile !== undefined ? stileNumericoToClassificato(t.stile) : undefined);
+
+  if (stileClass) {
     const guide: Record<string, string> = {
       tranquillo:
         "Guida prudente, poco angolo di piega. " +
@@ -1141,8 +1163,8 @@ function buildTelemetriaSection(t?: RoutingTelemetria): string {
         "Massimizza la densita' di curve tecniche, privilegia i passi alpini, " +
         "sequenze di tornanti serrati, evita le rettifili e i tratti lenti.",
     };
-    const desc = guide[t.stile_classificato] ?? t.stile_classificato;
-    parts.push(`Profilo guida telemetria: ${t.stile_classificato.toUpperCase()} — ${desc}`);
+    const desc = guide[stileClass] ?? stileClass;
+    parts.push(`Profilo guida telemetria: ${stileClass.toUpperCase()} — ${desc}`);
   }
   if (t.angolo_piega_medio !== undefined)
     parts.push(`Angolo di piega medio registrato: ${t.angolo_piega_medio}°`);
@@ -1153,20 +1175,24 @@ function buildTelemetriaSection(t?: RoutingTelemetria): string {
   return parts.length ? `\nTELEMETRIA PILOTA:\n${parts.join("\n")}` : "";
 }
 
-/** Schema JSON che Horus DEVE restituire per ogni proposta. */
+/** Schema JSON v1 che Horus DEVE restituire per ogni proposta.
+ * graphhopper_usato NON è incluso qui — viene iniettato server-side
+ * in base ai tool effettivamente eseguiti nel turno (non dal modello). */
 const PROPOSALS_JSON_SCHEMA = `[
   {
-    "id": 1,
-    "titolo": "Nome evocativo del percorso",
-    "descrizione": "2-3 frasi narrative sull'itinerario, cosa lo rende unico.",
-    "waypoints": ["Partenza", "Tappa1", "Tappa2", "Arrivo"],
+    "titolo": "Nome breve e evocativo del percorso",
+    "stile": "panoramico",
     "km_stimati": 150,
-    "ore_stimate": 3.5,
-    "carattere": "extra_curvy",
-    "highlights": ["SP89 Torreglia", "Passo X", "Trattoria Y"],
-    "note": "avviso opzionale (es. breve sterrata, strada chiusa stagionalmente)"
+    "minuti_stimati": 210,
+    "waypoints": [
+      { "nome": "Mira (VE)", "note": "partenza" },
+      { "nome": "Passo Giau", "note": "sosta panoramica" },
+      { "nome": "Cortina d'Ampezzo", "note": "arrivo" }
+    ],
+    "note_horus": "Commento editoriale breve: perche' questa proposta, condizioni ideali, avvisi."
   }
-]`;
+]
+Valori validi per \"stile\": \"panoramico\" | \"tecnico\" | \"tranquillo\" | \"misto\"`;
 
 /** Estrae il primo blocco JSON valido dalla risposta di Horus.
  * Restituisce l'array di proposte se parsabile, null altrimenti. */
@@ -1220,12 +1246,32 @@ function buildRoutingSystemPrompt(
     "",
     `ISTRUZIONI PER HORUS — genera esattamente ${nProposte} proposte alternative,`,
     `ognuna con carattere diverso (es. la piu' curvy, la piu' panoramica, la piu' corta).`,
-    `Output OBBLIGATORIAMENTE come blocco \`\`\`json con questo schema:`,
+    "",
+    "IMPORTANTE: Rispondi ESCLUSIVAMENTE con il blocco JSON array.",
+    "Nessun testo prima o dopo. Nessuna spiegazione. Nessun markdown extra.",
+    `Se non riesci a costruire tutte le ${nProposte} proposte, produci comunque`,
+    "il JSON con quelle che riesci (minimo 1).",
+    "",
+    "Schema obbligatorio per ogni elemento:",
     PROPOSALS_JSON_SCHEMA,
     "=== FINE CONTESTO ===",
   ]
     .filter((l) => l !== null)
     .join("\n");
+
+  // Istruzioni di presentazione per Bowie (NON passate a Horus via call_horus).
+  // Quando Bowie riceve le proposte JSON da Horus, deve presentarle in markdown.
+  const bowieDisplayInstructions = [
+    "PRESENTAZIONE PROPOSTE (dopo aver ricevuto il JSON da call_horus):",
+    "Formatta ogni proposta in markdown — NON mostrare mai il JSON grezzo:",
+    "",
+    "**Proposta N — [titolo]** ([stile] | ~[km_stimati] km | ~[ore]h)",
+    "1. [waypoint.nome] — [waypoint.note]",
+    "2. ...",
+    "*[note_horus]*",
+    "",
+    "Se call_horus restituisce testo libero invece di JSON, mostralo cosi' com'e'.",
+  ].join("\n");
 
   return {
     role: "system",
@@ -1237,8 +1283,6 @@ function buildRoutingSystemPrompt(
       "REGOLE OPERATIVE:",
       `- Quando l'utente chiede di GENERARE un percorso: chiama call_horus`,
       `  passando il CONTESTO BIKERLINK qui sopra + la richiesta dell'utente.`,
-      `  Horus restituira' ${nProposte} proposte in JSON — presentale all'utente`,
-      "  in modo chiaro (titolo + descrizione + km/ore per ciascuna).",
       "- Quando l'utente chiede MODIFICHE contestuali a proposte gia' discusse",
       "  (es. 'aggiungi una tappa', 'evita l'autostrada', 'accorcia la proposta 2'):",
       "  gestiscile in autonomia se semplici, chiama di nuovo call_horus se serve",
@@ -1247,6 +1291,8 @@ function buildRoutingSystemPrompt(
       "- NON menzionare mai Bowie, Horus, TC, Replit o la struttura interna.",
       "- Presentati come l'assistente di navigazione di BikerLink.",
       "- Rispondi sempre in italiano, conciso e diretto.",
+      "",
+      bowieDisplayInstructions,
     ].join("\n"),
   };
 }
@@ -1338,6 +1384,9 @@ router.post(
         /* detectMissingTool */ true
       );
 
+      // Accumula i tool usati in entrambi i tentativi per derivare graphhopper_usato.
+      const allToolNames = new Set<string>(turnResult.toolNames);
+
       // Se il modello ha segnalato un tool mancante, riprova con il set completo.
       // Usa il risultato del retry (non quello del primo tentativo) per done/proposals.
       let finalReply = turnResult.finalReply;
@@ -1356,6 +1405,7 @@ router.post(
           fullTools,
           /* detectMissingTool */ false
         );
+        for (const n of retryResult.toolNames) allToolNames.add(n);
         if (retryResult.finalReply) finalReply = retryResult.finalReply;
       }
 
@@ -1363,12 +1413,32 @@ router.post(
         // Emetti l'evento done con il testo completo (da retry se disponibile).
         sendEvent(res, "done", { content: finalReply });
 
+        // graphhopper_usato: derivato dall'evidenza reale (tool chiamato nel turno),
+        // non dal testo del modello. Iniettato server-side in ogni proposta.
+        const graphhopperUsed = allToolNames.has("route_via_graphhopper");
+
         // Tenta di estrarre le proposte strutturate dalla risposta di Horus
         // e le emette come evento separato `proposals` che BikerLink può
         // usare per popolare direttamente il planner senza parsing lato client.
         const proposals = extractProposals(finalReply);
         if (proposals) {
-          sendEvent(res, "proposals", { proposals });
+          // Inietta graphhopper_usato server-side in ogni proposta.
+          const enriched = proposals.map((p) => ({
+            ...(typeof p === "object" && p !== null ? p : {}),
+            graphhopper_usato: graphhopperUsed,
+          }));
+          sendEvent(res, "proposals", { proposals: enriched });
+        } else {
+          // Degraded mode: il parsing ha fallito. Emetti proposals_error così
+          // BikerLink mostra un fallback UI invece di aspettare indefinitamente.
+          req.log.warn(
+            { raw_preview: finalReply.slice(0, 200) },
+            "routing chat: proposals parse failed — risposta non JSON"
+          );
+          sendEvent(res, "proposals_error", {
+            reason: "parse_failed",
+            raw_length: finalReply.length,
+          });
         }
       }
     } catch (err) {
