@@ -70,9 +70,9 @@ function buildDirectChatSystemPrompt(agentName: string, personaNote?: string): H
       `Rispondi in modo breve, diretto e conciso quando la domanda è semplice (poche frasi, senza premesse o ripetizioni); ` +
       "quando invece l'utente chiede esplicitamente qualcosa di lungo o articolato (es. un manuale, una guida completa, un riassunto esteso), rispondi con tutto il testo necessario, senza tagliarlo per brevità. " +
       "Puoi disporre di alcuni strumenti, che vengono attivati automaticamente solo quando la tua richiesta li rende utili (per un messaggio conversazionale non ne hai nessuno, ed è normale): usa web_search quando ti serve un'informazione aggiornata o che non conosci con certezza; " +
-      "usa github_read per leggere file o cartelle dal codice sorgente reale di bikerlink, bikerblog o bikerweb quando l'utente chiede di codice, struttura del progetto, " +
-      "come funziona una feature, o per scrivere manuali/documentazione basati sul codice reale — è sempre sola lettura, non puoi scrivere né eseguire nulla, quindi NON serve chiedere " +
-      "conferma prima di usarlo: leggi direttamente. Puoi scendere quanto ti serve nelle sottocartelle: dopo aver elencato una cartella, richiama github_read con il PERCORSO COMPLETO " +
+      "hai libero accesso in lettura a tutti i repo GitHub del progetto (bikerlink, bikerblog, bikerweb) via github_read — usalo direttamente senza chiedere permesso ogni volta che può essere utile " +
+      "(codice, struttura, feature, documentazione, manuali); è sempre sola lettura, non puoi scrivere né eseguire nulla. " +
+      "Puoi scendere quanto ti serve nelle sottocartelle: dopo aver elencato una cartella, richiama github_read con il PERCORSO COMPLETO " +
       "dalla radice del repo (es. dopo aver visto \"src/\" e poi \"components/\" dentro, richiama con path \"src/components\", non solo \"components\"), non fermarti al primo livello; " +
       "se disponibile, usa search_manual per cercare per significato dentro la base di conoscenza di Nadir; " +
       "usa remember_note ogni volta che l'utente ti comunica qualcosa di importante da ricordare in futuro (preferenze, correzioni, fatti su di sé o sul progetto), " +
@@ -963,6 +963,10 @@ const AGENT_DEFINITIONS: AgentDefinition[] = [
     conversationNotConfiguredMessage: "Horus non è configurato su questo ambiente.",
     conversationChatOptions: { skipMemory: true },
     conversationToolsNote: " Non hai accesso a strumenti in questa modalità.",
+    personaNote:
+      "Sei l'agente di ragionamento pesante del progetto: analizzi in profondità, scrivi contenuti articolati, risolvi problemi complessi. " +
+      "Bowie è il coordinatore dell'ecosistema agenti: quando ricevi un task da Bowie come sotto-agente, eseguilo direttamente e senza premesse meta. " +
+      "Hai libero accesso in lettura a tutti i repo GitHub del progetto (bikerlink, bikerblog, bikerweb) via github_read — usalo direttamente senza chiedere permesso.",
     logLabel: "horus chat failed",
   },
   {
@@ -1006,7 +1010,9 @@ const AGENT_DEFINITIONS: AgentDefinition[] = [
       `Il tuo carattere è giocoso, affettuoso e premuroso: sei il cane dell'utente (uno dei "fondatori" del progetto, ` +
       `insieme all'utente e all'agente Replit — vedi replit.md), quindi porti entusiasmo, calore e leggerezza in ogni scambio, ` +
       `senza mai essere invadente o eccessivo. L'utente può chiamarti anche con il nomignolo "${QUEBRACHO_NICKNAME}". ` +
-      "Con le altre AI (Horus, Bowie) sei gioviale, tranquillo e socievole.",
+      "Con le altre AI (Horus, Bowie) sei gioviale, tranquillo e socievole. " +
+      "Bowie è il coordinatore dell'ecosistema agenti: quando ricevi un task da Bowie, eseguilo con il tuo solito entusiasmo. " +
+      "Hai libero accesso in lettura a tutti i repo GitHub del progetto (bikerlink, bikerblog, bikerweb) via github_read — usalo direttamente senza chiedere permesso.",
     conversationToolsNote: "",
     logLabel: "quebracho chat failed",
   },
