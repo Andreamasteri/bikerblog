@@ -30,11 +30,12 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
+  const horusModel = process.env["HORUS_OLLAMA_MODEL"] ?? HORUS_MODEL;
   const bowieModel = process.env["BOWIE_OLLAMA_MODEL"];
   const quebrachoModel = process.env["QUEBRACHO_OLLAMA_MODEL"];
   logger.info(
     {
-      horus: `Horus (${HORUS_MODEL})`,
+      horus: `Horus (${horusModel})`,
       bowie: isBowieConfigured() ? `${BOWIE_AGENT_NAME} (${bowieModel})` : `${BOWIE_AGENT_NAME} non configurato`,
       quebracho: isQuebrachoConfigured()
         ? `${QUEBRACHO_AGENT_NAME} (${quebrachoModel})`

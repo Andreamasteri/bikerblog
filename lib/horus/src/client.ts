@@ -483,7 +483,7 @@ const horusClient = createOllamaAgentClient({
   ollamaUrl: process.env.HORUS_OLLAMA_URL,
   cfAccessClientId: process.env.CF_ACCESS_CLIENT_ID,
   cfAccessClientSecret: process.env.CF_ACCESS_CLIENT_SECRET,
-  model: HORUS_MODEL,
+  model: process.env.HORUS_OLLAMA_MODEL ?? HORUS_MODEL,
   useHorusMemoryByDefault: true,
 });
 
