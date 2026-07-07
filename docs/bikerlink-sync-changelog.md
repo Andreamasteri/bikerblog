@@ -156,6 +156,12 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **12:24** · Feat: persist Horus architect mode to localStorage across page reloads <!-- 0d6b800 -->
+  - _In parole semplici:_ Okay, I need to rephrase this tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text says: "Feat: persist Horus architect mode to localStorage across page reloads".
+- **12:24** · Test: add automated coverage for mode-switch history clearing in AgentChatPanel <!-- 358f7a5 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified not to use technical jargon without explaining it, no extra details, and just the sentence without quotes or prefixes.
+- **12:24** · Git commit prior to merge <!-- c4b5b4f -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They specified not to use technical jargon without explaining it, don't add extra details, and just give the sentence without quotes, prefixes, or explanations.
 - **12:17** · Add ares review task functionality and associated tests <!-- cbcebf7 -->
   - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite the technical changelog entry "Add ares review task functionality and associated tests" into a single short sentence in simple Italian that's understandable for non-programmers. They don't want any technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
 - **11:58** · Feat(horus): architect mode — system prompt strutturato + review-task script <!-- 17f5d87 -->
