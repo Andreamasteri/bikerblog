@@ -156,6 +156,16 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **14:45** · Add a gated heavy coder to prevent interruptions during active chats <!-- 32b4ca9 -->
+  - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
+- **13:28** · Saved progress at the end of the loop <!-- 51343b2 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for someone who isn't a programmer. No tech jargon without explanation, don't add extra details, and just the sentence without quotes, prefixes, or explanations.
+- **13:13** · Update Ares tool to support custom timeouts for task reviews <!-- c9a341d -->
+  - _In parole semplici:_ Okay, the user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. Let me see.
+- **12:33** · Add Ares task review for power modes <!-- 26bdd38 -->
+  - _In parole semplici:_ Okay, I need to rewrite this tech changelog entry into a short Italian sentence that's easy for non-programmers to understand. Let me see.
+- **12:27** · Add ability to save architect mode preferences across sessions <!-- 02e1895 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text says: "Add ability to save architect mode preferences across sessions".
 - **12:24** · Feat: persist Horus architect mode to localStorage across page reloads <!-- 0d6b800 -->
   - _In parole semplici:_ Okay, I need to rephrase this tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text says: "Feat: persist Horus architect mode to localStorage across page reloads".
 - **12:24** · Test: add automated coverage for mode-switch history clearing in AgentChatPanel <!-- 358f7a5 -->

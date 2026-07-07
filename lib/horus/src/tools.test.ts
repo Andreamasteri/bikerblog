@@ -268,6 +268,10 @@ test("capToolResult spezza su un a-capo quando è ragionevolmente vicino alla fi
 
 const ANALYSIS_ONLY_TOOL_NAMES = ["typecheck_repo", "lint_repo", "search_code", "git_log", "architect"];
 const BASE_TOOL_NAMES = ["web_search", "github_read", "remember_note", "read_blog"];
+// Tool di contesto routing sempre disponibili (nessuna env richiesta):
+// get_weather usa Open-Meteo (no API key), get_traffic usa euristiche locali.
+// Compaiono sempre, a differenza dei tool geo/STT/GraphHopper gated su env.
+const ALWAYS_ON_ROUTING_TOOL_NAMES = ["get_weather", "get_traffic"];
 
 test("getHorusTools returns only the base tools when the analysis/nadir/hub service env vars are unset", async (t) => {
   const originalUrl = process.env["HORUS_ANALYSIS_URL"];
@@ -279,6 +283,7 @@ test("getHorusTools returns only the base tools when the analysis/nadir/hub serv
   const originalNominatimUrl = process.env["NOMINATIM_URL"];
   const originalValhallaUrl = process.env["VALHALLA_URL"];
   const originalWhisperUrl = process.env["WHISPER_URL"];
+  const originalGraphhopperUrl = process.env["GRAPHHOPPER_URL"];
   delete process.env["HORUS_ANALYSIS_URL"];
   delete process.env["ANALYSIS_GATE_TOKEN"];
   delete process.env["NADIR_URL"];
@@ -288,6 +293,7 @@ test("getHorusTools returns only the base tools when the analysis/nadir/hub serv
   delete process.env["NOMINATIM_URL"];
   delete process.env["VALHALLA_URL"];
   delete process.env["WHISPER_URL"];
+  delete process.env["GRAPHHOPPER_URL"];
   t.after(() => {
     process.env["HORUS_ANALYSIS_URL"] = originalUrl;
     process.env["ANALYSIS_GATE_TOKEN"] = originalToken;
@@ -298,13 +304,17 @@ test("getHorusTools returns only the base tools when the analysis/nadir/hub serv
     process.env["NOMINATIM_URL"] = originalNominatimUrl;
     process.env["VALHALLA_URL"] = originalValhallaUrl;
     process.env["WHISPER_URL"] = originalWhisperUrl;
+    process.env["GRAPHHOPPER_URL"] = originalGraphhopperUrl;
   });
   const calls = mockAnalysisFetch(t, { result: "should not be reached" });
 
   const tools = await getHorusTools();
   const names = tools.map((tool) => tool.function.name);
 
-  assert.deepEqual(names, BASE_TOOL_NAMES);
+  // Con tutte le env di servizio non impostate restano i tool base più i due
+  // tool di contesto routing sempre disponibili (get_weather/get_traffic).
+  // route_via_graphhopper NON compare perché gated su GRAPHHOPPER_URL (rimosso sopra).
+  assert.deepEqual(names, [...BASE_TOOL_NAMES, ...ALWAYS_ON_ROUTING_TOOL_NAMES]);
   assert.equal(calls.length, 0);
 });
 

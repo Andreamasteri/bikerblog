@@ -100,8 +100,13 @@
  * token per-servizio (X-<Servizio>-Gate-Token) se impostato E le credenziali
  * Cloudflare Access se presenti, per essere robusti a entrambi gli schemi di
  * protezione del TC. L'ossatura di route-planning "intelligente" (intento di
- * viaggio + meteo via web_search + telemetria via read_file) è lasciata aperta
- * finché non arriva il file di logica in studio dall'utente.
+ * viaggio → tool geo + meteo + telemetria) è composta lato api-server in
+ * `artifacts/api-server/src/routes/horus.ts` (endpoint `/horus/routing-chat`):
+ * il meteo arriva dal tool `get_weather` (Open-Meteo, sempre disponibile) e la
+ * telemetria per-utente è iniettata nel prompt dalla richiesta di BikerLink
+ * (`buildTelemetriaSection`), non da un file locale. L'integrazione combinata
+ * GraphHopper+Valhalla resta di proprietà di BikerLink (fuori scope qui) —
+ * vedi `.agents/memory/route-planning-deferred-bikerlink.md`.
  */
 
 import { createHmac } from "node:crypto";
