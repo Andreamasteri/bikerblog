@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #223** — (Fase 2e POWER): fix stale horus tool-gating test + docs reconcile <!-- 98a4cf9 -->
+  - _In parole semplici:_ Okay, I need to translate this changelog entry into a simple Italian sentence that's easy for non-programmers to understand. Let me first read the original text carefully.
 - **Task #217** — Feat: expose architect mode selector in Horus web chat panel <!-- 708f424 -->
   - _In parole semplici:_ Okay, the user wants me to rewrite a tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first understand the original text.
 - **Task #211** — Ares: add task-review mode <!-- a5fe07c -->
