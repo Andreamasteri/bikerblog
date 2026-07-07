@@ -35,6 +35,7 @@ import {
   setAresNotes,
   updateBacklogStatus,
 } from "./supervision-backlog.js";
+import { isChatActive, chatIdleMs } from "./chat-activity.js";
 
 export const ARES_AGENT_NAME = "Ares";
 
@@ -205,6 +206,14 @@ export function isAresRunning(): boolean {
 
 const ARES_MAX_TOOL_ITERATIONS = 8;
 const ARES_KEEP_ALIVE = "15m"; // Ares resta caricato per la durata del ciclo, poi unload esplicito
+
+/**
+ * Sentinel aggiunto a `restoreFailures` quando il ripristino della lineup non
+ * completa entro `restoreTimeoutMs` (rollback temporizzato del coder, Task
+ * #222). Il chiamante lo riconosce per loggare/alertare "timeout di ripristino"
+ * invece di trattarlo come un modello specifico non ripristinato.
+ */
+export const RESTORE_TIMEOUT_SENTINEL = "__restore_timeout__";
 
 /**
  * Allowlist READ-ONLY dei tool concessi ad Ares. È un'allowlist esplicita (non
@@ -401,9 +410,18 @@ async function runAresGpuCycle<T>(
   options: {
     signal?: AbortSignal;
     preflight?: (signal: AbortSignal | undefined) => Promise<string | null>;
+    /**
+     * Se impostato, il ripristino della lineup nel `finally` è vincolato a
+     * questo timeout (ms): se non completa in tempo, il sentinel
+     * `RESTORE_TIMEOUT_SENTINEL` viene aggiunto a `restoreFailures` così il
+     * chiamante può loggare/alertare l'evento (Task #222 — rollback
+     * temporizzato del coder). Non impostato = comportamento invariato (Ares),
+     * nessun bound sul ripristino.
+     */
+    restoreTimeoutMs?: number;
   } = {}
 ): Promise<AresCycleOutcome<T>> {
-  const { signal, preflight } = options;
+  const { signal, preflight, restoreTimeoutMs } = options;
   const restoreFailures: string[] = [];
 
   if (!isAresConfigured()) {
@@ -456,36 +474,84 @@ async function runAresGpuCycle<T>(
       error: `ciclo Ares fallito: ${err instanceof Error ? err.message : String(err)}`,
     };
   } finally {
+    // Quando il ripristino va in timeout resta in corso in background: in quel
+    // caso NON rilasciamo subito il lock a ciclo singolo, ma lo teniamo alzato
+    // finché il restore non si conclude davvero, così un secondo trigger heavy
+    // non può correre in parallelo mentre unload/warmup stanno ancora mutando la
+    // residenza dei modelli. Il TTL del lock (ARES_LOCK_TTL_MS) resta la rete di
+    // sicurezza se il restore in background non finisse mai.
+    let deferredRestore: Promise<void> | null = null;
     if (touchedGpu) {
-      // 4. unload Ares — sempre, così non resta lui a occupare la VRAM al posto
-      //    della lineup economy.
-      await unloadModel(model);
-      // 5. ripristino lineup — sempre tentato, anche se il lavoro è fallito.
-      for (const m of snapshot) {
-        const ok = await warmupModel(m);
-        if (!ok) restoreFailures.push(m);
-      }
-      // 6. health check post-run: verifica che i modelli dello snapshot siano
-      //    effettivamente residenti dopo il warmup. warmupModel restituisce true
-      //    se la chiamata HTTP ha avuto successo, ma non garantisce che il modello
-      //    sia già caricato in VRAM (Ollama carica in background). Un secondo
-      //    GET /api/ps conferma la residenza effettiva; i modelli mancanti vengono
-      //    aggiunti a restoreFailures così il chiamante non riceve mai un "ok"
-      //    silenzioso con la lineup parzialmente assente.
-      try {
-        const nowResident = await listResidentModels();
+      // Sequenza di ripristino (unload Ares + warmup lineup + health check).
+      // Estratta in una funzione per poterla vincolare a un timeout quando
+      // richiesto (rollback temporizzato del coder, Task #222). Muta
+      // `restoreFailures` (array condiviso con l'outcome già restituito).
+      const doRestore = async (): Promise<void> => {
+        // 4. unload Ares — sempre, così non resta lui a occupare la VRAM al
+        //    posto della lineup economy.
+        await unloadModel(model);
+        // 5. ripristino lineup — sempre tentato, anche se il lavoro è fallito.
         for (const m of snapshot) {
-          if (!nowResident.includes(m) && !restoreFailures.includes(m)) {
-            restoreFailures.push(m);
-          }
+          const ok = await warmupModel(m);
+          if (!ok) restoreFailures.push(m);
         }
-      } catch {
-        // /api/ps irraggiungibile: impossibile verificare — segnala come
-        // failure generica di restore piuttosto che silenziare l'errore.
-        restoreFailures.push("__health_check_failed__");
+        // 6. health check post-run: verifica che i modelli dello snapshot siano
+        //    effettivamente residenti dopo il warmup. warmupModel restituisce
+        //    true se la chiamata HTTP ha avuto successo, ma non garantisce che il
+        //    modello sia già caricato in VRAM (Ollama carica in background). Un
+        //    secondo GET /api/ps conferma la residenza effettiva; i modelli
+        //    mancanti vengono aggiunti a restoreFailures così il chiamante non
+        //    riceve mai un "ok" silenzioso con la lineup parzialmente assente.
+        try {
+          const nowResident = await listResidentModels();
+          for (const m of snapshot) {
+            if (!nowResident.includes(m) && !restoreFailures.includes(m)) {
+              restoreFailures.push(m);
+            }
+          }
+        } catch {
+          // /api/ps irraggiungibile: impossibile verificare — segnala come
+          // failure generica di restore piuttosto che silenziare l'errore.
+          restoreFailures.push("__health_check_failed__");
+        }
+      };
+
+      if (restoreTimeoutMs && restoreTimeoutMs > 0) {
+        // Rollback temporizzato: se il ripristino non completa entro il timeout,
+        // NON lo si silenzia — si marca il sentinel così il chiamante logga e
+        // alerta. Il ripristino resta comunque in corso in background (i fetch
+        // non sono cancellabili in modo affidabile), ma l'evento è registrato.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<"timeout">((resolveTimeout) => {
+          timer = setTimeout(() => resolveTimeout("timeout"), restoreTimeoutMs);
+        });
+        const restorePromise = doRestore();
+        const outcome = await Promise.race([
+          restorePromise.then(() => "done" as const),
+          timeout,
+        ]);
+        if (timer) clearTimeout(timer);
+        if (outcome === "timeout") {
+          if (!restoreFailures.includes(RESTORE_TIMEOUT_SENTINEL)) {
+            restoreFailures.push(RESTORE_TIMEOUT_SENTINEL);
+          }
+          // Restore ancora in corso: tieni il lock finché non si conclude.
+          deferredRestore = restorePromise;
+        }
+      } else {
+        await doRestore();
       }
     }
-    aresRunningSince = null;
+    if (deferredRestore) {
+      // Il chiamante ha già ricevuto la risposta (timeout segnalato); il lock si
+      // rilascia solo quando il restore in background termina davvero, sia in
+      // successo sia in errore.
+      void deferredRestore.finally(() => {
+        aresRunningSince = null;
+      });
+    } else {
+      aresRunningSince = null;
+    }
   }
 }
 
@@ -632,6 +698,169 @@ export async function runAresTaskReview(
     review: outcome.value,
     snapshot: outcome.snapshot,
     restoreFailures: outcome.restoreFailures,
+    error: outcome.error,
+  };
+}
+
+// ── Modalità coder pesante on-demand (Task #222, Fase 2d power) ───────────────
+// Il "coder" è lo STESSO slot heavy di Ares (stesso modello devstral, stesso
+// client, stesso lock a ciclo singolo): non installiamo un secondo modello sul
+// TC — riusiamo la capacità pesante già presente in modalità "fix di codice".
+// Per l'utente resta un solo agente heavy non residente che, a seconda del
+// trigger, o revisiona il backlog di supervisione (Ares) o propone fix di
+// codice complessi (coder). Invariante identico: PROPONE soltanto, non applica
+// nulla — read-only allowlist, "l'admin decide".
+//
+// Differenza chiave rispetto ad Ares: l'eviction è GATED sull'attività di chat.
+// Il coder può essere innescato in automatico (escalation da Quebracho) mentre
+// gli utenti stanno chattando; il gate nel preflight (che gira PRIMA di toccare
+// la GPU) rifiuta il ciclo se c'è una chat in corso, così non si sfratta mai la
+// lineup a metà di uno stream. Inoltre il ripristino è vincolato a un timeout
+// finito (rollback temporizzato) così un restore bloccato viene alertato.
+
+/**
+ * Messaggio esplicito quando il coder viene rifiutato dal gate anti-interruzione
+ * (chat attiva o affluenza troppo recente per un trigger non-admin). Il coder va
+ * "in coda/rifiutato con messaggio esplicito", mai a interrompere uno stream.
+ */
+export const CODER_GATED_MESSAGE =
+  "Coder rimandato: c'è una chat attiva (o troppo recente) e il coder non sfratta mai una " +
+  "sessione in corso. Riprova quando la chat è libera, oppure forza con un trigger admin esplicito.";
+
+/**
+ * Timeout (ms) entro cui il ripristino della lineup residente dopo il coder deve
+ * completare, altrimenti l'evento viene loggato/alertato (rollback temporizzato,
+ * default 60s). Configurabile via `CODER_RESTORE_TIMEOUT_MS`, ma esiste sempre un
+ * timeout finito.
+ */
+const CODER_RESTORE_TIMEOUT_MS = Number(process.env["CODER_RESTORE_TIMEOUT_MS"]) || 60_000;
+
+/**
+ * Inattività minima della chat (ms) richiesta per innescare il coder da un
+ * trigger NON admin (es. escalation automatica di Quebracho): "nessuna sessione
+ * di chat attiva da almeno N minuti". Un trigger admin esplicito salta questa
+ * soglia (ma resta comunque bloccato se una chat è attiva in questo istante).
+ * Default 5 minuti, configurabile via `CODER_MIN_IDLE_MS`.
+ */
+const CODER_MIN_IDLE_MS = Number(process.env["CODER_MIN_IDLE_MS"]) || 5 * 60_000;
+
+const CODER_SYSTEM_PROMPT = [
+  "Sei il coder pesante di BikerBlog (un blog di moto gestito da una pipeline notturna",
+  "e da agenti Ollama sul server dell'utente). In questa modalità PROPONI un fix per un",
+  "problema di codice complesso che ti viene delegato — tipicamente escalato da Quebracho",
+  "o da un admin.",
+  "",
+  "REGOLA ASSOLUTA — 'il coder propone, l'admin decide':",
+  "- NON applichi mai modifiche, NON scrivi file, NON installi nulla, NON esegui comandi.",
+  "- Produci solo una diagnosi e una proposta di fix. L'applicazione resta all'admin/agente.",
+  "",
+  "Hai tool READ-ONLY (ricerca nel codice, typecheck, lint, git log, github, ricerca web).",
+  "Usali per CAPIRE il problema sul codice reale prima di proporre: individua i file e le",
+  "funzioni coinvolte, verifica le assunzioni, non inventare percorsi o simboli che non hai",
+  "confermato.",
+  "",
+  "Al termine produci una risposta in ITALIANO così strutturata:",
+  "1. Diagnosi: qual è la causa reale del problema (con i file/funzioni coinvolti).",
+  "2. Fix proposto: la modifica concreta, con snippet o diff a parole dei punti da cambiare.",
+  "3. Rischi ed effetti collaterali: cosa potrebbe rompersi, cosa testare dopo il fix.",
+  "4. Alternative: se esiste più di un percorso ragionevole, elencane un paio con trade-off.",
+  "Sii conciso e concreto: l'admin deve poter applicare la proposta senza reinterpretarla.",
+].join("\n");
+
+function formatCoderProblem(problem: string): string {
+  return [
+    "Problema di codice da analizzare e per cui proporre un fix.",
+    "Descrizione integrale tra i marcatori:",
+    "--- INIZIO PROBLEMA ---",
+    problem.trim(),
+    "--- FINE PROBLEMA ---",
+  ].join("\n");
+}
+
+/** Modello usato dal coder: è lo stesso slot heavy di Ares (devstral). */
+export function coderModel(): string {
+  return aresModel();
+}
+
+/**
+ * True se un ciclo heavy è in corso. Coder e Ares condividono lo stesso slot e
+ * lo stesso lock, quindi questo è un alias di `isAresRunning`: se uno dei due
+ * gira, l'altro è occupato (una sola capacità pesante non residente).
+ */
+export function isCoderRunning(): boolean {
+  return isAresRunning();
+}
+
+/** Esito di un ciclo del coder pesante. */
+export interface CoderTaskResult {
+  ok: boolean;
+  /** Proposta di fix testuale del coder, se prodotta. */
+  proposal?: string;
+  /** Modelli della lineup sfrattati e poi ripristinati. */
+  snapshot: string[];
+  /** Modelli il cui ripristino è fallito (lineup da controllare). */
+  restoreFailures: string[];
+  /** True se il ripristino ha superato il timeout (rollback temporizzato). */
+  restoreTimedOut: boolean;
+  /** True se il ciclo è stato rifiutato dal gate anti-interruzione (chat attiva). */
+  gated?: boolean;
+  /** Messaggio d'errore (o motivo del gate) se il ciclo non ha prodotto una proposta. */
+  error?: string;
+}
+
+/**
+ * Ciclo del coder pesante su UN problema di codice. Riusa lo slot heavy di Ares
+ * (stesso modello, stesso lock) ma con eviction GATED sull'attività di chat:
+ *
+ * - `adminTrigger: true` (trigger admin esplicito) → gira purché non ci sia una
+ *   chat attiva IN QUESTO ISTANTE (non si interrompe mai uno stream in corso).
+ * - `adminTrigger: false` (escalation automatica, es. Quebracho) → gira solo se
+ *   non c'è chat attiva E l'ultima attività di chat è più vecchia di
+ *   `CODER_MIN_IDLE_MS` ("bassa affluenza").
+ *
+ * Il gate vive nel preflight, che gira PRIMA di toccare la GPU: un rifiuto NON
+ * sfratta nulla. Il ripristino della lineup è vincolato a `CODER_RESTORE_TIMEOUT_MS`.
+ *
+ * Non lancia: ritorna sempre un `CoderTaskResult`.
+ */
+export async function runCoderTask(
+  problem: string,
+  options: { signal?: AbortSignal; adminTrigger?: boolean; timeoutMs?: number } = {}
+): Promise<CoderTaskResult> {
+  // Il preflight può segnalare il rifiuto-da-gate; lo comunichiamo al chiamante
+  // via questo flag mutato nel closure (l'outcome porta solo `error` testuale).
+  const gate = { blocked: false };
+
+  const outcome = await runAresGpuCycle<string>(
+    async (signal) => runAresToolLoop(formatCoderProblem(problem), signal, CODER_SYSTEM_PROMPT, options.timeoutMs),
+    {
+      signal: options.signal,
+      restoreTimeoutMs: CODER_RESTORE_TIMEOUT_MS,
+      preflight: async () => {
+        // Valida l'input PRIMA di toccare la GPU: un problema vuoto non sfratta nulla.
+        if (!problem || problem.trim().length === 0) return "problema vuoto: niente da proporre al coder";
+        // Gate anti-interruzione: mai sfrattare una chat in corso.
+        if (isChatActive()) {
+          gate.blocked = true;
+          return CODER_GATED_MESSAGE;
+        }
+        // Per un trigger non-admin serve anche bassa affluenza (idle ≥ soglia).
+        if (!options.adminTrigger && chatIdleMs() < CODER_MIN_IDLE_MS) {
+          gate.blocked = true;
+          return CODER_GATED_MESSAGE;
+        }
+        return null;
+      },
+    }
+  );
+
+  return {
+    ok: outcome.ok,
+    proposal: outcome.value,
+    snapshot: outcome.snapshot,
+    restoreFailures: outcome.restoreFailures,
+    restoreTimedOut: outcome.restoreFailures.includes(RESTORE_TIMEOUT_SENTINEL),
+    gated: gate.blocked || undefined,
     error: outcome.error,
   };
 }

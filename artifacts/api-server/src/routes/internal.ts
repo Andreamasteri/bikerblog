@@ -24,6 +24,15 @@ import {
   isAresRunning,
   aresModel,
   ARES_BUSY_MESSAGE,
+  runCoderTask,
+  coderModel,
+  isCoderRunning,
+  isChatActive,
+  chatIdleMs,
+  getChatActivitySnapshot,
+  listResidentModels,
+  writeCoderAlertState,
+  clearCoderAlertState,
 } from "@workspace/horus";
 import type { SupervisionBacklogStatus } from "@workspace/db";
 
@@ -584,6 +593,133 @@ router.post(
     fileExists: existsSync,
     readFile: (p) => readFileSync(p, "utf-8"),
   })
+);
+
+// ── Coder pesante on-demand (Task #222, Fase 2d power) ───────────────────────
+// Il coder riusa lo slot heavy di Ares (stesso modello devstral, stesso lock),
+// ma con eviction GATED sull'attività di chat: non sfratta mai una sessione in
+// corso. Questo endpoint è il PUNTO UNICO di orchestrazione — sia il trigger
+// admin sia l'escalation di Quebracho passano di qui, così il gate e l'alert di
+// ripristino vivono in un solo posto. Admin-only: stesso bearer interno delle
+// altre /_internal/* (coerente col threat model).
+//
+// Body: { problem: string, adminTrigger?: boolean }. Response: CoderTaskResult.
+router.post(
+  "/_internal/coder/analyze",
+  express.json({ limit: "20kb" }),
+  async (req, res): Promise<void> => {
+    const auth = req.headers.authorization;
+    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    // Il coder è lo slot heavy di Ares: se Ares non è configurato, non c'è slot.
+    if (!isAresConfigured()) {
+      res.status(503).json({ error: "coder non configurato (manca ARES_OLLAMA_MODEL o un URL Ollama)" });
+      return;
+    }
+    if (isCoderRunning()) {
+      res.status(409).json({ error: "un ciclo heavy (coder/Ares) è già in corso" });
+      return;
+    }
+
+    const problem = typeof req.body?.problem === "string" ? req.body.problem : "";
+    if (problem.trim().length === 0) {
+      res.status(400).json({ error: "campo 'problem' mancante o vuoto" });
+      return;
+    }
+    const adminTrigger = req.body?.adminTrigger === true;
+
+    req.log.info(
+      { model: coderModel(), adminTrigger, chatActive: isChatActive() },
+      "coder analyze triggered"
+    );
+    try {
+      const result = await runCoderTask(problem, { adminTrigger });
+
+      // Rifiuto dal gate anti-interruzione (chat attiva / affluenza recente):
+      // NON è un errore del server, è il comportamento voluto. 409 = "riprova
+      // quando la chat è libera", con messaggio esplicito.
+      if (result.gated) {
+        req.log.info({ chatActive: isChatActive() }, "coder gated: chat attiva, nessuna eviction");
+        res.status(409).json(result);
+        return;
+      }
+
+      // Rollback temporizzato: se il ripristino della lineup non è completo (o è
+      // andato in timeout) NON lo si silenzia — si logga e si scrive l'allarme
+      // che emergerà spontaneamente all'admin in chat.
+      if (result.restoreFailures.length > 0 || result.restoreTimedOut) {
+        req.log.error(
+          { restoreFailures: result.restoreFailures, restoreTimedOut: result.restoreTimedOut },
+          "coder restore incompleto/timeout: lineup residente da controllare"
+        );
+        const now = new Date().toISOString();
+        writeCoderAlertState({
+          active: true,
+          restoreFailures: result.restoreFailures,
+          restoreTimedOut: result.restoreTimedOut,
+          since: now,
+          lastUpdated: now,
+        });
+      } else if (result.ok) {
+        // Ripristino pulito: azzera un eventuale allarme precedente.
+        clearCoderAlertState();
+      }
+
+      if (!result.ok) {
+        req.log.warn({ error: result.error }, "coder task failed");
+        res.status(502).json(result);
+        return;
+      }
+      res.json(result);
+    } catch (err) {
+      req.log.error({ err }, "coder analyze threw");
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+// Stato condiviso esplicito "chi sta girando" (dipendenza dichiarata del task):
+// il loop leggero di Quebracho su Replit e il coder heavy sul TC devono
+// concordare senza dedurlo ognuno per sé. Il loop consulta questo endpoint
+// invece di indovinare. Include lo stato in-process autoritativo (lock heavy +
+// attività di chat) e, best-effort, la residenza reale dei modelli via /api/ps.
+router.get(
+  "/_internal/coder/status",
+  async (req, res): Promise<void> => {
+    const auth = req.headers.authorization;
+    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    const activity = getChatActivitySnapshot();
+    const idle = chatIdleMs();
+    const body: {
+      running: boolean;
+      model: string;
+      configured: boolean;
+      chatActive: boolean;
+      chatIdleMs: number | null;
+      activeChats: number;
+      residentModels?: string[];
+    } = {
+      running: isCoderRunning(),
+      model: coderModel(),
+      configured: isAresConfigured(),
+      chatActive: isChatActive(),
+      // Infinity (nessuna chat mai) non è serializzabile in JSON → null.
+      chatIdleMs: Number.isFinite(idle) ? idle : null,
+      activeChats: activity.activeCount,
+    };
+    // Residenza reale sul TC: best-effort, non deve mai far fallire lo stato.
+    try {
+      body.residentModels = await listResidentModels();
+    } catch {
+      // TC irraggiungibile: omettiamo il campo, lo stato in-process resta valido.
+    }
+    res.json(body);
+  }
 );
 
 export default router;

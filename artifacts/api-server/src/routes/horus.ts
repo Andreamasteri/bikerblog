@@ -24,6 +24,8 @@ import {
   QUEBRACHO_NICKNAME,
   loadActiveVramAlertPrompt,
   loadActiveSupervisionAlertPrompt,
+  loadActiveCoderAlertPrompt,
+  beginChatActivity,
   recordLlmTrace,
   type HorusMessage,
   type HorusToolCall,
@@ -58,11 +60,13 @@ function requireHorusPassword(req: express.Request, res: express.Response): bool
 function buildDirectChatSystemPrompt(agentName: string, personaNote?: string): HorusMessage {
   const vramAlert = loadActiveVramAlertPrompt();
   const supervisionAlert = loadActiveSupervisionAlertPrompt();
+  const coderAlert = loadActiveCoderAlertPrompt();
   return {
     role: "system",
     content:
       (vramAlert ? `${vramAlert} ` : "") +
       (supervisionAlert ? `${supervisionAlert} ` : "") +
+      (coderAlert ? `${coderAlert} ` : "") +
       `Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. Ti chiami ${agentName}. ` +
       (personaNote ? `${personaNote} ` : "") +
       "Rispondi come un assistente generico, competente e diretto, sull'argomento che l'utente porta. " +
@@ -762,6 +766,12 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     const abortController = new AbortController();
     res.on("close", () => abortController.abort());
 
+    // Task #222: segna questa chat come "attiva" per tutta la durata del turno.
+    // Il gate del coder pesante legge questo stato e NON sfratta la lineup se
+    // c'è una chat in corso — così un'escalation al coder non interrompe mai lo
+    // stream. Rilasciato nel `finally` (anche in caso di disconnessione/errore).
+    const releaseChatActivity = beginChatActivity();
+
     // Task #200: una traccia per l'intero turno (tutte le iterazioni del
     // tool-loop, inclusa un'eventuale riprova con tool estesi), non una per
     // singola chiamata al modello — così una riga per turno resta coerente
@@ -885,6 +895,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
         input: message,
       });
     } finally {
+      releaseChatActivity();
       clearInterval(heartbeat);
       res.end();
     }
@@ -1556,9 +1567,10 @@ function buildConvoSystemPrompt(opts: {
         `che ha detto ${previousSpeakerName}, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.`;
   const vramAlert = loadActiveVramAlertPrompt();
   const supervisionAlert = loadActiveSupervisionAlertPrompt();
+  const coderAlert = loadActiveCoderAlertPrompt();
   return {
     role: "system",
-    content: `${vramAlert ? `${vramAlert} ` : ""}${supervisionAlert ? `${supervisionAlert} ` : ""}${intro}${personaNote ? ` ${personaNote}` : ""} ${body}${brevity}${toolsNote}`,
+    content: `${vramAlert ? `${vramAlert} ` : ""}${supervisionAlert ? `${supervisionAlert} ` : ""}${coderAlert ? `${coderAlert} ` : ""}${intro}${personaNote ? ` ${personaNote}` : ""} ${body}${brevity}${toolsNote}`,
   };
 }
 
@@ -1824,6 +1836,11 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
     const abortController = new AbortController();
     res.on("close", () => abortController.abort());
 
+    // Task #222: anche la conversazione a più agenti è una sessione di chat
+    // attiva (Horus/Bowie): segnalala così il coder pesante non sfratta la
+    // lineup mentre gli agenti stanno dialogando. Rilasciata nel `finally`.
+    const releaseChatActivity = beginChatActivity();
+
     // L'agente del prossimo turno si alterna secondo l'ordine del registry
     // partendo dal primo (Horus) al turno 0, quindi se riprendiamo da una
     // trascrizione esistente dobbiamo continuare l'alternanza da dove si era
@@ -1989,6 +2006,7 @@ export function createBowieConversationHandler(deps: BowieConversationDeps = def
           req.log.error({ err }, "failed to persist dropped horus-bowie conversation");
         }
       }
+      releaseChatActivity();
       clearInterval(heartbeat);
       res.end();
     }

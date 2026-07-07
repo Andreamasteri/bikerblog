@@ -89,4 +89,25 @@ export {
   type AresAnalysisResult,
   runAresTaskReview,
   type AresTaskReviewResult,
+  RESTORE_TIMEOUT_SENTINEL,
+  runCoderTask,
+  coderModel,
+  isCoderRunning,
+  CODER_GATED_MESSAGE,
+  type CoderTaskResult,
 } from "./ares.js";
+
+export {
+  beginChatActivity,
+  isChatActive,
+  chatIdleMs,
+  getChatActivitySnapshot,
+} from "./chat-activity.js";
+
+export {
+  loadCoderAlertState,
+  writeCoderAlertState,
+  clearCoderAlertState,
+  loadActiveCoderAlertPrompt,
+  type CoderAlertState,
+} from "./coder-alert.js";

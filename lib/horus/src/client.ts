@@ -668,28 +668,57 @@ async function quebrachoCloudChatRaw(
   options: HorusChatOptions = {}
 ): Promise<HorusRawResult> {
   const { openrouter } = await import("@workspace/integrations-openrouter-ai");
-  const stream = await openrouter.chat.completions.create(
-    {
-      model: QUEBRACHO_CLOUD_FALLBACK_MODEL,
-      messages: messages.map((m) => ({
-        role: m.role === "tool" ? "user" : m.role,
-        content: m.content,
-      })),
-      max_tokens: options.maxTokens ?? 4096,
-      stream: true,
-    },
-    { signal: options.signal }
-  );
+  try {
+    const stream = await openrouter.chat.completions.create(
+      {
+        model: QUEBRACHO_CLOUD_FALLBACK_MODEL,
+        messages: messages.map((m) => ({
+          role: m.role === "tool" ? "user" : m.role,
+          content: m.content,
+        })),
+        max_tokens: options.maxTokens ?? 4096,
+        stream: true,
+      },
+      { signal: options.signal }
+    );
 
-  let full = "";
-  for await (const chunk of stream) {
-    const token = chunk.choices[0]?.delta?.content;
-    if (token) {
-      full += token;
-      options.onToken?.(token);
+    let full = "";
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content;
+      if (token) {
+        full += token;
+        options.onToken?.(token);
+      }
     }
+    return { content: full.trim(), toolCalls: [] };
+  } catch (err) {
+    // Il free tier di OpenRouter è l'UNICO livello autorizzato per la riserva
+    // cloud di Quebracho: se i rate limit sono raggiunti restituiamo un errore
+    // ESPLICITO e ci fermiamo — nessun upgrade a tier a pagamento, nessun
+    // fallback ad altri provider (invariante del task, Fase 2d power).
+    if (isRateLimitError(err)) {
+      throw new Error(
+        "Riserva cloud Quebracho non disponibile: free tier OpenRouter esaurito (rate limit). " +
+          "Per policy non si passa a tier a pagamento né ad altri provider — riprova più tardi."
+      );
+    }
+    throw err;
   }
-  return { content: full.trim(), toolCalls: [] };
+}
+
+/**
+ * True se l'errore è un rate limit / quota esaurita del provider cloud (HTTP
+ * 429 o messaggio equivalente). Riconosce sia `err.status`/`err.code` degli SDK
+ * OpenAI-compatibili sia il testo del messaggio come fallback.
+ */
+function isRateLimitError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const anyErr = err as { status?: number; code?: string | number; message?: string };
+  if (anyErr.status === 429 || anyErr.code === 429 || anyErr.code === "429") return true;
+  if (typeof anyErr.code === "string" && /rate.?limit|insufficient_quota|quota/i.test(anyErr.code)) {
+    return true;
+  }
+  return typeof anyErr.message === "string" && /\b429\b|rate.?limit|too many requests|quota/i.test(anyErr.message);
 }
 
 /**
