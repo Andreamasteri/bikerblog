@@ -82,7 +82,7 @@ function buildDirectChatSystemPrompt(agentName: string, personaNote?: string): H
       "tool che questa volta non è stato allegato. Se ti accorgi che ti servirebbe un tool assente dalla lista disponibile in questo turno, NON " +
       "rispondere con un disclaimer generico e non provare a rispondere comunque senza: rispondi in QUESTO turno con ESATTAMENTE e SOLO questo testo, " +
       "nient'altro prima o dopo: [TOOL_MANCANTE: nome_tool] dove nome_tool è uno tra web_search, github_read, remember_note, read_blog, search_manual, " +
-      "typecheck_repo, lint_repo, search_code, git_log, sonar_scan, architect (usa sconosciuto se non sei sicuro di quale serva). Il sistema se ne " +
+      "typecheck_repo, lint_repo, search_code, git_log, sonar_scan, architect, call_horus, call_quebracho (usa sconosciuto se non sei sicuro di quale serva). Il sistema se ne " +
       "accorgerà e riproverà subito con lo strumento giusto disponibile, senza che l'utente debba richiedere nulla.",
   };
 }
@@ -761,7 +761,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
       // Task #178: allega solo il sottoinsieme di tool pertinente al messaggio
       // dell'utente (o nessun tool per un messaggio conversazionale), così il
       // prefill su CPU resta minimo e "Ciao" non scade sul tunnel Cloudflare.
-      const tools = await getHorusTools(message);
+      const tools = await getHorusTools(message, config.agentName);
       const primary = await runChatTurn(req, res, config, abortController, message, conversation, tools, true);
       traceToolNames.push(...primary.toolNames);
       let finalReply = primary.finalReply;
@@ -780,7 +780,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
           { missingTool: primary.missingTool },
           `${config.logLabel}: tool mancante dichiarato ("${primary.missingTool}"), riprovo con l'intero set disponibile`
         );
-        const broadenedTools = await getHorusTools();
+        const broadenedTools = await getHorusTools(undefined, config.agentName);
         const escalated = await runChatTurn(
           req,
           res,
@@ -977,6 +977,13 @@ const AGENT_DEFINITIONS: AgentDefinition[] = [
     conversationNotConfiguredMessage: `${BOWIE_AGENT_NAME} non è configurato su questo ambiente — manca BOWIE_OLLAMA_MODEL. Aggiungilo dalla scheda Secrets per abilitare la conversazione Horus↔Bowie.`,
     conversationChatOptions: {},
     conversationToolsNote: "",
+    personaNote:
+      "Sei il punto di contatto principale con l'utente: sintetico, diretto, concreto. " +
+      "Quando un task è complesso o richiede ragionamento pesante, puoi delegarlo a Horus con il tool call_horus " +
+      "(descrivi il task in modo completo nel prompt — Horus risponde in italiano). " +
+      "Per domande leggere o opinioni puoi coinvolgere Quebracho (Qq) con call_quebracho. " +
+      "Per ricerca semantica nella knowledge base usa search_manual: è il modo con cui parli con Nadir. " +
+      "Hai accesso in lettura a tutti i repo GitHub del progetto (bikerlink, bikerblog, bikerweb) via github_read — usalo direttamente senza chiedere permesso.",
     logLabel: "bowie chat failed",
   },
   {

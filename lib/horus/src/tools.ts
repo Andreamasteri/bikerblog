@@ -105,7 +105,7 @@
  */
 
 import type { HorusToolSpec } from "./client.js";
-import { appendHorusMemory } from "./client.js";
+import { appendHorusMemory, horusChatRaw, quebrachoChatRawResilient } from "./client.js";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -816,6 +816,57 @@ const SONAR_SCAN_TOOL_NAME = "sonar_scan";
  * tool più probabile. Se il modello si accorge di aver bisogno di un tool non
  * allegato, il system prompt gli chiede di dichiararlo esplicitamente.
  */
+
+/**
+ * Tool di delega inter-agente: disponibili solo per Bowie (gated via agentName
+ * in getHorusTools). Permettono a Bowie di delegare task a Horus (ragionamento
+ * pesante) o di coinvolgere Quebracho (parere leggero/giocoso). Nadir è già
+ * coperto da search_manual. Ares è escluso per design: è admin-only e
+ * introdurrebbe una dipendenza circolare (ares.ts importa tools.ts).
+ */
+const INTER_AGENT_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "call_horus",
+      description:
+        "Delega un task o una domanda a Horus (qwen3:4b), l'agente di ragionamento pesante. " +
+        "Usalo quando la richiesta richiede analisi approfondita, redazione articolata o ragionamento " +
+        "complesso che va oltre le tue capacità come modello leggero. Horus risponde in italiano.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: {
+            type: "string",
+            description: "Il task o la domanda completa da inviare a Horus",
+          },
+        },
+        required: ["prompt"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "call_quebracho",
+      description:
+        "Chiede un parere o coinvolge Quebracho (granite4:tiny-h), il cane dell'utente e terzo fondatore " +
+        "del progetto. Usa per domande leggere, opinioni, o quando vuoi il punto di vista giocoso e " +
+        "affettuoso di Qq.",
+      parameters: {
+        type: "object",
+        properties: {
+          message: {
+            type: "string",
+            description: "Il messaggio da inviare a Quebracho",
+          },
+        },
+        required: ["message"],
+      },
+    },
+  },
+];
+
 export function selectRelevantTools(
   message: string,
   available: HorusToolSpec[]
@@ -945,6 +996,14 @@ export function selectRelevantTools(
     wanted.add("transcribe_audio");
   }
 
+  // call_horus / call_quebracho — delega inter-agente (solo Bowie).
+  if (has(/chiedi a horus|delega.*horus|passa.*horus|fallo fare a horus|horus (lo |la |li |le )?farebbe|affida.*horus|fai fare a horus/)) {
+    wanted.add("call_horus");
+  }
+  if (has(/chiedi a quebracho|chiedi a qq|passa.*quebracho|cosa (ne )?pensa quebracho|coinvolgi quebracho|sentire quebracho/)) {
+    wanted.add("call_quebracho");
+  }
+
   if (wanted.size === 0) return [];
   return available.filter((tool) => wanted.has(tool.function.name));
 }
@@ -965,7 +1024,7 @@ export function selectRelevantTools(
  * quando sonar_scan sopravvive alla selezione contestuale, così un messaggio
  * semplice non paga alcun round-trip di rete.
  */
-export async function getHorusTools(message?: string): Promise<HorusToolSpec[]> {
+export async function getHorusTools(message?: string, agentName?: string): Promise<HorusToolSpec[]> {
   // search_manual (Nadir) è gated solo sulla presenza delle env var: a
   // differenza di sonar_scan non serve un capability-check live, perché non ci
   // sono sotto-configurazioni che possano variare indipendentemente.
@@ -976,10 +1035,14 @@ export async function getHorusTools(message?: string): Promise<HorusToolSpec[]> 
   const geoTools = isNominatimConfigured() ? GEO_TOOL_SPECS : [];
   const routeTools = isValhallaConfigured() ? ROUTE_TOOL_SPECS : [];
   const whisperTools = isWhisperConfigured() ? WHISPER_TOOL_SPECS : [];
+  // Tool inter-agente: disponibili solo per Bowie (non per Horus che non chiama
+  // se stesso, né per Quebracho che non ha tool calling stabile).
+  const interAgentTools = agentName === "Bowie" ? INTER_AGENT_TOOL_SPECS : [];
 
   // Insieme candidato PRIMA del capability-check live di sonar_scan.
   const candidates = [
     ...BASE_HORUS_TOOLS,
+    ...interAgentTools,
     ...nadirTools,
     ...analysisCandidates,
     ...hubTools,
@@ -2431,6 +2494,27 @@ export async function executeHorusTool(
         return await routeDirectionsTool(args, signal);
       case "transcribe_audio":
         return await transcribeAudioTool(args, signal);
+      case "call_horus": {
+        const result = await horusChatRaw(
+          [
+            {
+              role: "system",
+              content:
+                "Sei Horus, chiamato da Bowie come sotto-agente per un task specifico. " +
+                "Rispondi in modo diretto e completo al task assegnato, senza premesse meta né spiegazioni sul processo.",
+            },
+            { role: "user", content: String(args.prompt ?? "") },
+          ],
+          { skipMemory: true }
+        );
+        return result.content?.trim() || "(Horus non ha risposto)";
+      }
+      case "call_quebracho": {
+        const result = await quebrachoChatRawResilient([
+          { role: "user", content: String(args.message ?? "") },
+        ]);
+        return result.content?.trim() || "(Quebracho non ha risposto)";
+      }
       default:
         return `Tool sconosciuto: "${name}".`;
     }
