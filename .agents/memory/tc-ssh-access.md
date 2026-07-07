@@ -27,4 +27,8 @@ ssh -i ~/.ssh/tc_key -o ProxyCommand="cloudflared access ssh --hostname %h" "$TC
 
 4. **Pasting into a secrets UI text field can flatten newlines into spaces**, turning a valid multi-line PEM-style key into one line (`-----BEGIN...----- <base64 with spaces> -----END...-----`). `ssh`/`ssh-keygen` then fail with `error in libcrypto` / "is not a key file" even though the fingerprint step may still partially work. Fix by reconstructing the file programmatically: split on the BEGIN/END markers, replace remaining spaces in the body with newlines, and rewrite with real line breaks — don't ask the user to fix whitespace themselves, just repair it in code before writing the key file.
 
+## Sudo su TC (aggiornamento 2026-07-07)
+
+`sudo -n true` per l'utente `andrea` ora esce con 0: il **sudo passwordless è disponibile** via SSH, contrariamente alle note precedenti ("no passwordless sudo", workaround via gruppo docker). Per operazioni root su TC usare direttamente `sudo` negli comandi SSH; il workaround docker-as-root non è più necessario.
+
 **How to apply:** when setting up or debugging any new SSH-based access to user hardware, verify with `ssh-keygen -l -f` at every step (after receiving the secret, after any reformatting) and don't re-attempt the exact same failing command — diagnose via fingerprint comparison and raw file inspection (`cat -A`) first.
