@@ -54,3 +54,6 @@ Thumbs.db
 # incluse in un repository pubblico.
 inbox/
 attached_assets/
+
+# Log persistenti API server
+logs/
