@@ -1085,26 +1085,167 @@ function requireRoutingToken(req: express.Request, res: express.Response): boole
   return true;
 }
 
-/** System prompt di Bowie nel contesto routing: non menziona mai la struttura
- * interna, si presenta come "assistente di navigazione" di BikerLink. */
-function buildRoutingSystemPrompt(): HorusMessage {
+// --- Routing context types (ricevuti da BikerLink sul body) ------------------
+
+interface RoutingContext {
+  stile?: number;         // 1=Diretto … 5=Extra+
+  veicolo?: string;       // "moto" | "moto_veloce" | "auto"
+  moto?: string;          // es. "Suzuki GSF Bandit"
+  autonomia_km?: number;  // autonomia stimata in km
+  evita?: string[];       // ["autostrade","pedaggi","traghetti","sterrate","maltempo"]
+  andata_ritorno?: boolean;
+  multi_giorno?: boolean;
+  n_proposte?: number;    // quante proposte alternative (default 3, max 5)
+  partenza?: string;      // partenza pre-impostata (opzionale)
+}
+
+interface RoutingTelemetria {
+  stile_classificato?: string; // "tranquillo"|"moderato"|"sportivo"|"da_pista"
+  angolo_piega_medio?: number; // gradi
+  gforce_media?: number;       // g
+  km_registrati?: number;
+}
+
+/** Converte il numero di stile 1-5 in testo leggibile per il prompt. */
+function stileLabel(n: number): string {
+  const labels: Record<number, string> = {
+    1: "Diretto (minimizza distanza, strade principali)",
+    2: "Veloce (strade scorrevoli, niente curve inutili)",
+    3: "Bilanciato (mix scorrevolezza e curve)",
+    4: "Curvy (privilegia le curve, strade secondarie)",
+    5: "Extra+ (massimizza le curve, strade tortuose secondarie)",
+  };
+  return labels[Math.max(1, Math.min(5, Math.round(n)))] ?? `Stile ${n}`;
+}
+
+/** Sezione telemetria da iniettare nel prompt Horus, vuota se assente. */
+function buildTelemetriaSection(t?: RoutingTelemetria): string {
+  if (!t) return "";
+  const parts: string[] = [];
+  if (t.stile_classificato) {
+    const guide: Record<string, string> = {
+      tranquillo:
+        "Guida prudente, poco angolo di piega. " +
+        "Privilegia strade panoramiche con buona visibilita', tagli le curve strettissime, " +
+        "aggiungi soste e punti di interesse. Evita passi alpini tecnici.",
+      moderato:
+        "Guida equilibrata. Proponi un mix di strade panoramiche e curve moderate, " +
+        "qualche tornante, nessuna esagerazione.",
+      sportivo:
+        "Guida sportiva, piega media/alta. Privilegia strade tecniche, " +
+        "tornanti di qualita', SP secondarie, valuta l'inserimento di passi alpini o collinari.",
+      da_pista:
+        "Guida da circuito: piega elevata, g-force alta. " +
+        "Massimizza la densita' di curve tecniche, privilegia i passi alpini, " +
+        "sequenze di tornanti serrati, evita le rettifili e i tratti lenti.",
+    };
+    const desc = guide[t.stile_classificato] ?? t.stile_classificato;
+    parts.push(`Profilo guida telemetria: ${t.stile_classificato.toUpperCase()} — ${desc}`);
+  }
+  if (t.angolo_piega_medio !== undefined)
+    parts.push(`Angolo di piega medio registrato: ${t.angolo_piega_medio}°`);
+  if (t.gforce_media !== undefined)
+    parts.push(`G-force laterale media: ${t.gforce_media.toFixed(2)}g`);
+  if (t.km_registrati !== undefined)
+    parts.push(`Km telemetria registrati: ${t.km_registrati} km`);
+  return parts.length ? `\nTELEMETRIA PILOTA:\n${parts.join("\n")}` : "";
+}
+
+/** Schema JSON che Horus DEVE restituire per ogni proposta. */
+const PROPOSALS_JSON_SCHEMA = `[
+  {
+    "id": 1,
+    "titolo": "Nome evocativo del percorso",
+    "descrizione": "2-3 frasi narrative sull'itinerario, cosa lo rende unico.",
+    "waypoints": ["Partenza", "Tappa1", "Tappa2", "Arrivo"],
+    "km_stimati": 150,
+    "ore_stimate": 3.5,
+    "carattere": "extra_curvy",
+    "highlights": ["SP89 Torreglia", "Passo X", "Trattoria Y"],
+    "note": "avviso opzionale (es. breve sterrata, strada chiusa stagionalmente)"
+  }
+]`;
+
+/** Estrae il primo blocco JSON valido dalla risposta di Horus.
+ * Restituisce l'array di proposte se parsabile, null altrimenti. */
+function extractProposals(text: string): unknown[] | null {
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const raw = match ? match[1] : text;
+  try {
+    const parsed: unknown = JSON.parse(raw.trim());
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** System prompt di Bowie nel contesto routing. Include il contesto BikerLink
+ * e le istruzioni per generare N proposte strutturate via call_horus.
+ * Non menziona mai la struttura interna degli agenti. */
+function buildRoutingSystemPrompt(
+  context?: RoutingContext,
+  telemetria?: RoutingTelemetria
+): HorusMessage {
+  const nProposte = Math.max(1, Math.min(5, context?.n_proposte ?? 3));
+  const evita = context?.evita?.length
+    ? context.evita.join(", ")
+    : "nessuna restrizione";
+  const motoInfo = [
+    context?.moto ?? "moto",
+    context?.autonomia_km ? `~${context.autonomia_km} km autonomia` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const stile = context?.stile ? stileLabel(context.stile) : "Bilanciato";
+  const veicolo = context?.veicolo ?? "moto";
+  const andata = context?.andata_ritorno ? "Si' (partenza = arrivo)" : "No";
+  const multiGiorno = context?.multi_giorno ? "Si'" : "No";
+  const partenzaLine = context?.partenza
+    ? `Partenza prefissata: ${context.partenza}\n`
+    : "";
+  const teleSection = buildTelemetriaSection(telemetria);
+
+  const horusContextBlock = [
+    "=== CONTESTO BIKERLINK (da includere nel prompt call_horus) ===",
+    `Veicolo: ${motoInfo} (profilo: ${veicolo})`,
+    `Stile percorso: ${stile}`,
+    `Evita: ${evita}`,
+    `Andata e ritorno: ${andata}`,
+    `Giro multi-giorno: ${multiGiorno}`,
+    partenzaLine.trim(),
+    teleSection,
+    "",
+    `ISTRUZIONI PER HORUS — genera esattamente ${nProposte} proposte alternative,`,
+    `ognuna con carattere diverso (es. la piu' curvy, la piu' panoramica, la piu' corta).`,
+    `Output OBBLIGATORIAMENTE come blocco \`\`\`json con questo schema:`,
+    PROPOSALS_JSON_SCHEMA,
+    "=== FINE CONTESTO ===",
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
   return {
     role: "system",
-    content:
-      "Sei l'assistente di navigazione integrato in BikerLink. " +
-      "Il tuo compito è interpretare le richieste di percorso degli utenti, " +
-      "strutturare i risultati in modo chiaro e gestire le modifiche successive. " +
-      "Quando l'utente chiede di GENERARE o CALCOLARE un nuovo percorso, " +
-      "usa il tool call_horus: descrivi partenza, destinazione, preferenze e waypoint " +
-      "in modo completo nel prompt — Horus restituirà il percorso strutturato. " +
-      "Quando l'utente chiede MODIFICHE a un percorso già discusso nella conversazione " +
-      "(es. 'aggiungi una tappa', 'evita l'autostrada', 'accorcia il percorso') " +
-      "e la modifica è semplice e contestuale, gestiscila in autonomia senza chiamare Horus. " +
-      "Se la modifica richiede un ricalcolo completo, chiama di nuovo call_horus. " +
-      "Se hai bisogno di informazioni aggiornate su luoghi, strade o punti di interesse, usa web_search. " +
-      "NON menzionare mai Bowie, Horus, TC, Replit o la struttura interna degli agenti. " +
-      "Presentati semplicemente come l'assistente di navigazione di BikerLink. " +
-      "Rispondi sempre in italiano, conciso e diretto.",
+    content: [
+      "Sei l'assistente di navigazione integrato in BikerLink.",
+      "",
+      horusContextBlock,
+      "",
+      "REGOLE OPERATIVE:",
+      `- Quando l'utente chiede di GENERARE un percorso: chiama call_horus`,
+      `  passando il CONTESTO BIKERLINK qui sopra + la richiesta dell'utente.`,
+      `  Horus restituira' ${nProposte} proposte in JSON — presentale all'utente`,
+      "  in modo chiaro (titolo + descrizione + km/ore per ciascuna).",
+      "- Quando l'utente chiede MODIFICHE contestuali a proposte gia' discusse",
+      "  (es. 'aggiungi una tappa', 'evita l'autostrada', 'accorcia la proposta 2'):",
+      "  gestiscile in autonomia se semplici, chiama di nuovo call_horus se serve",
+      "  un ricalcolo completo.",
+      "- Per informazioni su luoghi, strade o POI: usa web_search.",
+      "- NON menzionare mai Bowie, Horus, TC, Replit o la struttura interna.",
+      "- Presentati come l'assistente di navigazione di BikerLink.",
+      "- Rispondi sempre in italiano, conciso e diretto.",
+    ].join("\n"),
   };
 }
 
@@ -1122,7 +1263,17 @@ router.post(
       return;
     }
 
-    const { message, history } = req.body as { message?: unknown; history?: unknown };
+    const {
+      message,
+      history,
+      context,
+      telemetria,
+    } = req.body as {
+      message?: unknown;
+      history?: unknown;
+      context?: RoutingContext;
+      telemetria?: RoutingTelemetria;
+    };
     if (typeof message !== "string" || !message.trim()) {
       res.status(400).json({ error: "message is required" });
       return;
@@ -1132,7 +1283,7 @@ router.post(
       ? history.slice(-ROUTING_MAX_HISTORY)
       : [];
 
-    const systemPrompt = buildRoutingSystemPrompt();
+    const systemPrompt = buildRoutingSystemPrompt(context, telemetria);
     const conversation: HorusMessage[] = [
       systemPrompt,
       ...priorHistory.map((m) => ({ role: m.role, content: m.content }) satisfies HorusMessage),
@@ -1147,17 +1298,20 @@ router.post(
     const abortController = new AbortController();
     req.on("close", () => abortController.abort());
 
-    // Tool selection: contestuale + call_horus garantito sempre (Bowie ne ha
-    // sempre bisogno per delegare il calcolo percorso a Horus). web_search
-    // viene aggiunto se il messaggio lo triggera via selectRelevantTools, o
-    // se è richiesto esplicitamente per info su luoghi/strade.
-    const contextualTools = await getHorusTools(message, "bowie");
-    const hasCallHorus = contextualTools.some((t) => t.function.name === "call_horus");
+    // Tool selection: call_horus sempre garantito + meteo/traffico routing-aware
+    // + web_search se la query lo triggera.
+    const contextualTools = await getHorusTools(
+      `${message} percorso meteo traffico chiedi a horus`,
+      "bowie"
+    );
+    const toolNames = new Set(contextualTools.map((t) => t.function.name));
     let tools: HorusToolSpec[] = contextualTools;
-    if (!hasCallHorus) {
-      const delegation = (await getHorusTools("chiedi a horus", "bowie"))
-        .find((t) => t.function.name === "call_horus");
-      if (delegation) tools = [delegation, ...tools];
+    // Garantisci call_horus sempre presente.
+    if (!toolNames.has("call_horus")) {
+      const callHorus = (await getHorusTools("chiedi a horus", "bowie")).find(
+        (t) => t.function.name === "call_horus"
+      );
+      if (callHorus) tools = [callHorus, ...tools];
     }
 
     const config: DirectChatAgentConfig = {
@@ -1184,7 +1338,10 @@ router.post(
 
       // Se il modello ha segnalato un tool mancante, riprova con il set completo.
       if (turnResult.missingTool && !abortController.signal.aborted) {
-        const fullTools = await getHorusTools("chiedi a horus cerca sul web", "bowie");
+        const fullTools = await getHorusTools(
+          "chiedi a horus cerca sul web percorso meteo traffico",
+          "bowie"
+        );
         await runChatTurn(
           req,
           res,
@@ -1198,7 +1355,16 @@ router.post(
       }
 
       if (!abortController.signal.aborted) {
+        // Emetti l'evento done con il testo completo.
         sendEvent(res, "done", { content: turnResult.finalReply });
+
+        // Tenta di estrarre le proposte strutturate dalla risposta di Horus
+        // e le emette come evento separato `proposals` che BikerLink può
+        // usare per popolare direttamente il planner senza parsing lato client.
+        const proposals = extractProposals(turnResult.finalReply);
+        if (proposals) {
+          sendEvent(res, "proposals", { proposals });
+        }
       }
     } catch (err) {
       req.log.error({ err }, "routing chat: errore nel turno");
