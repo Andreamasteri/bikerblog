@@ -11,6 +11,17 @@ viene enumerata: la porta root del suo slot non compare nemmeno in lspci
 (l'unica porta attiva, 00:1b.0, è l'NVMe). Diagnosi rimasta: adattatore/cavo
 difettoso o jumper di delay errato — da provare su un altro PC.
 
+**Problema attuale (2026-07-08):** il driver nvidia è installato su Ubuntu e
+fa boot loop ("GPU nvidia not found") perché la GPU non è enumerata. Il TC
+risponde solo in locale (tastiera+monitor), il tunnel Cloudflare non parte
+perché il sistema si blocca prima di raggiungere il network.
+
+**Prossimo passo immediato:** boot con GRUB → tasto `e` sulla voce Ubuntu →
+aggiungere `nomodeset module_blacklist=nvidia,nvidia_drm,nvidia_modeset`
+alla riga `linux ...` → F10. Poi da SSH: blacklist permanente del driver
+nvidia, poi dump BIOS con flashrom + analisi IFR per opzioni nascoste
+(CSM off / select active video / 4G decoding).
+
 **Attenzione:** una vecchia nota di memoria (bowie-real-model-quality-check)
 dice che la 1070 era "aggiunta al TC il 2026-07-04" — è imprecisa: la GPU era
 su un altro PC. Su TC Ollama gira ancora su CPU (size_vram 0).
