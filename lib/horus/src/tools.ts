@@ -104,6 +104,7 @@
  * finché non arriva il file di logica in studio dall'utente.
  */
 
+import { createHmac } from "node:crypto";
 import type { HorusToolSpec } from "./client.js";
 import { appendHorusMemory, horusChatRaw, quebrachoChatRawResilient } from "./client.js";
 
@@ -865,6 +866,22 @@ const INTER_AGENT_TOOL_SPECS: HorusToolSpec[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "call_ares",
+      description:
+        "Attiva Ares (agente heavy on-demand, devstral) sulla prossima voce aperta del backlog di " +
+        "supervisione. Ares analizza l'anomalia e propone ~2 percorsi di risoluzione — non applica mai " +
+        "modifiche autonomamente. L'analisi è asincrona (Ares gira in background e sfratta " +
+        "temporaneamente gli altri modelli dalla GPU). Usa solo per anomalie che richiedono analisi approfondita.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
 ];
 
 export function selectRelevantTools(
@@ -996,12 +1013,15 @@ export function selectRelevantTools(
     wanted.add("transcribe_audio");
   }
 
-  // call_horus / call_quebracho — delega inter-agente (solo Bowie).
+  // call_horus / call_quebracho / call_ares — delega inter-agente (solo Bowie).
   if (has(/chiedi a horus|delega.*horus|passa.*horus|fallo fare a horus|horus (lo |la |li |le )?farebbe|affida.*horus|fai fare a horus/)) {
     wanted.add("call_horus");
   }
   if (has(/chiedi a quebracho|chiedi a qq|passa.*quebracho|cosa (ne )?pensa quebracho|coinvolgi quebracho|sentire quebracho/)) {
     wanted.add("call_quebracho");
+  }
+  if (has(/chiama ares|attiva ares|lancia ares|avvia ares|ares (analizz|esamina|guarda)|manda ares|usa ares/)) {
+    wanted.add("call_ares");
   }
 
   if (wanted.size === 0) return [];
@@ -2514,6 +2534,33 @@ export async function executeHorusTool(
           { role: "user", content: String(args.message ?? "") },
         ]);
         return result.content?.trim() || "(Quebracho non ha risposto)";
+      }
+      case "call_ares": {
+        const port = process.env["PORT"];
+        if (!port) return "Impossibile contattare Ares: PORT non configurata.";
+        let token: string | undefined = process.env["INBOX_TOKEN"];
+        if (!token && process.env["SESSION_SECRET"]) {
+          token = createHmac("sha256", process.env["SESSION_SECRET"])
+            .update("internal-api-token-v1")
+            .digest("hex");
+        }
+        if (!token) return "Impossibile contattare Ares: token interno non disponibile (manca INBOX_TOKEN o SESSION_SECRET).";
+        let resp: Response;
+        try {
+          resp = await fetch(`http://localhost:${port}/api/_internal/ares/analyze-next`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            signal,
+          });
+        } catch (fetchErr) {
+          return `Ares non raggiungibile: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`;
+        }
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
+          return `Ares non avviato (HTTP ${resp.status}): ${String(body["error"] ?? "errore sconosciuto")}`;
+        }
+        const data = await resp.json() as Record<string, unknown>;
+        return `Ares avviato in background sulla voce backlog #${String(data["id"] ?? "?")}. L'analisi è in corso — il risultato apparirà nel pannello di supervisione non appena completata.`;
       }
       default:
         return `Tool sconosciuto: "${name}".`;

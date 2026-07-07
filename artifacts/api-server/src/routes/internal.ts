@@ -459,6 +459,44 @@ router.post(
 // sfratta gli agenti residenti, quindi NON è un tool di chat né una rotta
 // pubblica (coerente col threat model — Elevation of Privilege / DoS). Il lock
 // a ciclo singolo (in `runAresAnalysis`) impedisce avvii concorrenti.
+
+// Variante fire-and-forget usata dal tool call_ares di Bowie: seleziona
+// automaticamente la prima voce aperta del backlog e avvia Ares in background,
+// restituendo subito l'id avviato. Stessa auth del sibling /:id.
+router.post(
+  "/_internal/ares/analyze-next",
+  async (req, res): Promise<void> => {
+    const auth = req.headers.authorization;
+    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    if (!isAresConfigured()) {
+      res.status(503).json({ error: "Ares non configurato (manca ARES_OLLAMA_MODEL o un URL Ollama)" });
+      return;
+    }
+    if (isAresRunning()) {
+      res.status(409).json({ error: "un ciclo Ares è già in corso" });
+      return;
+    }
+    const items = await listSupervisionBacklog({ status: "open" as SupervisionBacklogStatus, limit: 1 });
+    if (items.length === 0) {
+      res.status(404).json({ error: "nessuna voce aperta nel backlog di supervisione" });
+      return;
+    }
+    const item = items[0]!;
+    req.log.info({ id: item.id, model: aresModel() }, "ares analyze-next avviato da Bowie (fire-and-forget)");
+    // Fire-and-forget: Ares gira in background, la chat non aspetta.
+    runAresAnalysis(item.id)
+      .then((result) => {
+        if (!result.ok) req.log.warn({ id: item.id, error: result.error }, "ares analyze-next failed");
+        else req.log.info({ id: item.id }, "ares analyze-next completed");
+      })
+      .catch((err) => req.log.error({ id: item.id, err }, "ares analyze-next threw"));
+    res.json({ ok: true, id: item.id });
+  }
+);
+
 router.post(
   "/_internal/ares/analyze/:id",
   express.json({ limit: "10kb" }),
