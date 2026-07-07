@@ -1108,6 +1108,12 @@ export function selectRelevantTools(
     // per i nomi di luogo, route_directions geolocalizza via Nominatim: rendi
     // disponibile anche geocode_place così il modello può separare i due passi.
     wanted.add("geocode_place");
+    // Se call_horus è disponibile (= Bowie), il routing pesante va delegato a
+    // Horus: aggiungilo automaticamente così Bowie può fare call_horus → Horus
+    // pianifica l'itinerario senza che l'utente debba chiederlo esplicitamente.
+    if (available.some((t) => t.function.name === "call_horus")) {
+      wanted.add("call_horus");
+    }
   }
 
   // transcribe_audio — speech-to-text (Fase 2e).
@@ -1130,7 +1136,11 @@ export function selectRelevantTools(
   }
 
   // call_horus / call_quebracho / call_ares — delega inter-agente (solo Bowie).
-  if (has(/chiedi a horus|delega.*horus|passa.*horus|fallo fare a horus|horus (lo |la |li |le )?farebbe|affida.*horus|fai fare a horus/)) {
+  if (
+    has(
+      /chiedi a horus|chiama.*horus|usa.*horus|delega.*horus|passa.*horus|fallo fare a horus|horus (lo |la |li |le )?farebbe|affida.*horus|fai fare a horus|horus.*pianifica|horus.*percorso|horus.*route|route planning/
+    )
+  ) {
     wanted.add("call_horus");
   }
   if (has(/chiedi a quebracho|chiedi a qq|passa.*quebracho|cosa (ne )?pensa quebracho|coinvolgi quebracho|sentire quebracho/)) {
