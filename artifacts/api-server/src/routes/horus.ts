@@ -761,7 +761,9 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
       // Task #178: allega solo il sottoinsieme di tool pertinente al messaggio
       // dell'utente (o nessun tool per un messaggio conversazionale), così il
       // prefill su CPU resta minimo e "Ciao" non scade sul tunnel Cloudflare.
-      const tools = await getHorusTools(message, config.agentName);
+      // isAdmin: true — questa handler è protetta da requireHorusPassword, quindi
+      // è sempre una sessione admin; call_ares è accessibile solo qui.
+      const tools = await getHorusTools(message, config.agentName, { isAdmin: true });
       const primary = await runChatTurn(req, res, config, abortController, message, conversation, tools, true);
       traceToolNames.push(...primary.toolNames);
       let finalReply = primary.finalReply;
@@ -780,7 +782,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
           { missingTool: primary.missingTool },
           `${config.logLabel}: tool mancante dichiarato ("${primary.missingTool}"), riprovo con l'intero set disponibile`
         );
-        const broadenedTools = await getHorusTools(undefined, config.agentName);
+        const broadenedTools = await getHorusTools(undefined, config.agentName, { isAdmin: true });
         const escalated = await runChatTurn(
           req,
           res,

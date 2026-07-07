@@ -1229,8 +1229,15 @@ let diaryPostCreatedThisRun = false;
     console.log(`[cluster-daily] step 11: ${supervision.detail}`);
     // Nessuna anomalia in questa ronda: risolve un eventuale alert attivo
     // lasciato da una ronda precedente.
-    const { clearSupervisionAlertState } = await import("@workspace/horus");
+    const { clearSupervisionAlertState, classifyOpenBacklogWithHorus } = await import("@workspace/horus");
     clearSupervisionAlertState();
+    // Retry classificazione su voci aperte non ancora classificate da ronde
+    // precedenti (es. Horus era irraggiungibile quella notte). Best-effort:
+    // un guasto non fa fallire questo step.
+    const classified = await classifyOpenBacklogWithHorus();
+    if (classified.classified > 0) {
+      console.log(`[cluster-daily] step 11: classificazione backlog residuo — ${classified.detail}`);
+    }
     report.addStep({
       step: 11,
       name: "semantic supervision (Quebracho cross-check)",

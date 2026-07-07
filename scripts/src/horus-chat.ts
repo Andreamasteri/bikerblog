@@ -178,7 +178,7 @@ async function main(): Promise<void> {
         const { content, toolCalls } = await horusChatRaw(history, {
           // Task #178: solo il sottoinsieme di tool pertinente a questo
           // messaggio (o nessuno per un messaggio conversazionale).
-          tools: await getHorusTools(userInput),
+          tools: await getHorusTools(userInput, undefined, { isAdmin: true }),
           signal: requestController.signal,
           onToken: (token) => {
             stdout.write(token);

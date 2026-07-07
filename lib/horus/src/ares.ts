@@ -441,6 +441,25 @@ export async function runAresAnalysis(
         const ok = await warmupModel(m);
         if (!ok) restoreFailures.push(m);
       }
+      // 7. health check post-run: verifica che i modelli dello snapshot siano
+      //    effettivamente residenti dopo il warmup. warmupModel restituisce true
+      //    se la chiamata HTTP ha avuto successo, ma non garantisce che il modello
+      //    sia già caricato in VRAM (Ollama carica in background). Un secondo
+      //    GET /api/ps conferma la residenza effettiva; i modelli mancanti vengono
+      //    aggiunti a restoreFailures così il chiamante non riceve mai un "ok"
+      //    silenzioso con la lineup parzialmente assente.
+      try {
+        const nowResident = await listResidentModels();
+        for (const m of snapshot) {
+          if (!nowResident.includes(m) && !restoreFailures.includes(m)) {
+            restoreFailures.push(m);
+          }
+        }
+      } catch {
+        // /api/ps irraggiungibile: impossibile verificare — segnala come
+        // failure generica di restore piuttosto che silenziare l'errore.
+        restoreFailures.push("__health_check_failed__");
+      }
     }
     aresRunningSince = null;
   }

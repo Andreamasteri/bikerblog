@@ -1171,7 +1171,11 @@ export function selectRelevantTools(
  * quando sonar_scan sopravvive alla selezione contestuale, così un messaggio
  * semplice non paga alcun round-trip di rete.
  */
-export async function getHorusTools(message?: string, agentName?: string): Promise<HorusToolSpec[]> {
+export async function getHorusTools(
+  message?: string,
+  agentName?: string,
+  options?: { isAdmin?: boolean }
+): Promise<HorusToolSpec[]> {
   // search_manual (Nadir) è gated solo sulla presenza delle env var: a
   // differenza di sonar_scan non serve un capability-check live, perché non ci
   // sono sotto-configurazioni che possano variare indipendentemente.
@@ -1188,7 +1192,15 @@ export async function getHorusTools(message?: string, agentName?: string): Promi
   const graphhopperTools = isGraphhopperConfigured() ? GRAPHHOPPER_TOOL_SPECS : [];
   // Tool inter-agente: disponibili solo per Bowie (non per Horus che non chiama
   // se stesso, né per Quebracho che non ha tool calling stabile).
-  const interAgentTools = agentName === "Bowie" ? INTER_AGENT_TOOL_SPECS : [];
+  // call_ares è ulteriormente ristretto alle superfici admin (isAdmin: true):
+  // sfratta la GPU e triggera una lunga analisi, quindi non deve essere
+  // accessibile a utenti non-admin che chattano con Bowie (es. BikerLink).
+  const interAgentTools =
+    agentName === "Bowie"
+      ? options?.isAdmin === true
+        ? INTER_AGENT_TOOL_SPECS
+        : INTER_AGENT_TOOL_SPECS.filter((t) => t.function.name !== "call_ares")
+      : [];
 
   // Insieme candidato PRIMA del capability-check live di sonar_scan.
   const candidates = [
