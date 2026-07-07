@@ -833,6 +833,7 @@ export function HorusChat() {
           emptyStateText="Scrivi un messaggio per iniziare a chattare con Horus."
           placeholderText="Scrivi a Horus... (Invio per inviare, Shift+Invio per andare a capo)"
           agentName="horus"
+          showModeSelector
         />
       </div>
 

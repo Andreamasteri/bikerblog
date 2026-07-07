@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { Send, Wrench, User, Square, Paperclip, X, Download, RotateCcw } from "lucide-react";
+import { Send, Wrench, User, Square, Paperclip, X, Download, RotateCcw, HardHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -92,6 +92,8 @@ function downloadAsFile(content: string, filenamePrefix: string): void {
   URL.revokeObjectURL(url);
 }
 
+type ChatMode = "default" | "architect";
+
 export interface AgentChatPanelProps {
   /** Endpoint relativo alla base dell'app (es. "api/horus/chat" o "api/horus/bowie-chat"). */
   endpoint: string;
@@ -105,6 +107,13 @@ export interface AgentChatPanelProps {
   placeholderText: string;
   /** Nome dell'agente (es. "horus"), usato solo per il nome del file scaricato. */
   agentName: string;
+  /**
+   * Se true, mostra un selettore "Default / Architect" sopra l'input.
+   * Cambiare modalità azzera la cronologia (prompt di sistema diverso).
+   * Solo Horus supporta la modalità architect — non passare questo prop a
+   * Bowie/Quebracho.
+   */
+  showModeSelector?: boolean;
 }
 
 /**
@@ -123,6 +132,7 @@ export function AgentChatPanel({
   emptyStateText,
   placeholderText,
   agentName,
+  showModeSelector = false,
 }: AgentChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -131,6 +141,7 @@ export function AgentChatPanel({
   const [notConfigured, setNotConfigured] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [chatMode, setChatMode] = useState<ChatMode>("default");
   // Task #185: la connessione fetch/SSE su mobile può cadere mentre il server
   // sta ancora generando (Chrome sospende la rete a schermo bloccato/tab in
   // background). In quel caso il server completa comunque la risposta e la
@@ -157,6 +168,18 @@ export function AgentChatPanel({
   useEffect(() => {
     setNotConfigured(healthNotConfigured);
   }, [healthNotConfigured]);
+
+  // Cambiare modalità (default ↔ architect) azzera la cronologia: il prompt
+  // di sistema cambia e tenere la history precedente confonde il modello.
+  useEffect(() => {
+    if (!showModeSelector) return;
+    setMessages([]);
+    setError(null);
+    setCanRetry(false);
+    setAttachment(null);
+    abortRef.current?.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatMode]);
 
   function stopMessage() {
     abortRef.current?.abort();
@@ -244,7 +267,7 @@ export function AgentChatPanel({
           "Content-Type": "application/json",
           "X-Horus-Password": password,
         },
-        body: JSON.stringify({ message: outgoing, history }),
+        body: JSON.stringify({ message: outgoing, history, ...(showModeSelector ? { mode: chatMode } : {}) }),
         signal: controller.signal,
       });
 
@@ -510,6 +533,33 @@ export function AgentChatPanel({
           >
             <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+
+      {showModeSelector && (
+        <div className="flex items-center gap-1.5 mb-3 shrink-0">
+          <HardHat className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground mr-1">Modalità:</span>
+          {(["default", "architect"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              disabled={isStreaming}
+              onClick={() => setChatMode(m)}
+              className={`px-2.5 py-1 text-xs border transition-colors ${
+                chatMode === m
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-background text-muted-foreground border-border hover:border-foreground hover:text-foreground"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {m === "default" ? "Default" : "Architect"}
+            </button>
+          ))}
+          {chatMode === "architect" && (
+            <span className="text-xs text-muted-foreground ml-1 italic">
+              · prompt di sistema orientato all'analisi e architettura del codice
+            </span>
+          )}
         </div>
       )}
 
