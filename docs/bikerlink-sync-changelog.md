@@ -158,6 +158,9 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **21:42** · Update documentation for external power supply and GPU debugging <!-- 9c16c66 -->
+- **20:57** · Add documentation for controlling power supply via USB relay <!-- 60d4d4e -->
+- **20:30** · Add completion of a task for fixing a test and reconciling documentation <!-- 4346057 -->
 - **14:45** · Add a gated heavy coder to prevent interruptions during active chats <!-- 32b4ca9 -->
   - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
 - **13:28** · Saved progress at the end of the loop <!-- 51343b2 -->
