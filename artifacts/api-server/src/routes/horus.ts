@@ -611,10 +611,13 @@ const directReplyCache = new Map<string, CachedDirectReply>();
 function directReplyCacheKey(
   agentName: string,
   message: string,
-  history: ChatRequestMessage[]
+  history: ChatRequestMessage[],
+  mode: "default" | "architect" = "default"
 ): string {
   return createHash("sha256")
     .update(agentName)
+    .update("\u0000")
+    .update(mode)
     .update("\u0000")
     .update(message)
     .update("\u0000")
@@ -733,7 +736,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     // restituiscila subito dalla cache invece di rigenerarla. Un retry a un
     // click dalla UI riusa così la risposta già prodotta, senza altri ~80s di
     // attesa e senza un secondo possibile drop.
-    const cacheKey = directReplyCacheKey(config.agentName, message, priorHistory);
+    const cacheKey = directReplyCacheKey(config.agentName, message, priorHistory, parsedMode);
     const cachedReply = getCachedDirectReply(cacheKey);
     if (cachedReply) {
       req.log.info({ agent: config.agentName }, `${config.logLabel}: risposta servita dalla cache (retry)`);
