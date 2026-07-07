@@ -6,30 +6,35 @@
  * Script one-shot: esce dopo aver completato (o tentato) tutti e 3.
  */
 import { writeFileSync, mkdirSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { isAresConfigured, runAresTaskReview } from "@workspace/horus";
 import { readFileSync } from "node:fs";
+
+const WORKSPACE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const TASKS = [
   {
     name: "fase2b-motore-chat-tc-power",
-    file: ".local/tasks/fase2b-motore-chat-tc-power.md",
+    file: resolve(WORKSPACE_ROOT, ".local/tasks/fase2b-motore-chat-tc-power.md"),
     label: "Fase 2b — motore chat AI Hub + memoria condivisa",
   },
   {
     name: "fase-2d-power-coder-fallback",
-    file: ".local/tasks/fase-2d-power-coder-fallback.md",
+    file: resolve(WORKSPACE_ROOT, ".local/tasks/fase-2d-power-coder-fallback.md"),
     label: "Fase 2d — coder pesante on-demand + eviction gated",
   },
   {
     name: "fase-2e-power-whisper-route",
-    file: ".local/tasks/fase-2e-power-whisper-route.md",
+    file: resolve(WORKSPACE_ROOT, ".local/tasks/fase-2e-power-whisper-route.md"),
     label: "Fase 2e — Whisper STT + route planning su Horus",
   },
 ] as const;
 
 function saveResult(name: string, content: string): void {
-  mkdirSync("inbox", { recursive: true });
-  writeFileSync(`inbox/ares-review-${name}.md`, content, "utf-8");
+  const inboxDir = resolve(WORKSPACE_ROOT, "inbox");
+  mkdirSync(inboxDir, { recursive: true });
+  writeFileSync(resolve(inboxDir, `ares-review-${name}.md`), content, "utf-8");
 }
 
 async function main(): Promise<void> {
@@ -58,8 +63,8 @@ async function main(): Promise<void> {
       continue;
     }
 
-    console.log("   🚀 Avvio Ares...");
-    const result = await runAresTaskReview(content);
+    console.log("   🚀 Avvio Ares (timeout 10min)...");
+    const result = await runAresTaskReview(content, { timeoutMs: 10 * 60_000 });
 
     if (!result.ok) {
       console.error(`❌ Ares ha fallito: ${result.error ?? "errore sconosciuto"}`);

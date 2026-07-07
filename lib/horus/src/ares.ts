@@ -280,7 +280,8 @@ export interface AresAnalysisResult {
 async function runAresToolLoop(
   problem: string,
   signal?: AbortSignal,
-  systemPrompt: string = ARES_SYSTEM_PROMPT
+  systemPrompt: string = ARES_SYSTEM_PROMPT,
+  timeoutMs?: number
 ): Promise<string> {
   // Solo i tool dell'allowlist read-only: nessun tool che muta stato può
   // finire nel loop di Ares, a prescindere da cosa restituisce getHorusTools().
@@ -299,6 +300,7 @@ async function runAresToolLoop(
       keepAlive: ARES_KEEP_ALIVE,
       skipMemory: true,
       signal,
+      timeoutMs,
     });
     if (!toolCalls || toolCalls.length === 0) {
       finalText = content;
@@ -331,6 +333,7 @@ async function runAresToolLoop(
       keepAlive: ARES_KEEP_ALIVE,
       skipMemory: true,
       signal,
+      timeoutMs,
     });
     finalText = content;
   }
@@ -610,11 +613,11 @@ export interface AresTaskReviewResult {
  */
 export async function runAresTaskReview(
   taskContent: string,
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; timeoutMs?: number } = {}
 ): Promise<AresTaskReviewResult> {
   const outcome = await runAresGpuCycle<string>(
     async (signal) =>
-      runAresToolLoop(formatTaskForReview(taskContent), signal, ARES_TASK_REVIEW_SYSTEM_PROMPT),
+      runAresToolLoop(formatTaskForReview(taskContent), signal, ARES_TASK_REVIEW_SYSTEM_PROMPT, options.timeoutMs),
     {
       signal: options.signal,
       // Valida l'input PRIMA di toccare la GPU: un piano vuoto non deve
