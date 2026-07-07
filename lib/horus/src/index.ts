@@ -73,6 +73,8 @@ export {
   type BacklogCategory,
 } from "./supervision-backlog.js";
 
+export { ARCHITECT_SYSTEM_PROMPT } from "./prompts.js";
+
 export {
   ARES_AGENT_NAME,
   isAresConfigured,

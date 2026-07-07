@@ -28,6 +28,7 @@ import {
   executeHorusTool,
   capToolResult,
   recordLlmTrace,
+  ARCHITECT_SYSTEM_PROMPT,
   type HorusMessage,
 } from "@workspace/horus";
 
@@ -53,6 +54,19 @@ const CHAT_SYSTEM_PROMPT: HorusMessage = {
     "sono analisi statica REALE (tsc/eslint/grep eseguiti davvero), non una tua stima. Se questi tool non compaiono nella lista disponibile, di' esplicitamente che l'analisi statica del codice non è configurata in questo momento, invece di rispondere con un generico disclaimer da 'modello linguistico'. " +
     "Se disponibile, hai anche architect: usalo (non i tool leggeri sopra) quando ti chiedono un'analisi architetturale approfondita, di pianificare l'implementazione di una feature/modifica non banale, o di trovare la causa radice di un bug complesso — passagli i percorsi dei file più rilevanti come contesto quando li conosci. È solo analisi (mai scrittura/esecuzione di codice) e può richiedere qualche minuto: avvisa l'utente che ci vorrà un po' prima di invocarlo.",
 };
+
+// Flag --mode: "architect" usa il system prompt strutturato per review di task
+// plan / analisi architetturale. Default: "default" (chat libera generica).
+const MODE_ARG_IDX = process.argv.indexOf("--mode");
+const chatMode: "default" | "architect" =
+  MODE_ARG_IDX !== -1 && process.argv[MODE_ARG_IDX + 1] === "architect"
+    ? "architect"
+    : "default";
+
+const EFFECTIVE_SYSTEM_PROMPT: HorusMessage =
+  chatMode === "architect"
+    ? { role: "system", content: ARCHITECT_SYSTEM_PROMPT }
+    : CHAT_SYSTEM_PROMPT;
 
 const MAX_TOOL_ITERATIONS = 5;
 
@@ -95,7 +109,7 @@ async function maybeAutoRemember(userInput: string, assistantReply: string): Pro
   }
 }
 
-const history: HorusMessage[] = [CHAT_SYSTEM_PROMPT];
+const history: HorusMessage[] = [EFFECTIVE_SYSTEM_PROMPT];
 
 // Impostato solo mentre c'è una richiesta a Horus (o un tool) in corso, in
 // modo che l'handler di Ctrl+C sappia se deve annullare la richiesta o
@@ -148,7 +162,7 @@ async function main(): Promise<void> {
 
     if (userInput === "/reset") {
       history.length = 0;
-      history.push(CHAT_SYSTEM_PROMPT);
+      history.push(EFFECTIVE_SYSTEM_PROMPT);
       console.log("↺ Cronologia svuotata.\n");
       continue;
     }

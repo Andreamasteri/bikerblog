@@ -141,11 +141,21 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #211** — Ares: add task-review mode <!-- a5fe07c -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
+- **Task #210** — Attiva tool analisi codice Horus <!-- 1026812 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. The original text is "Attiva tool analisi codice Horus".
+- **Task #209** — Routing multi-proposta obbligatoria e output strutturato <!-- c90d91c -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Routing multi-proposta obbligatoria e output strutturato". Let me break it down.
+- **Task #208** — Add GRAPHHOPPER_URL env var and run regional coverage probe <!-- c547e9a -->
+  - _In parole semplici:_ Okay, let's tackle this query. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified not to use technical jargon without explanation, and not to add any extra details.
 - **Task #201** — Ares — agente heavy on-demand per analisi e risoluzione complesse <!-- a531fbc -->
   - _In parole semplici:_ Okay, the user wants me to rewrite this technical changelog entry into a single short sentence in Italian that's easy for non-programmers to understand. Let me read the original text first.
 
 **Altre modifiche:**
 
+- **11:46** · Update website's social media preview image <!-- c6b1a24 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original is "Update website's social media preview image". Let me break it down.
 - **10:30** · Add ability to plan motorcycle trips and routes <!-- 4d2b086 -->
   - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short Italian sentence that's easy to understand for non-programmers. The original text is "Add ability to plan motorcycle trips and routes".
 - **10:27** · Improve Horus routing and retry logic for better user experience <!-- 640fa3a -->

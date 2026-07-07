@@ -18,6 +18,7 @@ import {
   capToolResult,
   isGatewayTimeoutError,
   MAX_TOOL_RESULT_CHARS,
+  ARCHITECT_SYSTEM_PROMPT,
   BOWIE_AGENT_NAME,
   QUEBRACHO_AGENT_NAME,
   QUEBRACHO_NICKNAME,
@@ -682,10 +683,18 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
   return async (req: express.Request, res: express.Response): Promise<void> => {
     if (!requireHorusPassword(req, res)) return;
 
-    const { message, history } = req.body as {
+    const { message, history, mode } = req.body as {
       message?: unknown;
       history?: unknown;
+      mode?: unknown;
     };
+
+    const parsedMode: "default" | "architect" =
+      mode === "architect" ? "architect" : "default";
+    const effectiveSystemPrompt: HorusMessage =
+      parsedMode === "architect"
+        ? { role: "system", content: ARCHITECT_SYSTEM_PROMPT }
+        : config.systemPrompt;
 
     if (typeof message !== "string" || !message.trim()) {
       res.status(400).json({ error: "message is required" });
@@ -706,7 +715,7 @@ export function createDirectChatHandler(config: DirectChatAgentConfig) {
     // loop con i tool. (Il fallback senza-tool in caso di timeout del tunnel usa
     // invece un prompt MINIMO costruito nel catch — vedi sotto.)
     const baseConversation: HorusMessage[] = [
-      config.systemPrompt,
+      effectiveSystemPrompt,
       ...priorHistory.map((m) => ({ role: m.role, content: m.content }) satisfies HorusMessage),
       { role: "user", content: message },
     ];
