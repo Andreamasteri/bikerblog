@@ -188,6 +188,14 @@ export async function warmupModel(model: string, signal?: AbortSignal): Promise<
 const ARES_LOCK_TTL_MS = 20 * 60_000; // 20 minuti: tetto largo per un ciclo heavy
 let aresRunningSince: number | null = null;
 
+/**
+ * Messaggio d'errore restituito quando il lock a ciclo singolo è già preso.
+ * Esportato come costante così i chiamanti (es. l'endpoint admin) possono
+ * distinguere il conflitto di concorrenza in modo deterministico (match esatto)
+ * invece di cercare una sottostringa fragile nel testo.
+ */
+export const ARES_BUSY_MESSAGE = "Un ciclo Ares è già in corso — riprova quando ha finito";
+
 /** True se un ciclo Ares è attualmente in corso (lock non scaduto). */
 export function isAresRunning(): boolean {
   return aresRunningSince !== null && Date.now() - aresRunningSince < ARES_LOCK_TTL_MS;
@@ -269,14 +277,18 @@ export interface AresAnalysisResult {
  * Bounded a ARES_MAX_TOOL_ITERATIONS. Ritorna il testo finale della proposta.
  * Estratto come funzione a sé per poter essere testato in isolamento.
  */
-async function runAresToolLoop(problem: string, signal?: AbortSignal): Promise<string> {
+async function runAresToolLoop(
+  problem: string,
+  signal?: AbortSignal,
+  systemPrompt: string = ARES_SYSTEM_PROMPT
+): Promise<string> {
   // Solo i tool dell'allowlist read-only: nessun tool che muta stato può
   // finire nel loop di Ares, a prescindere da cosa restituisce getHorusTools().
   const tools = (await getHorusTools()).filter((t) =>
     ARES_READONLY_TOOL_ALLOWLIST.has(t.function.name)
   );
   const history: HorusMessage[] = [
-    { role: "system", content: ARES_SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     { role: "user", content: problem },
   ];
 
@@ -313,7 +325,7 @@ async function runAresToolLoop(problem: string, signal?: AbortSignal): Promise<s
     history.push({
       role: "user",
       content:
-        "Hai raccolto abbastanza informazioni. Ora scrivi la proposta finale (diagnosi + due percorsi + raccomandazione), senza usare altri tool.",
+        "Hai raccolto abbastanza informazioni. Ora scrivi la risposta finale strutturata come richiesto dalle istruzioni di sistema, senza usare altri tool.",
     });
     const { content } = await aresClient.chatRaw(history, {
       keepAlive: ARES_KEEP_ALIVE,
@@ -347,61 +359,77 @@ function formatProblem(item: {
     .join("\n");
 }
 
+/** Esito grezzo dell'orchestrazione GPU condivisa dai cicli Ares. */
+interface AresCycleOutcome<T> {
+  ok: boolean;
+  /** Valore prodotto dal `work` se il ciclo è andato a buon fine. */
+  value?: T;
+  /** Modelli sfrattati e poi ripristinati. */
+  snapshot: string[];
+  /** Modelli il cui warmup di ripristino è fallito (lineup da controllare). */
+  restoreFailures: string[];
+  /** Messaggio d'errore se il ciclo è fallito. */
+  error?: string;
+}
+
 /**
- * Ciclo Ares completo su UNA voce del backlog. Admin-only (il chiamante è
- * l'endpoint interno). Sfratta la lineup residente, carica Ares, analizza,
- * scarica Ares, ripristina la lineup (sempre, anche in errore).
+ * Orchestrazione GPU condivisa da TUTTI i cicli Ares (analisi backlog,
+ * task-review, ...). Gestisce gli invarianti che devono valere identici per
+ * ogni modalità:
+ *   - lock a ciclo singolo con acquisizione ATOMICA (nessun `await` tra il
+ *     check `isAresRunning()` e il set del lock, altrimenti due trigger
+ *     concorrenti sfratterebbero la lineup due volte);
+ *   - `preflight` opzionale PRIMA di toccare la GPU: se ritorna una stringa
+ *     d'errore il ciclo aborta SENZA eviction (usato per validare l'input, es.
+ *     voce di backlog inesistente / task plan vuoto);
+ *   - snapshot dei residenti (`GET /api/ps`, escluso Ares) → eviction;
+ *   - esecuzione di `work` con Ares caricato;
+ *   - `finally`: unload di Ares + ripristino della lineup + health check,
+ *     SEMPRE, anche in errore; lock rilasciato in ogni caso.
  *
- * Non lancia: ritorna sempre un `AresAnalysisResult`; gli errori sono nel
- * campo `error` così l'endpoint può loggarli e mostrarli all'admin (nessun
- * fallimento silenzioso).
+ * Non lancia: ritorna sempre un `AresCycleOutcome`; gli errori sono nel campo
+ * `error` così il chiamante può loggarli e mostrarli all'admin (nessun
+ * fallimento silenzioso). `restoreFailures` è lo STESSO array referenziato
+ * nell'outcome e mutato nel `finally`, così il chiamante vede l'esito reale del
+ * ripristino anche quando `work` è già ritornato.
  */
-export async function runAresAnalysis(
-  backlogId: number,
-  options: { signal?: AbortSignal } = {}
-): Promise<AresAnalysisResult> {
-  const { signal } = options;
-  const base: AresAnalysisResult = {
-    ok: false,
-    backlogId,
-    snapshot: [],
-    restoreFailures: [],
-  };
+async function runAresGpuCycle<T>(
+  work: (signal: AbortSignal | undefined) => Promise<T>,
+  options: {
+    signal?: AbortSignal;
+    preflight?: (signal: AbortSignal | undefined) => Promise<string | null>;
+  } = {}
+): Promise<AresCycleOutcome<T>> {
+  const { signal, preflight } = options;
+  const restoreFailures: string[] = [];
 
   if (!isAresConfigured()) {
-    return { ...base, error: "Ares non configurato (manca ARES_OLLAMA_MODEL o un URL Ollama)" };
+    return {
+      ok: false,
+      snapshot: [],
+      restoreFailures,
+      error: "Ares non configurato (manca ARES_OLLAMA_MODEL o un URL Ollama)",
+    };
   }
-  // Acquisizione del lock ATOMICA: il check e il set devono stare insieme senza
-  // alcun `await` in mezzo, altrimenti due trigger concorrenti potrebbero
-  // passare entrambi il check prima che uno alzi il lock e finire per sfrattare
-  // la lineup due volte. Da qui in poi ogni return passa dal `finally` che
-  // rilascia il lock.
+  // Lock ATOMICO: check + set senza alcun `await` in mezzo. Da qui in poi ogni
+  // return passa dal `finally` che rilascia il lock.
   if (isAresRunning()) {
-    return { ...base, error: "Un ciclo Ares è già in corso — riprova quando ha finito" };
+    return { ok: false, snapshot: [], restoreFailures, error: ARES_BUSY_MESSAGE };
   }
   aresRunningSince = Date.now();
 
   let snapshot: string[] = [];
-  const restoreFailures: string[] = [];
   const model = aresModel();
-  // Diventa true solo quando stiamo per toccare la GPU: se usciamo prima (voce
-  // inesistente/chiusa, lettura fallita) NON eseguiamo unload/restore.
+  // Diventa true solo quando stiamo per toccare la GPU: se usciamo prima
+  // (preflight fallito) NON eseguiamo unload/restore.
   let touchedGpu = false;
 
   try {
-    // Carica la voce PRIMA di toccare la GPU: se non esiste, non sfrattiamo nulla.
-    let item;
-    try {
-      item = await getSupervisionBacklogItem(backlogId);
-    } catch (err) {
-      return {
-        ...base,
-        error: `lettura backlog fallita: ${err instanceof Error ? err.message : String(err)}`,
-      };
-    }
-    if (!item) return { ...base, error: `voce di backlog #${backlogId} non trovata` };
-    if (item.status === "resolved" || item.status === "dismissed") {
-      return { ...base, error: `voce #${backlogId} già chiusa (status=${item.status})` };
+    // Validazione dell'input PRIMA di toccare la GPU: se fallisce non sfrattiamo
+    // nulla. L'errore torna così com'è (senza prefisso "ciclo Ares fallito").
+    if (preflight) {
+      const preErr = await preflight(signal);
+      if (preErr) return { ok: false, snapshot: [], restoreFailures, error: preErr };
     }
 
     // 1. snapshot dei residenti (esclude Ares stesso, per sicurezza)
@@ -413,35 +441,28 @@ export async function runAresAnalysis(
       await unloadModel(m, signal);
     }
 
-    // 3. analisi (carica Ares implicitamente alla prima chatRaw)
-    const proposal = await runAresToolLoop(formatProblem(item), signal);
+    // 3. lavoro effettivo (carica Ares implicitamente alla prima chatRaw)
+    const value = await work(signal);
 
-    // 4. persiste la proposta e fa avanzare lo stato a in_review (Ares ha preso
-    //    in carico; la chiusura resta una decisione admin)
-    await setAresNotes(backlogId, proposal);
-    if (item.status === "open") {
-      await updateBacklogStatus(backlogId, "in_review");
-    }
-
-    return { ok: true, backlogId, proposal, snapshot, restoreFailures };
+    return { ok: true, value, snapshot, restoreFailures };
   } catch (err) {
     return {
-      ...base,
+      ok: false,
       snapshot,
       restoreFailures,
       error: `ciclo Ares fallito: ${err instanceof Error ? err.message : String(err)}`,
     };
   } finally {
     if (touchedGpu) {
-      // 5. unload Ares — sempre, così non resta lui a occupare la VRAM al posto
+      // 4. unload Ares — sempre, così non resta lui a occupare la VRAM al posto
       //    della lineup economy.
       await unloadModel(model);
-      // 6. ripristino lineup — sempre tentato, anche se l'analisi è fallita.
+      // 5. ripristino lineup — sempre tentato, anche se il lavoro è fallito.
       for (const m of snapshot) {
         const ok = await warmupModel(m);
         if (!ok) restoreFailures.push(m);
       }
-      // 7. health check post-run: verifica che i modelli dello snapshot siano
+      // 6. health check post-run: verifica che i modelli dello snapshot siano
       //    effettivamente residenti dopo il warmup. warmupModel restituisce true
       //    se la chiamata HTTP ha avuto successo, ma non garantisce che il modello
       //    sia già caricato in VRAM (Ollama carica in background). Un secondo
@@ -463,4 +484,151 @@ export async function runAresAnalysis(
     }
     aresRunningSince = null;
   }
+}
+
+/**
+ * Ciclo Ares completo su UNA voce del backlog. Admin-only (il chiamante è
+ * l'endpoint interno). Sfratta la lineup residente, carica Ares, analizza,
+ * scarica Ares, ripristina la lineup (sempre, anche in errore).
+ *
+ * Non lancia: ritorna sempre un `AresAnalysisResult`; gli errori sono nel
+ * campo `error` così l'endpoint può loggarli e mostrarli all'admin (nessun
+ * fallimento silenzioso).
+ */
+export async function runAresAnalysis(
+  backlogId: number,
+  options: { signal?: AbortSignal } = {}
+): Promise<AresAnalysisResult> {
+  // La voce viene caricata nel preflight (prima di toccare la GPU) e riusata nel
+  // work; il closure la condivide tra le due fasi.
+  let item: Awaited<ReturnType<typeof getSupervisionBacklogItem>> | undefined;
+
+  const outcome = await runAresGpuCycle<string>(
+    async (signal) => {
+      // 3a. analisi (carica Ares implicitamente alla prima chatRaw)
+      const proposal = await runAresToolLoop(formatProblem(item!), signal);
+      // 3b. persiste la proposta e fa avanzare lo stato a in_review (Ares ha
+      //     preso in carico; la chiusura resta una decisione admin)
+      await setAresNotes(backlogId, proposal);
+      if (item!.status === "open") {
+        await updateBacklogStatus(backlogId, "in_review");
+      }
+      return proposal;
+    },
+    {
+      signal: options.signal,
+      preflight: async () => {
+        // Carica la voce PRIMA di toccare la GPU: se non esiste, non sfrattiamo nulla.
+        try {
+          item = await getSupervisionBacklogItem(backlogId);
+        } catch (err) {
+          return `lettura backlog fallita: ${err instanceof Error ? err.message : String(err)}`;
+        }
+        if (!item) return `voce di backlog #${backlogId} non trovata`;
+        if (item.status === "resolved" || item.status === "dismissed") {
+          return `voce #${backlogId} già chiusa (status=${item.status})`;
+        }
+        return null;
+      },
+    }
+  );
+
+  return {
+    ok: outcome.ok,
+    backlogId,
+    proposal: outcome.value,
+    snapshot: outcome.snapshot,
+    restoreFailures: outcome.restoreFailures,
+    error: outcome.error,
+  };
+}
+
+// ── Modalità task-review (Task #211) ─────────────────────────────────────────
+// Ares revisiona un TASK PLAN prima che venga assegnato a un agente, con lo
+// stesso ciclo GPU dell'analisi backlog ma un prompt orientato alla review
+// (scope, rischi, step mancanti, contraddizioni) e nessuna persistenza su DB:
+// la review torna al chiamante admin. Invariante identico: "Ares propone,
+// l'admin decide" — read-only, nessuna modifica al piano.
+
+const ARES_TASK_REVIEW_SYSTEM_PROMPT = [
+  "Sei Ares, l'agente di analisi pesante di BikerBlog (un blog di moto).",
+  "In questa modalità REVISIONI un task plan prima che venga assegnato a un agente:",
+  "il tuo compito è trovare problemi nel piano, NON eseguirlo.",
+  "",
+  "REGOLA ASSOLUTA — 'Ares propone, l'admin decide':",
+  "- NON applichi mai modifiche, NON scrivi file, NON installi nulla, NON esegui il task.",
+  "- Solo analisi del piano e osservazioni. Le decisioni restano all'admin.",
+  "",
+  "Hai tool READ-ONLY (ricerca nel codice, typecheck, lint, git log, github, lettura",
+  "del blog, ricerca web/manuali). Usali per VERIFICARE le assunzioni del piano contro",
+  "il codice reale: i file citati esistono? le funzioni/endpoint menzionati ci sono",
+  "davvero? Non inventare: se un tool non conferma un'assunzione, segnalalo.",
+  "",
+  "Al termine produci una review in ITALIANO così strutturata:",
+  "1. Scope: il piano è ben delimitato? Fa troppo o troppo poco rispetto all'obiettivo?",
+  "2. Rischi e dipendenze nascoste: cosa può rompersi; dipendenze non dichiarate.",
+  "3. Step mancanti o ambigui: passi assenti, sottospecificati o nell'ordine sbagliato.",
+  "4. Contraddizioni interne: parti del piano in conflitto tra loro.",
+  "5. Out of scope da verificare: cose escluse che forse andrebbero incluse (o viceversa).",
+  "6. Giudizio finale: PRONTO / DA CORREGGERE / DA RIPENSARE, con una frase di motivazione.",
+  "Per i punti 1-5, quando puoi apri con un verdetto binario (OK / PROBLEMA) e poi elabora.",
+  "Sii conciso e concreto.",
+].join("\n");
+
+function formatTaskForReview(taskContent: string): string {
+  return [
+    "Task plan da revisionare (prima dell'assegnazione a un agente).",
+    "Contenuto integrale tra i marcatori:",
+    "--- INIZIO TASK PLAN ---",
+    taskContent.trim(),
+    "--- FINE TASK PLAN ---",
+  ].join("\n");
+}
+
+/** Esito di un ciclo Ares in modalità task-review. */
+export interface AresTaskReviewResult {
+  ok: boolean;
+  /** Review testuale strutturata di Ares, se prodotta. */
+  review?: string;
+  /** Modelli sfrattati e poi ripristinati. */
+  snapshot: string[];
+  /** Modelli il cui warmup di ripristino è fallito (lineup da controllare). */
+  restoreFailures: string[];
+  /** Messaggio d'errore se il ciclo è fallito prima di produrre la review. */
+  error?: string;
+}
+
+/**
+ * Ciclo Ares completo in modalità task-review. Admin-only (il chiamante è
+ * l'endpoint interno). Riceve il CONTENUTO di un task plan (non un id), sfratta
+ * la lineup residente, carica Ares, produce una review strutturata usando i
+ * tool read-only per verificare le assunzioni del piano, scarica Ares e
+ * ripristina la lineup (sempre, anche in errore). Nessuna persistenza su DB.
+ *
+ * Non lancia: ritorna sempre un `AresTaskReviewResult`; gli errori sono nel
+ * campo `error`.
+ */
+export async function runAresTaskReview(
+  taskContent: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<AresTaskReviewResult> {
+  const outcome = await runAresGpuCycle<string>(
+    async (signal) =>
+      runAresToolLoop(formatTaskForReview(taskContent), signal, ARES_TASK_REVIEW_SYSTEM_PROMPT),
+    {
+      signal: options.signal,
+      // Valida l'input PRIMA di toccare la GPU: un piano vuoto non deve
+      // sfrattare la lineup.
+      preflight: async () =>
+        taskContent.trim().length === 0 ? "task plan vuoto" : null,
+    }
+  );
+
+  return {
+    ok: outcome.ok,
+    review: outcome.value,
+    snapshot: outcome.snapshot,
+    restoreFailures: outcome.restoreFailures,
+    error: outcome.error,
+  };
 }

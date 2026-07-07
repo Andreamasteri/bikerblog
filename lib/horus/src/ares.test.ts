@@ -67,6 +67,7 @@ async function setup(opts: {
   residentModels?: string[];
   item?: SupervisionBacklogRow | null;
   horusTools?: Array<{ type: "function"; function: { name: string } }>;
+  isConfigured?: boolean;
 }): Promise<{
   ares: typeof import("./ares.js");
   fetchCalls: FetchCall[];
@@ -80,7 +81,7 @@ async function setup(opts: {
   const fakeClient = {
     chatRaw: opts.chatRaw,
     chat: async () => "",
-    isConfigured: () => true,
+    isConfigured: () => opts.isConfigured ?? true,
     checkHealth: async () => ({ status: "ok", model: "devstral:test" }) as const,
   };
 
@@ -323,6 +324,134 @@ test("voce di backlog inesistente: errore, nessuna eviction", async () => {
     // Non deve aver toccato la GPU se la voce non esiste.
     assert.equal(unloadModels(fetchCalls).length, 0);
     assert.equal(ares.isAresRunning(), false);
+  } finally {
+    restore();
+  }
+});
+
+// ── Modalità task-review (Task #211) ─────────────────────────────────────────
+// Stessa orchestrazione GPU dell'analisi backlog, ma input = contenuto di un
+// task plan (non un id) e nessuna persistenza su DB: la review torna al
+// chiamante. Verifichiamo gli stessi invarianti (evict→review→unload→restore,
+// lock, ripristino nel finally) più le differenze specifiche del task-review.
+
+test("task-review: happy path — sfratta la lineup, produce la review, nessuna scrittura DB, ripristina", async () => {
+  let seenSystemPrompt = "";
+  const { ares, fetchCalls, dbCalls, restore } = await setup({
+    chatRaw: async (history) => {
+      const msgs = history as Array<{ role: string; content: string }>;
+      seenSystemPrompt = msgs.find((m) => m.role === "system")?.content ?? "";
+      return { content: "1. Scope: OK ... 6. Giudizio: PRONTO", toolCalls: [] };
+    },
+  });
+  try {
+    const result = await ares.runAresTaskReview("# Task\nAggiungi un endpoint di test.");
+
+    assert.equal(result.ok, true, result.error);
+    assert.match(result.review ?? "", /Giudizio: PRONTO/);
+    assert.deepEqual(result.snapshot, ["qwen3:4b", "qwen3:1.7b"]);
+    assert.deepEqual(result.restoreFailures, []);
+
+    // Prompt orientato alla review (non quello dell'analisi backlog).
+    assert.match(seenSystemPrompt, /REVISIONI un task plan/);
+
+    // Eviction della lineup + unload di Ares (keep_alive:0).
+    const unloaded = unloadModels(fetchCalls);
+    assert.ok(unloaded.includes("qwen3:4b") && unloaded.includes("qwen3:1.7b"), "lineup sfrattata");
+    assert.ok(unloaded.includes("devstral:test"), "Ares scaricato a fine ciclo");
+
+    // Ripristino della lineup (keep_alive:-1), Ares NON ri-warmato.
+    const warmed = warmupModels(fetchCalls);
+    assert.deepEqual(warmed.sort(), ["qwen3:1.7b", "qwen3:4b"]);
+    assert.ok(!warmed.includes("devstral:test"), "Ares non deve restare residente");
+
+    // Task-review NON persiste nulla sul DB (né note né avanzamenti di stato).
+    assert.equal(dbCalls.setAresNotes.length, 0);
+    assert.equal(dbCalls.updateStatus.length, 0);
+
+    // Lock rilasciato.
+    assert.equal(ares.isAresRunning(), false);
+  } finally {
+    restore();
+  }
+});
+
+test("task-review: task plan vuoto — errore, nessuna eviction", async () => {
+  const { ares, fetchCalls, restore } = await setup({
+    chatRaw: async () => ({ content: "non dovrebbe essere chiamato", toolCalls: [] }),
+  });
+  try {
+    const result = await ares.runAresTaskReview("   \n  ");
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /vuoto/);
+    // Preflight fallito PRIMA di toccare la GPU: nessun modello sfrattato.
+    assert.equal(unloadModels(fetchCalls).length, 0);
+    assert.equal(ares.isAresRunning(), false);
+  } finally {
+    restore();
+  }
+});
+
+test("task-review: Ares non configurato — errore immediato, nessuna eviction", async () => {
+  const { ares, fetchCalls, restore } = await setup({
+    chatRaw: async () => ({ content: "x", toolCalls: [] }),
+    isConfigured: false,
+  });
+  try {
+    const result = await ares.runAresTaskReview("# Task\nqualcosa");
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /non configurato/);
+    assert.equal(unloadModels(fetchCalls).length, 0);
+    assert.equal(ares.isAresRunning(), false);
+  } finally {
+    restore();
+  }
+});
+
+test("task-review: ripristino tentato anche se la review fallisce, lock rilasciato", async () => {
+  const { ares, fetchCalls, restore } = await setup({
+    chatRaw: async () => {
+      throw new Error("devstral non risponde");
+    },
+  });
+  try {
+    const result = await ares.runAresTaskReview("# Task\nqualcosa");
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /ciclo Ares fallito/);
+
+    // Nonostante il fallimento la lineup è stata ripristinata (finally).
+    const warmed = warmupModels(fetchCalls).sort();
+    assert.deepEqual(warmed, ["qwen3:1.7b", "qwen3:4b"]);
+
+    assert.equal(ares.isAresRunning(), false);
+  } finally {
+    restore();
+  }
+});
+
+test("task-review: riceve SOLO i tool read-only dell'allowlist", async () => {
+  const offered = [
+    toolSpec("search_code"),
+    toolSpec("typecheck_repo"),
+    toolSpec("github_read"),
+    toolSpec("remember_note"), // mutatore
+    toolSpec("save_file"), // mutatore
+  ];
+  let seenTools: string[] = [];
+  const { ares, restore } = await setup({
+    horusTools: offered,
+    chatRaw: async (_history, opts) => {
+      seenTools = (opts?.tools ?? []).map((t) => t.function.name);
+      return { content: "Review", toolCalls: [] };
+    },
+  });
+  try {
+    const result = await ares.runAresTaskReview("# Task\nqualcosa");
+    assert.equal(result.ok, true, result.error);
+    for (const forbidden of ["remember_note", "save_file"]) {
+      assert.ok(!seenTools.includes(forbidden), `${forbidden} non deve essere offerto ad Ares`);
+    }
+    assert.deepEqual(seenTools.sort(), ["github_read", "search_code", "typecheck_repo"]);
   } finally {
     restore();
   }

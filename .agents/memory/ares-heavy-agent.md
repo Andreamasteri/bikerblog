@@ -43,6 +43,20 @@ so a thrown analysis still puts the lineup back and frees the lock.
 change (economy tuning, Nadir on/off); snapshotting reality means restore fidelity
 without editing code each time the lineup changes.
 
+## Two modes share one GPU cycle
+The lock/snapshot/evict/finally-restore/health orchestration is a generic helper
+`runAresGpuCycle<T>(work, {signal, preflight})`. Two modes ride it:
+- `runAresAnalysis(backlogId)` — reviews a supervision-backlog item, persists to DB.
+- `runAresTaskReview(taskContent)` — reviews a task PLAN (scope/risks/missing
+  steps/contradictions), **no DB persistence**, review-oriented system prompt.
+
+**Why the split:** the risky part (evicting the resident lineup and guaranteeing
+restore) must be identical for every future Ares mode; only the `preflight` (load
+inputs, before touching the GPU) and `work` (the tool loop) differ. `preflight`
+runs BEFORE any eviction, so a bad input can never leave the lineup unloaded.
+Conflict detection uses the exported `ARES_BUSY_MESSAGE` constant (exact match),
+not a substring, so callers/endpoints signal 409 deterministically.
+
 ## Access / security
 Trigger + list are **admin-only** (`/_internal/*`, bearer derived from
 `SESSION_SECRET`/`INBOX_TOKEN`). Ares is deliberately NOT a public chat tool and

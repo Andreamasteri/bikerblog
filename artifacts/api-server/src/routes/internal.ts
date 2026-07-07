@@ -18,9 +18,11 @@ import {
   updateBacklogStatus,
   countOpenBacklog,
   runAresAnalysis,
+  runAresTaskReview,
   isAresConfigured,
   isAresRunning,
   aresModel,
+  ARES_BUSY_MESSAGE,
 } from "@workspace/horus";
 import type { SupervisionBacklogStatus } from "@workspace/db";
 
@@ -33,6 +35,11 @@ const router: IRouter = Router();
 // src/routes/) fa scrivere/leggere fuori dal progetto senza errori visibili.
 const INBOX_DIR = path.resolve(__dirname, "..", "..", "..", "inbox");
 const NADIR_MANUAL_PATH = path.join(INBOX_DIR, "nadir-manual.md");
+// Directory dei task plan (stesso conteggio di livelli di INBOX_DIR: __dirname è
+// .../artifacts/api-server/dist). Ares in modalità task-review può leggere solo
+// i piani che vivono qui, e la validazione anti-traversal (vedi review-task) usa
+// questo path come radice consentita.
+const TASKS_DIR = path.resolve(__dirname, "..", "..", "..", ".local", "tasks");
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
 // "Termina la sessione...."
@@ -546,6 +553,97 @@ router.post(
       res.json(result);
     } catch (err) {
       req.log.error({ id, err }, "ares analyze threw");
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+// ── Ares in modalità task-review (Task #211) ────────────────────────────────
+// Revisiona un TASK PLAN prima che venga assegnato a un agente: stesso ciclo
+// heavy dell'analisi backlog (evict lineup → devstral → review → restore), ma
+// l'input è il contenuto di un piano (non un id) e la review torna al chiamante
+// senza essere persistita. ADMIN-ONLY: stesso bearer interno delle altre
+// /_internal/* (coerente col threat model — Elevation of Privilege / DoS). Il
+// lock a ciclo singolo (in runAresTaskReview) impedisce avvii concorrenti.
+//
+// Body: { taskContent: string } oppure { taskFile: string } (path relativo a
+// .local/tasks/, validato contro path traversal). Response:
+// { review: AresTaskReviewResult, restoreOk: boolean }.
+router.post(
+  "/_internal/ares/review-task",
+  express.json({ limit: "1mb" }),
+  async (req, res): Promise<void> => {
+    const auth = req.headers.authorization;
+    if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+
+    if (!isAresConfigured()) {
+      res.status(503).json({ error: "Ares non configurato (manca ARES_OLLAMA_MODEL o un URL Ollama)" });
+      return;
+    }
+    if (isAresRunning()) {
+      res.status(409).json({ error: "un ciclo Ares è già in corso" });
+      return;
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const rawContent = typeof body["taskContent"] === "string" ? body["taskContent"] : undefined;
+    const taskFile = typeof body["taskFile"] === "string" ? body["taskFile"] : undefined;
+
+    if (!rawContent && !taskFile) {
+      res.status(400).json({ error: "richiesto taskContent (stringa) oppure taskFile (path relativo)" });
+      return;
+    }
+
+    let taskContent = rawContent ?? "";
+    if (taskFile) {
+      // Validazione anti-traversal: risolviamo il path richiesto e verifichiamo
+      // che resti sotto TASKS_DIR (nessun ../ che scappa dalla cartella).
+      const resolved = path.resolve(TASKS_DIR, taskFile);
+      if (resolved !== TASKS_DIR && !resolved.startsWith(TASKS_DIR + path.sep)) {
+        res.status(400).json({ error: "taskFile deve essere sotto .local/tasks/" });
+        return;
+      }
+      if (!existsSync(resolved)) {
+        res.status(404).json({ error: "taskFile non trovato" });
+        return;
+      }
+      try {
+        taskContent = readFileSync(resolved, "utf-8");
+      } catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+        return;
+      }
+    }
+
+    if (taskContent.trim().length === 0) {
+      res.status(400).json({ error: "task plan vuoto" });
+      return;
+    }
+
+    req.log.info({ taskFile, model: aresModel() }, "ares review-task triggered");
+    try {
+      const review = await runAresTaskReview(taskContent);
+      if (!review.ok) {
+        req.log.warn({ error: review.error }, "ares review-task failed");
+        // 409 se un altro ciclo è partito nel frattempo (match esatto sulla
+        // costante condivisa, non su sottostringa), 502 per il resto.
+        const status = review.error === ARES_BUSY_MESSAGE ? 409 : 502;
+        res.status(status).json({ review, restoreOk: review.restoreFailures.length === 0 });
+        return;
+      }
+      if (review.restoreFailures.length > 0) {
+        req.log.error(
+          { restoreFailures: review.restoreFailures },
+          "ares restore incompleto: lineup residente da controllare"
+        );
+      }
+      req.log.info({ snapshot: review.snapshot }, "ares review-task completed");
+      res.json({ review, restoreOk: review.restoreFailures.length === 0 });
+    } catch (err) {
+      req.log.error({ err }, "ares review-task threw");
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   }

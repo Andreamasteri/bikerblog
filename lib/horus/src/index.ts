@@ -79,9 +79,12 @@ export {
   checkAresHealth,
   aresModel,
   isAresRunning,
+  ARES_BUSY_MESSAGE,
   listResidentModels,
   unloadModel,
   warmupModel,
   runAresAnalysis,
   type AresAnalysisResult,
+  runAresTaskReview,
+  type AresTaskReviewResult,
 } from "./ares.js";
