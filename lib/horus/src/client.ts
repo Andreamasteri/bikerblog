@@ -339,6 +339,11 @@ export function createOllamaAgentClient(config: OllamaAgentConfig): OllamaAgentC
           model: config.model,
           messages: finalMessages,
           stream: true,
+          // Disabilita il "thinking mode" esteso dei modelli Qwen3 (e simili):
+          // senza questo, il modello scrive il ragionamento nel campo `thinking`
+          // lasciando `content` vuoto, causando "risposta vuota" nel client.
+          // È un no-op su modelli che non supportano il thinking (llama3, ecc.).
+          think: false,
           // Task #178: default -1 (numero, non stringa "-1" — Ollama la passa
           // al parser Go time.ParseDuration che rifiuta "-1" senza unità con
           // un 400) = il modello resta residente in RAM a tempo indeterminato
