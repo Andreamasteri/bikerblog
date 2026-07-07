@@ -71,6 +71,37 @@ silent fallback). The fix is TC-side data provisioning (build Valhalla tiles,
 import the right Nominatim extract) — outside this repo and the agent's reach
 (DNS-only CF token). Re-run the geo end-to-end verification once graphs exist.
 
+## GraphHopper — copertura regionale (probe 2026-07-07)
+
+`GRAPHHOPPER_URL = https://gh.biker-link.net` è ora configurato come env var
+su Replit (stesso pattern di `VALHALLA_URL`/`NOMINATIM_URL`). Il client e il
+tool `route_via_graphhopper` esistono in `lib/horus/src/tools.ts` e si attivano
+quando la variabile è presente.
+
+**Probe regionale completa (2026-07-07)** — tutti i path e tutte le regioni:
+
+| Zona | Path testato | Risultato |
+|---|---|---|
+| Arco Alpino (Mira VE → Cortina) | `/route` | 502 |
+| Iberia (Barcellona → Madrid) | `/route` | 502 |
+| Germania (Berlino → Monaco) | `/route` | 502 |
+| Balcani (Ljubljana → Zagreb) | `/route` | 502 |
+| Centro/Sud Italia (Roma → Napoli) | `/route` | 502 |
+| Est (Wien → Budapest) | `/route` | 502 |
+| Tutti i path variant | `/`, `/health`, `/info`, `/api/route`, `/v1/route` | 502 |
+
+**CF Access funziona** (403 senza credenziali → corretto). Il 502 uniforme su
+tutti i path e tutte le regioni indica che il backend (i container su TC) non è
+raggiungibile via tunnel — stesso pattern di Valhalla (tiles mancanti/container
+down). Non è un problema di codice o CF Access config.
+
+**Copertura osservata:** non determinabile — service down. Non è possibile
+distinguere "smart proxy" da "singolo container" senza accesso SSH a TC.
+
+**Prossimo passo:** verificare su TC se i container `bikerlink-gh-*` sono up
+(`docker ps | grep bikerlink-gh`) e se il CF Tunnel li raggiunge sulla porta
+giusta. Una volta up, la probe va rieseguita.
+
 ## Routing engine choice is open (Valhalla vs GraphHopper)
 
 TC runs BOTH `bikerlink-valhalla` AND 8 regional GraphHopper containers

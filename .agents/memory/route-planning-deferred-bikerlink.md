@@ -23,9 +23,11 @@ creep (violates the John Connor anti-creep policy in replit.md).
 
 **How to apply:** if a future session is asked to "make routing use both
 engines" / "integrate GraphHopper and Valhalla", stop and confirm scope with the
-user first. Current `route_directions` (lib/horus/src/tools.ts, `valhallaBaseUrl`,
-`VALHALLA_URL` only) is intentionally Valhalla-only. No `GRAPHHOPPER_URL` env or
-GraphHopper client exists by design.
+user first. `route_directions` (Valhalla-only) remains for atomic directions.
+`route_via_graphhopper` exists in `lib/horus/src/tools.ts` and is gated on
+`GRAPHHOPPER_URL` (now set as `https://gh.biker-link.net`) — it is available to
+Horus for multi-proposal routing chat, NOT as a replacement for `route_directions`.
+Decision revoked 2026-07-07: GRAPHHOPPER_URL env and client DO exist by design.
 
 **Infra state note (2026-07-05, changed from prior sessions):** both engines are
 now exposed behind Cloudflare Access — `valhalla.biker-link.net` returns 403
