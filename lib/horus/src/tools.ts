@@ -1099,9 +1099,10 @@ export function selectRelevantTools(
   }
 
   // route_directions — itinerari/distanze tra due punti (Fase 2e).
+  // Copre sia richieste dirette di navigazione sia pianificazione di viaggio/tour.
   if (
     has(
-      /percors|itinerar|come (ci )?(arrivo|si arriva|arrivare)|come raggiung|strada per|\broute\b|tragitto|quanto dista|distanza (da|tra|fra)|quanti km|quanto (ci )?(vuole|metto|si mette)|in quanto tempo/
+      /percors|itinerar|come (ci )?(arrivo|si arriva|arrivare)|come raggiung|strada per|\broute\b|tragitto|quanto dista|distanza (da|tra|fra)|quanti km|quanto (ci )?(vuole|metto|si mette)|in quanto tempo|piano di viaggio|piano.*viaggio|viaggio.*moto|giro.*moto|tour.*moto|uscita.*moto|weekend.*moto|escursion|tappa|prepara.*viaggio|organizza.*giro|organizza.*viaggio|programma.*giro|pianifica.*viaggio|pianifica.*giro/
     )
   ) {
     wanted.add("route_directions");
