@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "Daily Pipeline (23:30)"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Ares: review power tasks"
+
 [[workflows.workflow]]
 name = "Daily Pipeline (23:30)"
 author = "agent"
@@ -30,6 +34,17 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/scripts run cluster:daily"
+
+[[workflows.workflow]]
+name = "Ares: review power tasks"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run ares:review-power-tasks"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"
