@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import express from "express";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { desc, eq, lt, and, sql } from "drizzle-orm";
 import { db, horusBowieConversationsTable, type HorusConversationTurn } from "@workspace/db";
 import {
@@ -1043,6 +1043,177 @@ for (const def of AGENT_DEFINITIONS) {
     })
   );
 }
+
+// ── Routing chat (integrazione BikerLink) ───────────────────────────────────
+// Endpoint dedicato alla chat di navigazione/routing in BikerLink.
+//
+// Architettura: Bowie funge da interprete trasparente — gestisce il dialogo
+// con l'utente e delega il calcolo pesante a Horus via call_horus, senza che
+// l'utente veda la struttura interna (Bowie/Horus/TC). Il codice intelligente
+// rimane il più possibile su TC (nei modelli Bowie/Horus), qui c'è solo il
+// thin relay SSE.
+//
+// Auth: Bearer INBOX_TOKEN (HMAC di SESSION_SECRET), stesso schema dei
+// /_internal/* — il client BikerLink usa questo token condiviso anziché la
+// HORUS_CHAT_PASSWORD interattiva dell'utente admin.
+//
+// Storia: MAX_HISTORY_MESSAGES = 1 è adatto alla chat generica (un solo turno
+// di contesto per abbattere il prefill); per la chat di routing teniamo
+// ROUTING_MAX_HISTORY = 10 così le richieste di modifica ("aggiungi una tappa",
+// "evita l'autostrada") hanno sempre il percorso generato in precedenza nel
+// contesto.
+
+const ROUTING_MAX_HISTORY = 10;
+
+function getRoutingToken(): string | undefined {
+  if (process.env["INBOX_TOKEN"]) return process.env["INBOX_TOKEN"];
+  if (process.env["SESSION_SECRET"]) {
+    return createHmac("sha256", process.env["SESSION_SECRET"])
+      .update("internal-api-token-v1")
+      .digest("hex");
+  }
+  return undefined;
+}
+
+function requireRoutingToken(req: express.Request, res: express.Response): boolean {
+  const token = getRoutingToken();
+  const provided = req.headers.authorization;
+  if (!token || provided !== `Bearer ${token}`) {
+    res.status(401).json({ error: "unauthorized" });
+    return false;
+  }
+  return true;
+}
+
+/** System prompt di Bowie nel contesto routing: non menziona mai la struttura
+ * interna, si presenta come "assistente di navigazione" di BikerLink. */
+function buildRoutingSystemPrompt(): HorusMessage {
+  return {
+    role: "system",
+    content:
+      "Sei l'assistente di navigazione integrato in BikerLink. " +
+      "Il tuo compito è interpretare le richieste di percorso degli utenti, " +
+      "strutturare i risultati in modo chiaro e gestire le modifiche successive. " +
+      "Quando l'utente chiede di GENERARE o CALCOLARE un nuovo percorso, " +
+      "usa il tool call_horus: descrivi partenza, destinazione, preferenze e waypoint " +
+      "in modo completo nel prompt — Horus restituirà il percorso strutturato. " +
+      "Quando l'utente chiede MODIFICHE a un percorso già discusso nella conversazione " +
+      "(es. 'aggiungi una tappa', 'evita l'autostrada', 'accorcia il percorso') " +
+      "e la modifica è semplice e contestuale, gestiscila in autonomia senza chiamare Horus. " +
+      "Se la modifica richiede un ricalcolo completo, chiama di nuovo call_horus. " +
+      "Se hai bisogno di informazioni aggiornate su luoghi, strade o punti di interesse, usa web_search. " +
+      "NON menzionare mai Bowie, Horus, TC, Replit o la struttura interna degli agenti. " +
+      "Presentati semplicemente come l'assistente di navigazione di BikerLink. " +
+      "Rispondi sempre in italiano, conciso e diretto.",
+  };
+}
+
+router.post(
+  "/horus/routing-chat",
+  express.json({ limit: "512kb" }),
+  async (req, res): Promise<void> => {
+    if (!requireRoutingToken(req, res)) return;
+
+    if (!isBowieConfigured()) {
+      res.status(503).json({
+        error: "agent_not_configured",
+        message: "L'assistente di navigazione non è disponibile al momento.",
+      });
+      return;
+    }
+
+    const { message, history } = req.body as { message?: unknown; history?: unknown };
+    if (typeof message !== "string" || !message.trim()) {
+      res.status(400).json({ error: "message is required" });
+      return;
+    }
+
+    const priorHistory: ChatRequestMessage[] = isValidHistory(history)
+      ? history.slice(-ROUTING_MAX_HISTORY)
+      : [];
+
+    const systemPrompt = buildRoutingSystemPrompt();
+    const conversation: HorusMessage[] = [
+      systemPrompt,
+      ...priorHistory.map((m) => ({ role: m.role, content: m.content }) satisfies HorusMessage),
+      { role: "user", content: message },
+    ];
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+
+    // Tool selection: contestuale + call_horus garantito sempre (Bowie ne ha
+    // sempre bisogno per delegare il calcolo percorso a Horus). web_search
+    // viene aggiunto se il messaggio lo triggera via selectRelevantTools, o
+    // se è richiesto esplicitamente per info su luoghi/strade.
+    const contextualTools = await getHorusTools(message, "bowie");
+    const hasCallHorus = contextualTools.some((t) => t.function.name === "call_horus");
+    let tools: HorusToolSpec[] = contextualTools;
+    if (!hasCallHorus) {
+      const delegation = (await getHorusTools("chiedi a horus", "bowie"))
+        .find((t) => t.function.name === "call_horus");
+      if (delegation) tools = [delegation, ...tools];
+    }
+
+    const config: DirectChatAgentConfig = {
+      agentName: "Assistente Routing BikerLink",
+      systemPrompt,
+      chatRaw: bowieChatRaw,
+      isConfigured: isBowieConfigured,
+      checkHealth: checkBowieHealth,
+      notConfiguredMessage: "L'assistente di navigazione non è disponibile.",
+      logLabel: "routing chat failed",
+    };
+
+    try {
+      const turnResult = await runChatTurn(
+        req,
+        res,
+        config,
+        abortController,
+        message,
+        conversation,
+        tools,
+        /* detectMissingTool */ true
+      );
+
+      // Se il modello ha segnalato un tool mancante, riprova con il set completo.
+      if (turnResult.missingTool && !abortController.signal.aborted) {
+        const fullTools = await getHorusTools("chiedi a horus cerca sul web", "bowie");
+        await runChatTurn(
+          req,
+          res,
+          config,
+          abortController,
+          message,
+          conversation,
+          fullTools,
+          /* detectMissingTool */ false
+        );
+      }
+
+      if (!abortController.signal.aborted) {
+        sendEvent(res, "done", { content: turnResult.finalReply });
+      }
+    } catch (err) {
+      req.log.error({ err }, "routing chat: errore nel turno");
+      if (!abortController.signal.aborted) {
+        sendEvent(res, "error", {
+          message: isGatewayTimeoutError(err)
+            ? "Il calcolo del percorso ha impiegato troppo tempo — riprova tra qualche secondo."
+            : "Errore nell'elaborazione della richiesta di routing.",
+        });
+      }
+    } finally {
+      if (!res.writableEnded) res.end();
+    }
+  }
+);
 
 /**
  * Elenco degli agenti e dei relativi endpoint di health-check, così il
