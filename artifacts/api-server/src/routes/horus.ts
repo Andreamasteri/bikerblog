@@ -1337,12 +1337,14 @@ router.post(
       );
 
       // Se il modello ha segnalato un tool mancante, riprova con il set completo.
+      // Usa il risultato del retry (non quello del primo tentativo) per done/proposals.
+      let finalReply = turnResult.finalReply;
       if (turnResult.missingTool && !abortController.signal.aborted) {
         const fullTools = await getHorusTools(
           "chiedi a horus cerca sul web percorso meteo traffico",
           "bowie"
         );
-        await runChatTurn(
+        const retryResult = await runChatTurn(
           req,
           res,
           config,
@@ -1352,16 +1354,17 @@ router.post(
           fullTools,
           /* detectMissingTool */ false
         );
+        if (retryResult.finalReply) finalReply = retryResult.finalReply;
       }
 
       if (!abortController.signal.aborted) {
-        // Emetti l'evento done con il testo completo.
-        sendEvent(res, "done", { content: turnResult.finalReply });
+        // Emetti l'evento done con il testo completo (da retry se disponibile).
+        sendEvent(res, "done", { content: finalReply });
 
         // Tenta di estrarre le proposte strutturate dalla risposta di Horus
         // e le emette come evento separato `proposals` che BikerLink può
         // usare per popolare direttamente il planner senza parsing lato client.
-        const proposals = extractProposals(turnResult.finalReply);
+        const proposals = extractProposals(finalReply);
         if (proposals) {
           sendEvent(res, "proposals", { proposals });
         }
