@@ -141,6 +141,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **23:04** · Update documentation with build lessons and recent task completions <!-- 12933aa -->
 - **21:15** · Make SSH key login persistent across sessions <!-- b000252 -->
 - **21:03** · Add script to properly format SSH keys from environment variables <!-- 60ab139 -->
 - **21:01** · Update project changelog to reflect recent task completions <!-- 709a062 -->
