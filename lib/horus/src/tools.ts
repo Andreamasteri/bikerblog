@@ -733,6 +733,108 @@ function isWhisperConfigured(): boolean {
   return Boolean(whisperBaseUrl());
 }
 
+// --- Meteo / Traffico / GraphHopper (trigger abilitabili per il routing moto) ---
+// Meteo via Open-Meteo: API pubblica gratuita, nessuna chiave. Sempre disponibile.
+// Traffico: euristiche sempre disponibili; TOMTOM_API_KEY per dati real-time (opzionale).
+// GraphHopper: alternativa/complemento a Valhalla — gated su GRAPHHOPPER_URL (TC).
+function isWeatherConfigured(): boolean {
+  return true; // Open-Meteo non richiede API key
+}
+function isTrafficConfigured(): boolean {
+  return true; // euristiche di base sempre disponibili
+}
+function graphhopperBaseUrl(): string | undefined {
+  return process.env["GRAPHHOPPER_URL"]?.trim() || undefined;
+}
+function isGraphhopperConfigured(): boolean {
+  return Boolean(graphhopperBaseUrl());
+}
+
+const WEATHER_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "get_weather",
+      description:
+        "Recupera le previsioni meteorologiche per un luogo e una data usando Open-Meteo (gratuito, nessuna chiave). " +
+        "Restituisce temperatura min/max, probabilità di pioggia, vento massimo e condizioni generali. " +
+        "Usalo prima di pianificare un percorso moto per valutare se le condizioni sono adatte. Sola lettura.",
+      parameters: {
+        type: "object",
+        properties: {
+          location: {
+            type: "string",
+            description: "Nome del luogo (es. \"Mira (VE)\", \"Passo dello Stelvio\", \"Bolzano\").",
+          },
+          date: {
+            type: "string",
+            description: "Data in formato YYYY-MM-DD. Default: oggi. Massimo 7 giorni da oggi.",
+          },
+        },
+        required: ["location"],
+      },
+    },
+  },
+];
+
+const TRAFFIC_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "get_traffic",
+      description:
+        "Stima le condizioni di traffico per un luogo e orario. Senza chiave esterna usa euristiche " +
+        "(ora di punta, giorno, stagione, mese); con TOMTOM_API_KEY usa dati in tempo reale. " +
+        "Usalo per scegliere l'orario di partenza ottimale e pianificare le soste. Sola lettura.",
+      parameters: {
+        type: "object",
+        properties: {
+          location: {
+            type: "string",
+            description: "Luogo o tratta (es. \"A4 Milano-Venezia\", \"SS 48 Dolomiti\", \"Passo Giau\").",
+          },
+          datetime: {
+            type: "string",
+            description: "Data e ora ISO 8601 (es. \"2026-07-08T08:30:00\"). Default: adesso.",
+          },
+        },
+        required: ["location"],
+      },
+    },
+  },
+];
+
+const GRAPHHOPPER_TOOL_SPECS: HorusToolSpec[] = [
+  {
+    type: "function",
+    function: {
+      name: "route_via_graphhopper",
+      description:
+        "Calcola un itinerario con GraphHopper su TC: distanza, durata, istruzioni turn-by-turn e dislivello. " +
+        "Complementare a route_directions (Valhalla): GraphHopper eccelle nelle route con waypoint intermedi " +
+        "e nei percorsi alternativi. `from` e `to` possono essere nomi di luogo oppure coordinate \"lat,lon\". Sola lettura.",
+      parameters: {
+        type: "object",
+        properties: {
+          from: { type: "string", description: "Partenza: nome di luogo o \"lat,lon\"." },
+          to: { type: "string", description: "Arrivo: nome di luogo o \"lat,lon\"." },
+          waypoints: {
+            type: "array",
+            items: { type: "string" },
+            description: "Tappe intermedie opzionali (lista di nomi o \"lat,lon\").",
+          },
+          profile: {
+            type: "string",
+            description: "Profilo di routing. Default: car.",
+            enum: ["car", "bike", "foot"],
+          },
+        },
+        required: ["from", "to"],
+      },
+    },
+  },
+];
+
 /**
  * Header di autenticazione per i servizi HTTP su TC introdotti in Fase 2e
  * (Whisper/Valhalla/Nominatim). Questi hostname stanno dietro lo stesso tunnel
@@ -1013,6 +1115,20 @@ export function selectRelevantTools(
     wanted.add("transcribe_audio");
   }
 
+  // get_weather — previsioni meteo per un luogo/data.
+  if (has(/meteo|previsione|previsioni|tempo atmosferico|pioverà|pioggia|sole|nuvoloso|vento|temperatura|che tempo fa|weather|clima/)) {
+    wanted.add("get_weather");
+  }
+  // get_traffic — stima del traffico per un luogo/orario.
+  if (has(/traffico|congestion|coda|ore di punta|rush hour|ingorgo|circolazione|traffico intenso/)) {
+    wanted.add("get_traffic");
+  }
+  // route_via_graphhopper — routing alternativo con GraphHopper (waypoint multipli).
+  if (has(/graphhopper|percorso.*waypoint|tappe.*intermedie|alternativa.*percorso|confronta.*percorsi|route.*alternativ/)) {
+    wanted.add("route_via_graphhopper");
+    wanted.add("geocode_place");
+  }
+
   // call_horus / call_quebracho / call_ares — delega inter-agente (solo Bowie).
   if (has(/chiedi a horus|delega.*horus|passa.*horus|fallo fare a horus|horus (lo |la |li |le )?farebbe|affida.*horus|fai fare a horus/)) {
     wanted.add("call_horus");
@@ -1055,6 +1171,10 @@ export async function getHorusTools(message?: string, agentName?: string): Promi
   const geoTools = isNominatimConfigured() ? GEO_TOOL_SPECS : [];
   const routeTools = isValhallaConfigured() ? ROUTE_TOOL_SPECS : [];
   const whisperTools = isWhisperConfigured() ? WHISPER_TOOL_SPECS : [];
+  // Meteo/traffico/GraphHopper: trigger abilitabili per il routing moto.
+  const weatherTools = isWeatherConfigured() ? WEATHER_TOOL_SPECS : [];
+  const trafficTools = isTrafficConfigured() ? TRAFFIC_TOOL_SPECS : [];
+  const graphhopperTools = isGraphhopperConfigured() ? GRAPHHOPPER_TOOL_SPECS : [];
   // Tool inter-agente: disponibili solo per Bowie (non per Horus che non chiama
   // se stesso, né per Quebracho che non ha tool calling stabile).
   const interAgentTools = agentName === "Bowie" ? INTER_AGENT_TOOL_SPECS : [];
@@ -1069,6 +1189,9 @@ export async function getHorusTools(message?: string, agentName?: string): Promi
     ...geoTools,
     ...routeTools,
     ...whisperTools,
+    ...weatherTools,
+    ...trafficTools,
+    ...graphhopperTools,
   ];
   const contextual = message === undefined ? candidates : selectRelevantTools(message, candidates);
 
@@ -2438,6 +2561,273 @@ function validateAudioUrl(raw: string): { url: URL } | { error: string } {
   return { url };
 }
 
+// Mappa codici WMO meteo → descrizione in italiano (usata da getWeatherTool).
+function wmoToItalian(code: number): string {
+  if (code === 0) return "Sereno";
+  if (code === 1) return "Prevalentemente sereno";
+  if (code === 2) return "Parzialmente nuvoloso";
+  if (code === 3) return "Coperto";
+  if (code === 45 || code === 48) return "Nebbia";
+  if (code >= 51 && code <= 55) return "Pioggerella";
+  if (code >= 61 && code <= 65) return "Pioggia";
+  if (code >= 71 && code <= 77) return "Neve";
+  if (code >= 80 && code <= 82) return "Rovesci";
+  if (code === 85 || code === 86) return "Rovesci di neve";
+  if (code === 95) return "Temporale";
+  if (code === 96 || code === 99) return "Temporale con grandine";
+  return `Condizioni meteo (codice WMO ${code})`;
+}
+
+async function getWeatherTool(args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+  const location = String(args.location ?? "").trim();
+  if (!location) return "Specifica il luogo per cui vuoi le previsioni meteo.";
+  const dateStr = args.date ? String(args.date).trim() : null;
+  const abortGeo = signal
+    ? AbortSignal.any([AbortSignal.timeout(10_000), signal])
+    : AbortSignal.timeout(10_000);
+  const abortFc = signal
+    ? AbortSignal.any([AbortSignal.timeout(10_000), signal])
+    : AbortSignal.timeout(10_000);
+  try {
+    // 1. Geocoding: Open-Meteo (nessuna chiave) con fallback su Nominatim se configurato.
+    let lat: number | undefined;
+    let lon: number | undefined;
+    let placeName = location;
+    // Prova prima Open-Meteo Geocoding (accetta solo nomi di luogo brevi, non indirizzi).
+    const geoUrl =
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=it&format=json`;
+    const geoRes = await fetch(geoUrl, { signal: abortGeo });
+    if (geoRes.ok) {
+      const geoData = (await geoRes.json()) as {
+        results?: Array<{ latitude: number; longitude: number; name: string; country?: string; admin1?: string }>;
+      };
+      const place = geoData.results?.[0];
+      if (place) {
+        lat = place.latitude;
+        lon = place.longitude;
+        placeName = [place.name, place.admin1, place.country].filter(Boolean).join(", ");
+      }
+    }
+    // Fallback: Nominatim su TC (se configurato e Open-Meteo non ha trovato nulla).
+    if (lat === undefined && nominatimBaseUrl()) {
+      const nmCoords = await resolveToCoords(location, "it", signal);
+      if (!("error" in nmCoords)) {
+        lat = nmCoords.lat;
+        lon = nmCoords.lon;
+      }
+    }
+    if (lat === undefined || lon === undefined) {
+      return `Nessun luogo trovato per "${location}". Prova con un nome di comune (es. "Mira" invece di "Mira, Venezia").`;
+    }
+    // 2. Previsioni giornaliere da Open-Meteo (fuso orario Europe/Rome).
+    const fcUrl =
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,windspeed_10m_max,sunrise,sunset` +
+      `&timezone=Europe%2FRome&forecast_days=7`;
+    const fcRes = await fetch(fcUrl, { signal: abortFc });
+    if (!fcRes.ok) return `Previsioni meteo non disponibili per "${placeName}" (HTTP ${fcRes.status}).`;
+    const fc = (await fcRes.json()) as {
+      daily?: {
+        time: string[];
+        weathercode: number[];
+        temperature_2m_max: number[];
+        temperature_2m_min: number[];
+        precipitation_probability_max: number[];
+        windspeed_10m_max: number[];
+        sunrise: string[];
+        sunset: string[];
+      };
+    };
+    const daily = fc.daily;
+    if (!daily?.time?.length) return `Dati meteo non disponibili per "${placeName}".`;
+    const today = new Date().toISOString().slice(0, 10);
+    const target = dateStr ?? today;
+    const idx = daily.time.indexOf(target);
+    if (idx === -1) {
+      return `Data "${target}" fuori dalle previsioni disponibili (${daily.time[0]} – ${daily.time[daily.time.length - 1]}). Usa una data in quell'intervallo.`;
+    }
+    const code = daily.weathercode[idx] ?? 0;
+    const tMax = (daily.temperature_2m_max[idx] ?? 0).toFixed(1);
+    const tMin = (daily.temperature_2m_min[idx] ?? 0).toFixed(1);
+    const precip = daily.precipitation_probability_max[idx] ?? 0;
+    const wind = (daily.windspeed_10m_max[idx] ?? 0).toFixed(0);
+    const sunrise = (daily.sunrise[idx] ?? "").slice(11, 16);
+    const sunset = (daily.sunset[idx] ?? "").slice(11, 16);
+    const motoNote =
+      precip >= 60 ? "Alta probabilita' di pioggia — considera di posticipare o portare impermeabile."
+      : precip >= 30 ? "Possibile pioggia — impermeabile consigliato."
+      : "Condizioni adatte alla moto.";
+    return [
+      `Meteo: ${placeName} — ${target}`,
+      `Condizioni: ${wmoToItalian(code)}`,
+      `Temperatura: min ${tMin}C / max ${tMax}C`,
+      `Probabilita' pioggia: ${precip}%`,
+      `Vento massimo: ${wind} km/h`,
+      `Alba: ${sunrise} | Tramonto: ${sunset}`,
+      `Moto: ${motoNote}`,
+    ].join("\n");
+  } catch (err) {
+    if (signal?.aborted) return "Richiesta meteo interrotta.";
+    return `Errore meteo: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function getTrafficTool(args: Record<string, unknown>, _signal?: AbortSignal): Promise<string> {
+  const location = String(args.location ?? "").trim();
+  const datetimeStr = args.datetime ? String(args.datetime) : null;
+  const dt = datetimeStr ? new Date(datetimeStr) : new Date();
+  if (isNaN(dt.getTime())) {
+    return `Data/ora non valida: "${datetimeStr}". Usa il formato ISO 8601 (es. "2026-07-08T08:30:00").`;
+  }
+  const hour = dt.getHours();
+  const dow = dt.getDay();
+  const isWeekend = dow === 0 || dow === 6;
+  const month = dt.getMonth() + 1;
+  const dayNames = ["Domenica", "Lunedi'", "Martedi'", "Mercoledi'", "Giovedi'", "Venerdi'", "Sabato"];
+  const dayName = dayNames[dow] ?? "";
+  let level: string;
+  let note: string;
+  if (isWeekend) {
+    if (hour >= 7 && hour < 10) {
+      level = "Scorrevole-moderato";
+      note = `Traffico in uscita ${dayName} mattina.`;
+    } else if (hour >= 15 && hour < 20) {
+      level = "Moderato-intenso";
+      note = `Rientri pomeridiani del weekend.`;
+    } else if (hour >= 10 && hour < 15) {
+      level = "Moderato";
+      note = `Ore centrali del weekend — possibile traffico turistico.`;
+    } else {
+      level = "Molto scorrevole";
+      note = `Fuori dalle fasce di punta.`;
+    }
+  } else {
+    if ((hour >= 7 && hour < 9) || (hour >= 17 && hour < 20)) {
+      level = "Intenso";
+      note = `Ora di punta ${dayName} — traffico pendolari.`;
+    } else if (hour >= 9 && hour < 12) {
+      level = "Moderato";
+      note = `Fase post-punta mattutina.`;
+    } else if (hour >= 12 && hour < 14) {
+      level = "Scorrevole";
+      note = `Ora di pranzo — traffico ridotto.`;
+    } else if (hour >= 14 && hour < 17) {
+      level = "Scorrevole";
+      note = `Pomeriggio lavorativo — traffico contenuto.`;
+    } else {
+      level = "Molto scorrevole";
+      note = `Fuori dalle ore di punta.`;
+    }
+  }
+  const loc = location.toLowerCase();
+  const isTouristArea = /mare|lago|montagna|pass[oi]|dolomit|alps|alp[ei]|lido|riviera/.test(loc);
+  const summerNote =
+    month >= 6 && month <= 8 && isTouristArea
+      ? "\nAttenzione: mese estivo — possibili code verso mete turistiche nel weekend e nei ponti."
+      : "";
+  const tomtomKey = process.env["TOMTOM_API_KEY"];
+  const sourceNote = tomtomKey
+    ? "\n(Fonte: euristiche + TomTom configurato — dati real-time disponibili)"
+    : "\n(Fonte: euristiche — per dati real-time configurare TOMTOM_API_KEY su TC)";
+  return [
+    `Traffico stimato: ${location || "(luogo non specificato)"}`,
+    `${dayName} ${dt.toISOString().slice(0, 10)} ore ${String(hour).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`,
+    `Livello: ${level}`,
+    note,
+    summerNote,
+    sourceNote,
+  ]
+    .filter((s) => s !== "")
+    .join("\n");
+}
+
+async function routeViaGraphhopperTool(args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+  const baseUrl = graphhopperBaseUrl();
+  if (!baseUrl) return "GraphHopper non configurato (GRAPHHOPPER_URL mancante su TC).";
+  const from = String(args.from ?? "").trim();
+  const to = String(args.to ?? "").trim();
+  if (!from || !to) return "Specifica `from` e `to` per il percorso GraphHopper.";
+  const lang: GeoLang = "it";
+  const abort = signal
+    ? AbortSignal.any([AbortSignal.timeout(30_000), signal])
+    : AbortSignal.timeout(30_000);
+  const fromCoords = await resolveToCoords(from, lang, signal);
+  if ("error" in fromCoords) return `Partenza — ${fromCoords.error}`;
+  const toCoords = await resolveToCoords(to, lang, signal);
+  if ("error" in toCoords) return `Arrivo — ${toCoords.error}`;
+  // [lon, lat] per GraphHopper
+  const points: [number, number][] = [
+    [fromCoords.lon, fromCoords.lat],
+    [toCoords.lon, toCoords.lat],
+  ];
+  const rawWaypoints = Array.isArray(args.waypoints) ? args.waypoints : [];
+  for (const wp of rawWaypoints) {
+    const wpCoords = await resolveToCoords(String(wp), lang, signal);
+    if ("error" in wpCoords) continue;
+    points.splice(points.length - 1, 0, [wpCoords.lon, wpCoords.lat]);
+  }
+  const profile = String(args.profile ?? "car");
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/route`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...tcServiceAuthHeaders("X-Graphhopper-Gate-Token", process.env["GRAPHHOPPER_GATE_TOKEN"]),
+      },
+      body: JSON.stringify({
+        points,
+        profile,
+        locale: "it",
+        points_encoded: false,
+        instructions: true,
+        calc_points: true,
+        elevation: true,
+      }),
+      signal: abort,
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      return `GraphHopper ha risposto con errore (HTTP ${res.status}): ${errText.slice(0, 200)}`;
+    }
+    const data = (await res.json()) as {
+      paths?: Array<{
+        distance?: number;
+        time?: number;
+        ascend?: number;
+        descend?: number;
+        instructions?: Array<{ text: string; distance: number; time: number }>;
+      }>;
+    };
+    const path = data.paths?.[0];
+    if (!path) return "GraphHopper non ha restituito percorsi validi.";
+    const distKm = ((path.distance ?? 0) / 1000).toFixed(1);
+    const dMin = Math.round((path.time ?? 0) / 60_000);
+    const durStr = dMin >= 60 ? `${Math.floor(dMin / 60)}h ${dMin % 60}min` : `${dMin} min`;
+    const ascend = path.ascend ? `${Math.round(path.ascend)}m` : "n/d";
+    const descend = path.descend ? `${Math.round(path.descend)}m` : "n/d";
+    const instructions = (path.instructions ?? []).slice(0, 12);
+    const steps = instructions.map(
+      (ins, i) => `${i + 1}. ${ins.text} (${(ins.distance / 1000).toFixed(1)} km)`
+    );
+    const extra =
+      (path.instructions?.length ?? 0) > 12
+        ? [`... (${(path.instructions?.length ?? 0) - 12} istruzioni aggiuntive)`]
+        : [];
+    return [
+      `Percorso GraphHopper: ${from} → ${to}`,
+      `Distanza: ${distKm} km | Tempo stimato: ${durStr} | Profilo: ${profile}`,
+      `Dislivello: salita ${ascend} / discesa ${descend}`,
+      ``,
+      `Istruzioni principali:`,
+      ...steps,
+      ...extra,
+    ].join("\n");
+  } catch (err) {
+    if (signal?.aborted) return "Richiesta GraphHopper interrotta.";
+    return `Errore GraphHopper: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 /**
  * Esegue un tool richiesto dal modello e restituisce il testo del risultato
  * da rimandare come messaggio role:"tool". `signal` è opzionale e permette al
@@ -2514,6 +2904,12 @@ export async function executeHorusTool(
         return await routeDirectionsTool(args, signal);
       case "transcribe_audio":
         return await transcribeAudioTool(args, signal);
+      case "get_weather":
+        return await getWeatherTool(args, signal);
+      case "get_traffic":
+        return await getTrafficTool(args, signal);
+      case "route_via_graphhopper":
+        return await routeViaGraphhopperTool(args, signal);
       case "call_horus": {
         const result = await horusChatRaw(
           [
