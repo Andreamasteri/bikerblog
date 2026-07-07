@@ -724,7 +724,7 @@ export function HorusChat() {
           <Flame className="w-7 h-7 text-primary" />
           <div>
             <h1 className="text-2xl font-display font-bold uppercase tracking-tight leading-none">
-              Horus
+              {mode === "bowie-chat" ? "Bowie" : mode === "quebracho-chat" ? "Quebracho" : "Horus"}
             </h1>
             <p className="text-xs text-muted-foreground mt-1">
               {mode === "chat"
