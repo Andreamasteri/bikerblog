@@ -114,16 +114,71 @@ test("checkNadirSearch: timeout (AbortError) → warn (does not throw)", async (
   assert.match(result.detail, /irraggiungibile/);
 });
 
-test("checkNadirSearch: success → ok", async () => {
+test("checkNadirSearch: success with non-empty result → ok", async () => {
   setEnv("https://nadir.example", "secret");
   stubFetch(() =>
     fakeResponse({ ok: true, status: 200, json: () => ({ result: "qualche estratto pertinente" }) })
   );
   const result = await checkNadirSearch();
   assert.equal(result.status, "ok");
+  assert.match(result.detail, /correttamente/);
 });
 
-test("checkNadirSearch: success with unparseable body → ok", async () => {
+// ── Degraded-but-reachable cases (Task #153) ────────────────────────────────
+// A Nadir that returns HTTP 200 but no useful content (empty index, broken
+// embedding model, garbage response) must produce "warn", not "ok".
+
+test("checkNadirSearch: 200 OK with empty result string → warn", async () => {
+  setEnv("https://nadir.example", "secret");
+  stubFetch(() =>
+    fakeResponse({ ok: true, status: 200, json: () => ({ result: "" }) })
+  );
+  const result = await checkNadirSearch();
+  assert.equal(result.status, "warn");
+  assert.match(result.detail, /senza risultati utili/);
+});
+
+test("checkNadirSearch: 200 OK with whitespace-only result → warn", async () => {
+  setEnv("https://nadir.example", "secret");
+  stubFetch(() =>
+    fakeResponse({ ok: true, status: 200, json: () => ({ result: "   " }) })
+  );
+  const result = await checkNadirSearch();
+  assert.equal(result.status, "warn");
+  assert.match(result.detail, /senza risultati utili/);
+});
+
+test("checkNadirSearch: 200 OK with missing result field → warn", async () => {
+  setEnv("https://nadir.example", "secret");
+  stubFetch(() =>
+    fakeResponse({ ok: true, status: 200, json: () => ({}) })
+  );
+  const result = await checkNadirSearch();
+  assert.equal(result.status, "warn");
+  assert.match(result.detail, /senza risultati utili/);
+});
+
+test("checkNadirSearch: 200 OK with null result → warn", async () => {
+  setEnv("https://nadir.example", "secret");
+  stubFetch(() =>
+    fakeResponse({ ok: true, status: 200, json: () => ({ result: null }) })
+  );
+  const result = await checkNadirSearch();
+  assert.equal(result.status, "warn");
+  assert.match(result.detail, /senza risultati utili/);
+});
+
+test("checkNadirSearch: 200 OK with non-string result (array garbage) → warn", async () => {
+  setEnv("https://nadir.example", "secret");
+  stubFetch(() =>
+    fakeResponse({ ok: true, status: 200, json: () => ({ result: [] }) })
+  );
+  const result = await checkNadirSearch();
+  assert.equal(result.status, "warn");
+  assert.match(result.detail, /senza risultati utili/);
+});
+
+test("checkNadirSearch: unparseable body → warn (cannot verify result quality)", async () => {
   setEnv("https://nadir.example", "secret");
   stubFetch(() =>
     fakeResponse({
@@ -135,7 +190,9 @@ test("checkNadirSearch: success with unparseable body → ok", async () => {
     })
   );
   const result = await checkNadirSearch();
-  assert.equal(result.status, "ok");
+  // json() throws → data becomes {} → result is undefined → warn
+  assert.equal(result.status, "warn");
+  assert.match(result.detail, /senza risultati utili/);
 });
 
 test("checkNadirSearch: no branch ever throws or produces a hard failure", async () => {
@@ -153,7 +210,19 @@ test("checkNadirSearch: no branch ever throws or produces a hard failure", async
     },
     () => {
       setEnv("https://nadir.example", "secret");
-      stubFetch(() => fakeResponse({ ok: true, status: 200, json: () => ({ result: "ok" }) }));
+      stubFetch(() => fakeResponse({ ok: true, status: 200, json: () => ({}) }));
+    },
+    () => {
+      setEnv("https://nadir.example", "secret");
+      stubFetch(() =>
+        fakeResponse({ ok: true, status: 200, json: () => ({ result: "good result" }) })
+      );
+    },
+    () => {
+      setEnv("https://nadir.example", "secret");
+      stubFetch(() =>
+        fakeResponse({ ok: true, status: 200, json: () => ({ result: "" }) })
+      );
     },
   ];
 
