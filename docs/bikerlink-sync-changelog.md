@@ -158,6 +158,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **23:07** · Update documentation with current troubleshooting status <!-- 6e6c1d5 -->
+- **22:33** · Update documentation for power supply and GPU debugging <!-- 2ae4d96 -->
 - **21:42** · Update documentation for external power supply and GPU debugging <!-- 9c16c66 -->
 - **20:57** · Add documentation for controlling power supply via USB relay <!-- 60d4d4e -->
 - **20:30** · Add completion of a task for fixing a test and reconciling documentation <!-- 4346057 -->
