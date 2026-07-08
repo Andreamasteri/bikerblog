@@ -146,6 +146,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **03:52** · Update the blog’s promotional image for better user engagement <!-- 46608a3 -->
+- **03:51** · Update documentation for completed tasks and troubleshooting efforts <!-- 228150e -->
 - **03:51** · Update documentation to reflect current troubleshooting efforts <!-- 10fa0d9 -->
 - **03:51** · Update documentation to reflect current troubleshooting efforts <!-- 6e216b3 -->
 - **03:50** · Feat: catch Nadir index stuck out of date (stale-index check in step 7.5) <!-- 54ff9b7 -->
