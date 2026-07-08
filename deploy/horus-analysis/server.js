@@ -751,11 +751,33 @@ app.post("/sonar", (req, res) => {
 });
 
 // Permette al client (lib/horus/src/tools.ts) di sapere, senza avere accesso
-// diretto alle env var di TC, se SonarQube è configurato su questo servizio —
+// diretto alle env var di TC, se SonarQube è configurato E raggiungibile —
 // usato per nascondere il tool sonar_scan quando non è disponibile, invece
 // di esporlo sempre e fallire solo all'invocazione.
-app.get("/capabilities", (_req, res) => {
-  res.json({ sonarAvailable: isSonarConfigured() });
+// Verifica sia la presenza del token sia che SonarQube risponda davvero:
+// questo evita che sonar_scan sia mostrato quando SonarQube è configurato
+// ma il container/processo non è ancora partito.
+app.get("/capabilities", async (_req, res) => {
+  if (!isSonarConfigured()) {
+    return res.json({ sonarAvailable: false });
+  }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    let pingOk = false;
+    try {
+      const pingRes = await fetch(`${SONARQUBE_URL}/api/system/status`, {
+        headers: { Authorization: sonarAuthHeader() },
+        signal: ctrl.signal,
+      });
+      pingOk = pingRes.ok;
+    } finally {
+      clearTimeout(timer);
+    }
+    res.json({ sonarAvailable: pingOk });
+  } catch {
+    res.json({ sonarAvailable: false });
+  }
 });
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
