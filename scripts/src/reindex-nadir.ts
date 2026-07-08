@@ -9,6 +9,8 @@
 export interface NadirReindexResult {
   status: "ok" | "skipped" | "warn";
   detail: string;
+  /** Numero di documenti indicizzati, presente solo quando status === "ok". */
+  indexed?: number;
 }
 
 /**
@@ -56,7 +58,7 @@ export async function reindexNadir(): Promise<NadirReindexResult> {
       };
     }
     const indexed = data.result?.indexed ?? 0;
-    return { status: "ok", detail: `indice ricostruito — ${indexed} documenti` };
+    return { status: "ok", detail: `indice ricostruito — ${indexed} documenti`, indexed };
   } catch (err) {
     return {
       status: "warn",

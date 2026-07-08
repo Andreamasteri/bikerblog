@@ -137,6 +137,7 @@ test("reindexNadir: success → ok with parsed indexed count", async () => {
   const result = await reindexNadir();
   assert.equal(result.status, "ok");
   assert.match(result.detail, /42 documenti/);
+  assert.equal(result.indexed, 42, "indexed field must be 42");
 });
 
 test("reindexNadir: success with missing indexed → ok, defaults to 0", async () => {
@@ -147,6 +148,7 @@ test("reindexNadir: success with missing indexed → ok, defaults to 0", async (
   const result = await reindexNadir();
   assert.equal(result.status, "ok");
   assert.match(result.detail, /0 documenti/);
+  assert.equal(result.indexed, 0, "indexed field must be 0 when missing from response");
 });
 
 test("reindexNadir: success with unparseable body → ok, defaults to 0", async () => {
@@ -163,6 +165,25 @@ test("reindexNadir: success with unparseable body → ok, defaults to 0", async 
   const result = await reindexNadir();
   assert.equal(result.status, "ok");
   assert.match(result.detail, /0 documenti/);
+  assert.equal(result.indexed, 0, "indexed field must be 0 on parse error");
+});
+
+// (e) indexed field absent on non-ok results
+test("reindexNadir: warn result has no indexed field", async () => {
+  setEnv("https://nadir.example", "secret");
+  stubFetch(() =>
+    fakeResponse({ ok: false, status: 503, json: () => ({}) })
+  );
+  const result = await reindexNadir();
+  assert.equal(result.status, "warn");
+  assert.equal(result.indexed, undefined, "indexed must be absent on warn");
+});
+
+test("reindexNadir: skipped result has no indexed field", async () => {
+  setEnv(undefined, undefined);
+  const result = await reindexNadir();
+  assert.equal(result.status, "skipped");
+  assert.equal(result.indexed, undefined, "indexed must be absent on skipped");
 });
 
 // Cross-cutting guarantee: no branch ever throws or returns "failed".

@@ -234,6 +234,16 @@ async function countPosts(): Promise<number> {
   return Number(rows[0]?.count ?? 0);
 }
 
+async function countPublishedPosts(): Promise<number> {
+  const { db: d, postsTable: pt } = await import("@workspace/db");
+  const { sql, eq } = await import("drizzle-orm");
+  const rows = await d
+    .select({ count: sql<number>`count(*)` })
+    .from(pt)
+    .where(eq(pt.status, "published"));
+  return Number(rows[0]?.count ?? 0);
+}
+
 /** Returns true if a diary post for the given date exists in the DB. */
 async function diaryPostExists(date: string): Promise<boolean> {
   const { db: d, postsTable: pt } = await import("@workspace/db");
@@ -968,10 +978,49 @@ let diaryPostCreatedThisRun = false;
     }
   }
 
+  // Stale-index check: anche quando /reindex risponde HTTP 200, l'indice può
+  // essere silenziosamente vuoto o quasi vuoto (es. percorso di export rotto
+  // sul lato Nadir). Compara il conteggio di documenti indicizzati con il
+  // numero effettivo di post pubblicati nel DB:
+  //   • indexed === 0 e publishedCount > 0  → indice completamente vuoto
+  //   • indexed < publishedCount * 0.5      → più della metà dei post mancante
+  // Entrambi i casi finiscono direttamente in criticalWarnings (scatta subito
+  // sendPipelineAlert, senza aspettare la soglia streak) perché non è un
+  // problema di raggiungibilità ma di dati silenziosamente sbagliati.
+  if (nadir.status === "ok" && nadir.indexed !== undefined) {
+    try {
+      const publishedCount = await countPublishedPosts();
+      const indexed = nadir.indexed;
+
+      const isEmpty = indexed === 0 && publishedCount > 0;
+      const isStale = !isEmpty && publishedCount > 0 && indexed < publishedCount * 0.5;
+
+      if (isEmpty || isStale) {
+        const msg = isEmpty
+          ? `indice semantico Nadir vuoto (0 documenti indicizzati su ${publishedCount} post pubblicati) — possibile percorso di export rotto`
+          : `indice semantico Nadir incompleto: ${indexed} documenti indicizzati su ${publishedCount} post pubblicati (< 50%) — possibile export parziale`;
+        criticalWarnings.push(`step 7.5 (Nadir stale index): ${msg}`);
+        warnings.push(msg);
+        console.warn(`[cluster-daily] ⚠ step 7.5: ${msg}`);
+      } else if (publishedCount > 0) {
+        console.log(
+          `[cluster-daily] step 7.5: stale-index check ok — ${indexed}/${publishedCount} post indicizzati`
+        );
+      }
+    } catch (err) {
+      // Non bloccante: se la query DB fallisce lo step resta "ok" e il
+      // warning stale non viene emesso (meglio un falso negativo occasionale
+      // che un crash della pipeline).
+      console.warn(
+        `[cluster-daily] step 7.5: stale-index check fallito (query DB): ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
   report.addStep({
     step: 7.5,
     name: "Nadir semantic reindex",
-    status: nadir.status,
+    status: nadir.status === "ok" && warnings.length > 0 ? "warn" : nadir.status,
     duration_ms: Date.now() - stepStart,
     errors: [],
     warnings,
