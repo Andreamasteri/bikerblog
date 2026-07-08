@@ -137,6 +137,12 @@ _Da qui in giù il contenuto è generato automaticamente ogni notte. Ogni voce
 corrisponde a una modifica registrata dopo il backfill iniziale._
 
 <!-- AUTO-CHANGELOG:START -->
+### 8 luglio 2026
+
+**Altre modifiche:**
+
+- **03:17** · Update documentation for troubleshooting and debugging Update bikerlink-sync-changelog.md to reflect current troubleshooting status and GPU debugging efforts. <!-- 2594498 -->
+
 ### 7 luglio 2026
 
 **Task completati:**
