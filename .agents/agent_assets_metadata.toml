@@ -6,3 +6,9 @@ id = "50q1KgtDXl5qTOtvOdE8X"
 uri = "file://attached_assets/generated_audio/03-marzo-tutto-e-cominciato-cosi.mp3"
 type = "audio"
 title = "03-marzo-tutto-e-cominciato-cosi"
+
+[[outputs]]
+id = "exaZHEgzz-I9MRWH8kQqc"
+uri = "file://inbox/bikerlink-agent-briefing-2026-07-08.md"
+type = "text"
+title = "Briefing per l'agente BikerLink — 8 luglio 2026"
