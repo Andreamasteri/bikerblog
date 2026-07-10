@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import express from "express";
 import { createHmac } from "crypto";
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from "fs";
+import { writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync } from "fs";
 import path from "path";
 import { Storage } from "@google-cloud/storage";
 import {
@@ -721,5 +721,37 @@ router.get(
     res.json(body);
   }
 );
+
+// ── Briefing agente per BikerLink ────────────────────────────────────────────
+// Espone i file di memoria dell'agente BikerBlog (MEMORY.md + topic files) in
+// modo che l'agente BikerLink possa leggerli via HTTP. Sola lettura, stesso
+// bearer token interno delle altre /_internal/*. BikerLink deve configurare:
+//   BIKERBLOG_INTERNAL_URL = https://<dominio>/api/_internal/agent-briefing
+//   BIKERBLOG_INTERNAL_TOKEN = <stesso token>
+const MEMORY_DIR = path.resolve(__dirname, "..", "..", "..", ".agents", "memory");
+
+router.get("/_internal/agent-briefing", (req, res): void => {
+  const auth = req.headers.authorization;
+  if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+
+  try {
+    const files = readdirSync(MEMORY_DIR).filter((f) => f.endsWith(".md"));
+
+    const sections = files.map((filename) => {
+      const content = readFileSync(path.join(MEMORY_DIR, filename), "utf-8");
+      return `# ${filename}\n\n${content}`;
+    });
+
+    const body = sections.join("\n\n---\n\n");
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.send(body);
+  } catch (err) {
+    req.log.error({ err }, "agent-briefing read failed");
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 export default router;
