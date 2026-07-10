@@ -12,3 +12,9 @@ id = "exaZHEgzz-I9MRWH8kQqc"
 uri = "file://inbox/bikerlink-agent-briefing-2026-07-08.md"
 type = "text"
 title = "Briefing per l'agente BikerLink — 8 luglio 2026"
+
+[[outputs]]
+id = "Tuqa0Tgif4q2J-9XYcejj"
+uri = "file://inbox/tc-network-fix.zip"
+type = "unspecified"
+title = "tc-network-fix.zip — script risolutivo rete TC"
