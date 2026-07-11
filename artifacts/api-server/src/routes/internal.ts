@@ -732,7 +732,11 @@ const MEMORY_DIR = path.resolve(__dirname, "..", "..", "..", ".agents", "memory"
 
 router.get("/_internal/agent-briefing", (req, res): void => {
   const auth = req.headers.authorization;
-  if (!INBOX_TOKEN || auth !== `Bearer ${INBOX_TOKEN}`) {
+  const agentToken = process.env["BIKERBLOG_AGENT_TOKEN"];
+  const validTokens: string[] = [];
+  if (INBOX_TOKEN) validTokens.push(`Bearer ${INBOX_TOKEN}`);
+  if (agentToken) validTokens.push(`Bearer ${agentToken}`);
+  if (validTokens.length === 0 || !auth || !validTokens.includes(auth)) {
     res.status(401).json({ error: "unauthorized" });
     return;
   }
