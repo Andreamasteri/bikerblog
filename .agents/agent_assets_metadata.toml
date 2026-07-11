@@ -18,3 +18,9 @@ id = "Tuqa0Tgif4q2J-9XYcejj"
 uri = "file://inbox/tc-network-fix.zip"
 type = "unspecified"
 title = "tc-network-fix.zip — con Tethering USB Samsung S26"
+
+[[outputs]]
+id = "XB7wq-BphpVQFOTWaOg3N"
+uri = "file://inbox/tc-usb-bundle.zip"
+type = "unspecified"
+title = "tc-usb-bundle.zip — bundle completo chiavetta USB"
