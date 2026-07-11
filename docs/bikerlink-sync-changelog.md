@@ -141,6 +141,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **03:34** · Add alternative authentication for internal agent API endpoint <!-- 0981390 -->
 - **03:33** · Add alternative authentication for internal agent API endpoint <!-- ca9fb06 -->
 - **03:28** · Add endpoint to provide agent memory files to BikerLink <!-- 7c61ed5 -->
 
