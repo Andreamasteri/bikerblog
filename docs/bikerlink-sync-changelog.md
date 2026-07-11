@@ -141,6 +141,7 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **10:56** · Update agent briefing and sync changelog with new authentication details <!-- 2d43fa2 -->
 - **03:59** · Update changelog to reflect new agent authentication <!-- d11f955 -->
 - **03:34** · Add alternative authentication for internal agent API endpoint <!-- 0981390 -->
 - **03:33** · Add alternative authentication for internal agent API endpoint <!-- ca9fb06 -->
