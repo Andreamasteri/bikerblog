@@ -137,6 +137,13 @@ _Da qui in giù il contenuto è generato automaticamente ogni notte. Ogni voce
 corrisponde a una modifica registrata dopo il backfill iniziale._
 
 <!-- AUTO-CHANGELOG:START -->
+### 11 luglio 2026
+
+**Altre modifiche:**
+
+- **03:33** · Add alternative authentication for internal agent API endpoint <!-- ca9fb06 -->
+- **03:28** · Add endpoint to provide agent memory files to BikerLink <!-- 7c61ed5 -->
+
 ### 10 luglio 2026
 
 **Altre modifiche:**
