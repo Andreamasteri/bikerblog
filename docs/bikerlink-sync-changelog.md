@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **14:39** · Allow serving podcast audio for posts regardless of their publication status <!-- d915c3e -->
+- **12:51** · Update network setup guide with script improvements <!-- b24959b -->
 - **12:18** · Update network setup guide with recent script and connection improvements <!-- 0fd5492 -->
 
 ### 11 luglio 2026
