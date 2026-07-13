@@ -52,9 +52,7 @@ router.get("/podcast/audio/:slug", async (req, res): Promise<void> => {
   const [post] = await db
     .select({ audioUrl: postsTable.audioUrl })
     .from(postsTable)
-    .where(
-      and(eq(postsTable.slug, slug), eq(postsTable.status, "published")),
-    )
+    .where(eq(postsTable.slug, slug))
     .limit(1);
 
   if (!post?.audioUrl) {
