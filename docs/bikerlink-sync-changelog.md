@@ -137,6 +137,12 @@ _Da qui in giù il contenuto è generato automaticamente ogni notte. Ogni voce
 corrisponde a una modifica registrata dopo il backfill iniziale._
 
 <!-- AUTO-CHANGELOG:START -->
+### 13 luglio 2026
+
+**Altre modifiche:**
+
+- **12:18** · Update network setup guide with recent script and connection improvements <!-- 0fd5492 -->
+
 ### 11 luglio 2026
 
 **Altre modifiche:**
