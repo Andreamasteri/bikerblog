@@ -139,59 +139,103 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 <!-- AUTO-CHANGELOG:START -->
 ### 13 luglio 2026
 
+**Task completati:**
+
+- **Task #232** — Bowie riconosce Horus/Quebracho/Ares su menzione diretta del nome <!-- 2460df4 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry in a short, simple Italian sentence that's understandable for non-programmers. They specified no technical jargon without explanation, don't add details, and just the sentence without quotes, prefixes, or explanations.
+
 **Altre modifiche:**
 
+- **17:39** · Add alerts for GPU utilization and VRAM issues to the system <!-- 795abdb -->
+  - _In parole semplici:_ Okay, let's see. The user wants me to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. No tech jargon without explanation, no extra details, just the sentence.
+- **17:27** · Enable GPU acceleration for AI models by resolving driver and BIOS issues <!-- 6324566 -->
+  - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. No tech jargon without explanation, no extra details, just the sentence.
+- **17:12** · Update changelog with recent improvements and fixes <!-- def6b5f -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that non-technical people can understand. The original text is "Update changelog with recent improvements and fixes". Let me break it down.
 - **14:39** · Allow serving podcast audio for posts regardless of their publication status <!-- d915c3e -->
+  - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. No technical jargon without explanation, and don't add extra details.
 - **12:51** · Update network setup guide with script improvements <!-- b24959b -->
+  - _In parole semplici:_ Okay, I need to rephrase this changelog entry into a short Italian sentence that's easy for non-programmers to understand. Let me look at the original text: "Update network setup guide with script improvements".
 - **12:18** · Update network setup guide with recent script and connection improvements <!-- 0fd5492 -->
+  - _In parole semplici:_ Okay, I need to rephrase this technical changelog entry into a simple Italian sentence that's easy for non-programmers to understand. The original text is: "Update network setup guide with recent script and connection improvements".
 
 ### 11 luglio 2026
 
 **Altre modifiche:**
 
 - **12:08** · Update script title for dedicated ICS connection <!-- cf52e3b -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Update script title for dedicated ICS connection".
 - **12:05** · Update network fix script to automatically detect router gateway <!-- 602e2e9 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me read the original again: "Update network fix script to automatically detect router gateway".
 - **11:56** · Update zip file to include new network connection script <!-- 61cb873 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short Italian sentence that's easy for non-programmers to understand. The original text is "Update zip file to include new network connection script".
 - **11:35** · Update zip bundle title with package information <!-- 132f2cd -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Update zip bundle title with package information".
 - **11:31** · Add a USB bundle for offline network setup <!-- 65f4be1 -->
+  - _In parole semplici:_ Okay, I need to rewrite this tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Add a USB bundle for offline network setup". Let me break this down.
 - **11:25** · Add USB tethering for Samsung S26 phone connection <!-- 0a82778 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Add USB tethering for Samsung S26 phone connection".
 - **11:22** · Update network configuration tool with specific IP address <!-- 929b3e6 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
 - **10:56** · Update agent briefing and sync changelog with new authentication details <!-- 2d43fa2 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. No technical jargon without explanation, and don't add extra details.
 - **03:59** · Update changelog to reflect new agent authentication <!-- d11f955 -->
+  - _In parole semplici:_ Okay, I need to translate the technical changelog entry "Update changelog to reflect new agent authentication" into a simple, short Italian sentence that's easy for non-programmers to understand. Let me break it down.
 - **03:34** · Add alternative authentication for internal agent API endpoint <!-- 0981390 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first understand what the original text says.
 - **03:33** · Add alternative authentication for internal agent API endpoint <!-- ca9fb06 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. The original text is "Add alternative authentication for internal agent API endpoint".
 - **03:28** · Add endpoint to provide agent memory files to BikerLink <!-- 7c61ed5 -->
+  - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. No tech jargon without explanation, and no extra details.
 
 ### 10 luglio 2026
 
 **Altre modifiche:**
 
 - **23:42** · Add endpoint to provide agent memory files to BikerLink <!-- ec8abc1 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is: "Add endpoint to provide agent memory files to BikerLink".
 - **23:19** · Update script to use correct network interface name <!-- 66d6a5a -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
 - **23:08** · Update script title to reflect corrected network fix <!-- 565ee02 -->
+  - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified not to use technical jargon without explaining it, not to add extra details, and just give the sentence without quotes, prefixes, or explanations.
 - **23:05** · Add a script to fix network issues on the TC device <!-- d890fc8 -->
+  - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. No tech jargon without explanation, and I shouldn't add any extra details.
 - **22:21** · Add briefing for BikerLink agent with new asset <!-- 0687c67 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Add briefing for BikerLink agent with new asset". Let me break it down.
 - **22:01** · Update documentation with recent task completions and troubleshooting <!-- 7a60624 -->
+  - _In parole semplici:_ Okay, I need to rephrase this tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original is "Update documentation with recent task completions and troubleshooting".
 - **21:33** · Update documentation with recent task completions and troubleshooting <!-- b25866a -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants a short, simple Italian sentence that explains the changelog tech entry without technical jargon. They specified it should be understandable for non-programmers.
 - **21:15** · Update documentation for completed tasks and troubleshooting efforts <!-- 6c3234b -->
+  - _In parole semplici:_ Okay, I need to rewrite this changelog entry in a short Italian sentence that's easy for non-programmers to understand. The original text is "Update documentation for completed tasks and troubleshooting efforts".
 
 ### 8 luglio 2026
 
 **Task completati:**
 
 - **Task #215** — Sblocca sonar_scan — aggiungi /capabilities al servizio di analisi <!-- 6c4c867 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is: "Sblocca sonar_scan — aggiungi /capabilities al servizio di analisi".
 - **Task #153** — Detect degraded-but-reachable Nadir (empty/garbage results) <!-- 2b1ba58 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They don't want technical jargon without explanation, and I shouldn't add any details not present in the original text.
 
 **Altre modifiche:**
 
 - **11:58** · Update documentation for completed tasks and troubleshooting efforts <!-- 74b367a -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. Let me start by understanding the original text.
 - **03:52** · Update the blog’s promotional image for better user engagement <!-- 46608a3 -->
+  - _In parole semplici:_ Okay, let me tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
 - **03:51** · Update documentation for completed tasks and troubleshooting efforts <!-- 228150e -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a simple Italian sentence that's easy for non-programmers to understand. The original text is: "Update documentation for completed tasks and troubleshooting efforts".
 - **03:51** · Update documentation to reflect current troubleshooting efforts <!-- 10fa0d9 -->
+  - _In parole semplici:_ Okay, I need to rewrite this tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first understand what the original text says.
 - **03:51** · Update documentation to reflect current troubleshooting efforts <!-- 6e216b3 -->
+  - _In parole semplici:_ Okay, I need to rewrite this changelog entry in a short Italian sentence that's easy for non-programmers to understand. Let me check the original text first.
 - **03:50** · Feat: catch Nadir index stuck out of date (stale-index check in step 7.5) <!-- 54ff9b7 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. Let me first understand what the original text says.
 - **03:41** · Update documentation to reflect current troubleshooting and debugging efforts <!-- 89948ea -->
+  - _In parole semplici:_ Okay, I need to translate this technical changelog entry into a simple Italian sentence that's easy for non-programmers to understand. The original text is: "Update documentation to reflect current troubleshooting and debugging efforts".
 - **03:17** · Update documentation for troubleshooting and debugging Update bikerlink-sync-changelog.md to reflect current troubleshooting status and GPU debugging efforts. <!-- 2594498 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me read the original text first.
 
 ### 7 luglio 2026
 
@@ -215,10 +259,15 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 **Altre modifiche:**
 
 - **23:07** · Update documentation with current troubleshooting status <!-- 6e6c1d5 -->
+  - _In parole semplici:_ Okay, let's see. The user wants me to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes, prefixes, or explanations.
 - **22:33** · Update documentation for power supply and GPU debugging <!-- 2ae4d96 -->
+  - _In parole semplici:_ Okay, I need to rewrite this tech changelog entry into a short, simple Italian sentence that's understandable for non-programmers. Let me check the original text: "Update documentation for power supply and GPU debugging".
 - **21:42** · Update documentation for external power supply and GPU debugging <!-- 9c16c66 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They don't want any technical jargon without explanation, and I shouldn't add extra details.
 - **20:57** · Add documentation for controlling power supply via USB relay <!-- 60d4d4e -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. The original text is "Add documentation for controlling power supply via USB relay".
 - **20:30** · Add completion of a task for fixing a test and reconciling documentation <!-- 4346057 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is: "Add completion of a task for fixing a test and reconciling documentation".
 - **14:45** · Add a gated heavy coder to prevent interruptions during active chats <!-- 32b4ca9 -->
   - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
 - **13:28** · Saved progress at the end of the loop <!-- 51343b2 -->
