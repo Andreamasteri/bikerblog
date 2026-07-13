@@ -146,6 +146,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **18:48** · Test(horus): add unit tests for Bowie agent-name detection in selectRelevantTools <!-- f32074e -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me read the original text again: "Test(horus): add unit tests for Bowie agent-name detection in selectRelevantTools".
+- **18:48** · Add a way to securely use Bluetooth tethering and WiFi hotspot <!-- 831c9a2 -->
+  - _In parole semplici:_ Okay, I need to rephrase this technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. The original text is "Add a way to securely use Bluetooth tethering and WiFi hotspot".
 - **17:39** · Add alerts for GPU utilization and VRAM issues to the system <!-- 795abdb -->
   - _In parole semplici:_ Okay, let's see. The user wants me to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. No tech jargon without explanation, no extra details, just the sentence.
 - **17:27** · Enable GPU acceleration for AI models by resolving driver and BIOS issues <!-- 6324566 -->
