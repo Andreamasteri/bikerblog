@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #239** — Test: guard group-conversation greeting against silent wipe <!-- b39c975 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first understand what the original text says.
 - **Task #237** — Test(horus): integration tests for getHorusTools → quebrachoChatRawResilient cloud-block <!-- 78396c0 -->
   - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. No technical jargon without explanation, and don't add extra details.
 - **Task #235** — Ripristina presentazione poetica di Bowie nella chat <!-- 09dd939 -->
@@ -150,6 +152,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:11** · Test(quebracho): route-level guard — TC down + tools selected → SSE error, never cloud done <!-- 31f16c8 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first parse the original text.
+- **19:10** · Update documentation with recent task completions <!-- 023ca2a -->
+  - _In parole semplici:_ Okay, let's see. The user wants me to rewrite this technical changelog entry in a short, simple Italian sentence that's easy for non-programmers to understand. They don't want any technical jargon without explanation, and I shouldn't add extra details.
 - **19:06** · Test: guard agent empty-state text against silent regressions (#236) <!-- 8a9f2ab -->
   - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first look at the original text: "Test: guard agent empty-state text against silent regressions (#236)".
 - **19:05** · Update changelog with recent task completions <!-- b1e884b -->
