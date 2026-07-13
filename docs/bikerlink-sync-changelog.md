@@ -148,6 +148,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **18:56** · Test(horus): add Quebracho tool-selection regression suite <!-- 97a3938 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first look at the original text: "Test(horus): add Quebracho tool-selection regression suite".
+- **18:56** · Git commit prior to merge <!-- 743e86a -->
+  - _In parole semplici:_ Okay, the user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Git commit prior to merge".
 - **18:55** · Git commit prior to merge <!-- 2faa22a -->
   - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They specified no technical jargon without explanation, don't add extra details, and just the sentence without quotes or prefixes.
 - **18:48** · Test(horus): add unit tests for Bowie agent-name detection in selectRelevantTools <!-- f32074e -->
