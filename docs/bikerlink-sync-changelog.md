@@ -152,6 +152,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:16** · Test: add dedicated regression guard for Quebracho direct-chat greeting <!-- a203029 -->
+  - _In parole semplici:_ Okay, let's tackle this query. The user wants me to rewrite a technical changelog entry in a short, simple Italian sentence that's understandable for non-programmers. No technical jargon without explanation, and don't add extra details.
+- **19:16** · Git commit prior to merge <!-- efd9ba5 -->
+  - _In parole semplici:_ Okay, let's tackle this request. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. They specified no technical jargon without explanation, don't add extra details, and just the sentence without quotes, prefixes, or explanations.
 - **19:11** · Update changelog with new tasks and fixes <!-- 09c4bb3 -->
   - _In parole semplici:_ Okay, let's tackle this query. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. No technical jargon without explanation, no extra details, just the sentence.
 - **19:11** · Test(quebracho): route-level guard — TC down + tools selected → SSE error, never cloud done <!-- 31f16c8 -->
