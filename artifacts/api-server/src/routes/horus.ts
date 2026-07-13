@@ -23,6 +23,7 @@ import {
   QUEBRACHO_AGENT_NAME,
   QUEBRACHO_NICKNAME,
   loadActiveVramAlertPrompt,
+  loadActiveGpuUtilAlertPrompt,
   loadActiveSupervisionAlertPrompt,
   loadActiveCoderAlertPrompt,
   beginChatActivity,
@@ -59,12 +60,14 @@ function requireHorusPassword(req: express.Request, res: express.Response): bool
 // comunque salvate nello storico/log a prescindere dai tool.
 function buildDirectChatSystemPrompt(agentName: string, personaNote?: string): HorusMessage {
   const vramAlert = loadActiveVramAlertPrompt();
+  const gpuUtilAlert = loadActiveGpuUtilAlertPrompt();
   const supervisionAlert = loadActiveSupervisionAlertPrompt();
   const coderAlert = loadActiveCoderAlertPrompt();
   return {
     role: "system",
     content:
       (vramAlert ? `${vramAlert} ` : "") +
+      (gpuUtilAlert ? `${gpuUtilAlert} ` : "") +
       (supervisionAlert ? `${supervisionAlert} ` : "") +
       (coderAlert ? `${coderAlert} ` : "") +
       `Questa è una conversazione libera con l'utente, non generazione di contenuti per il blog BikerBlog/BikerLink. Ti chiami ${agentName}. ` +
@@ -1566,11 +1569,12 @@ function buildConvoSystemPrompt(opts: {
         `portando avanti la discussione con opinioni, domande o osservazioni tue. Non ripetere semplicemente quello ` +
         `che ha detto ${previousSpeakerName}, e non chiudere subito la conversazione: contribuisci con qualcosa di nuovo.`;
   const vramAlert = loadActiveVramAlertPrompt();
+  const gpuUtilAlert = loadActiveGpuUtilAlertPrompt();
   const supervisionAlert = loadActiveSupervisionAlertPrompt();
   const coderAlert = loadActiveCoderAlertPrompt();
   return {
     role: "system",
-    content: `${vramAlert ? `${vramAlert} ` : ""}${supervisionAlert ? `${supervisionAlert} ` : ""}${coderAlert ? `${coderAlert} ` : ""}${intro}${personaNote ? ` ${personaNote}` : ""} ${body}${brevity}${toolsNote}`,
+    content: `${vramAlert ? `${vramAlert} ` : ""}${gpuUtilAlert ? `${gpuUtilAlert} ` : ""}${supervisionAlert ? `${supervisionAlert} ` : ""}${coderAlert ? `${coderAlert} ` : ""}${intro}${personaNote ? ` ${personaNote}` : ""} ${body}${brevity}${toolsNote}`,
   };
 }
 

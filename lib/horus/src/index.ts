@@ -40,6 +40,10 @@ export {
   writeVramAlertState,
   loadActiveVramAlertPrompt,
   type VramAlertState,
+  loadGpuUtilAlertState,
+  writeGpuUtilAlertState,
+  loadActiveGpuUtilAlertPrompt,
+  type GpuUtilAlertState,
 } from "./vram-alert.js";
 
 export {

@@ -69,3 +69,46 @@ export function loadActiveVramAlertPrompt(): string {
     "messaggio successivo se lo hai già detto in questa conversazione."
   );
 }
+
+// ── GPU utilization stuck alert ──────────────────────────────────────────────
+// Stesso pattern del VRAM alert: TC campiona l'utilizzo GPU ogni 45s e, se
+// rimane >= GPU_UTIL_STUCK_THRESHOLD_PCT (default 95%) per N campioni
+// consecutivi (default 7 × 45s ≈ 5 minuti), chiama POST /_internal/gpu-util-alert.
+
+const GPU_UTIL_ALERT_FILE = resolve(__dirname, "..", "..", "..", "inbox", "gpu-util-alert-state.json");
+
+export interface GpuUtilAlertState {
+  active: boolean;
+  utilPct?: number;
+  thresholdPct?: number;
+  since?: string;
+  lastUpdated?: string;
+  resolvedAt?: string;
+}
+
+export function loadGpuUtilAlertState(): GpuUtilAlertState {
+  if (!existsSync(GPU_UTIL_ALERT_FILE)) return { active: false };
+  try {
+    const parsed = JSON.parse(readFileSync(GPU_UTIL_ALERT_FILE, "utf-8")) as GpuUtilAlertState;
+    return parsed && typeof parsed.active === "boolean" ? parsed : { active: false };
+  } catch {
+    return { active: false };
+  }
+}
+
+export function writeGpuUtilAlertState(state: GpuUtilAlertState): void {
+  mkdirSync(dirname(GPU_UTIL_ALERT_FILE), { recursive: true });
+  writeFileSync(GPU_UTIL_ALERT_FILE, JSON.stringify(state, null, 2), "utf-8");
+}
+
+export function loadActiveGpuUtilAlertPrompt(): string {
+  const state = loadGpuUtilAlertState();
+  if (!state.active) return "";
+  const pct = state.utilPct !== undefined ? `${state.utilPct.toFixed(0)}%` : "sconosciuta";
+  const since = state.since ? new Date(state.since).toLocaleString("it-IT") : "poco fa";
+  return (
+    `ATTENZIONE — GPU su TC bloccata dalle ${since}: utilizzo ${pct} sostenuto sopra soglia ` +
+    `(${state.thresholdPct ?? "?"}%) per oltre 5 minuti. Potrebbe essere un processo incastrato o un'inferenza ` +
+    "che non termina. Segnalalo all'utente in questo turno in una frase breve — non ripetere se già detto."
+  );
+}

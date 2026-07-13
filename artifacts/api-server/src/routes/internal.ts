@@ -15,6 +15,7 @@ import { createNadirExportHandler } from "./nadir-export.js";
 import { createAresReviewTaskHandler } from "./ares-review-task.js";
 import {
   writeVramAlertState,
+  writeGpuUtilAlertState,
   listSupervisionBacklog,
   updateBacklogStatus,
   countOpenBacklog,
@@ -385,6 +386,48 @@ router.post(
     });
 
     req.log.warn({ usedMiB, totalMiB, pct, thresholdPct }, "vram-alert active");
+    res.json({ ok: true, active: true });
+  },
+);
+
+// ── GPU utilization stuck alert (da TC ai-hub) ───────────────────────────────
+// Stesso pattern di vram-alert: TC campiona utilization.gpu ogni 45s e chiama
+// qui quando rimane >= soglia per N campioni consecutivi (~5 minuti).
+// Autenticazione: stesso HUB_GATE_TOKEN del vram-alert (nessun nuovo secret).
+router.post(
+  "/_internal/gpu-util-alert",
+  express.json({ limit: "10kb" }),
+  (req, res): void => {
+    const auth = req.headers["x-hub-gate-token"];
+    const hubToken = process.env["HUB_GATE_TOKEN"];
+    if (!hubToken || auth !== hubToken) {
+      res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown>;
+    const active = body["active"] === true;
+
+    if (!active) {
+      writeGpuUtilAlertState({ active: false, resolvedAt: new Date().toISOString() });
+      req.log.info("gpu-util-alert resolved");
+      res.json({ ok: true, active: false });
+      return;
+    }
+
+    const utilPct = typeof body["utilPct"] === "number" ? body["utilPct"] : undefined;
+    const thresholdPct = typeof body["thresholdPct"] === "number" ? body["thresholdPct"] : undefined;
+    const since = typeof body["since"] === "string" ? body["since"] : new Date().toISOString();
+
+    writeGpuUtilAlertState({
+      active: true,
+      utilPct,
+      thresholdPct,
+      since,
+      lastUpdated: new Date().toISOString(),
+    });
+
+    req.log.warn({ utilPct, thresholdPct }, "gpu-util-alert active: GPU stuck");
     res.json({ ok: true, active: true });
   },
 );
