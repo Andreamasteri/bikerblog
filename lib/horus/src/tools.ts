@@ -1155,6 +1155,18 @@ export function selectRelevantTools(
   if (has(/chiama ares|attiva ares|lancia ares|avvia ares|ares (analizz|esamina|guarda)|manda ares|usa ares/)) {
     wanted.add("call_ares");
   }
+  // Fallback: menzione diretta del nome dell'agente, indipendentemente dalla formulazione.
+  // Il gating admin per call_ares resta invariato: il tool appare in available solo per
+  // sessioni admin, quindi la filter finale lo esclude per utenti non-admin.
+  if (has(/\bhorus\b/) && available.some((t) => t.function.name === "call_horus")) {
+    wanted.add("call_horus");
+  }
+  if ((has(/\bquebracho\b/) || has(/\bqq\b/)) && available.some((t) => t.function.name === "call_quebracho")) {
+    wanted.add("call_quebracho");
+  }
+  if (has(/\bares\b/) && available.some((t) => t.function.name === "call_ares")) {
+    wanted.add("call_ares");
+  }
 
   if (wanted.size === 0) return [];
   return available.filter((tool) => wanted.has(tool.function.name));
