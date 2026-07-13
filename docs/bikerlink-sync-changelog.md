@@ -152,6 +152,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:11** · Update changelog with new tasks and fixes <!-- 09c4bb3 -->
+  - _In parole semplici:_ Okay, let's tackle this query. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. No technical jargon without explanation, no extra details, just the sentence.
 - **19:11** · Test(quebracho): route-level guard — TC down + tools selected → SSE error, never cloud done <!-- 31f16c8 -->
   - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first parse the original text.
 - **19:10** · Update documentation with recent task completions <!-- 023ca2a -->
