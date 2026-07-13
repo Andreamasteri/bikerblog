@@ -152,6 +152,12 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:47** · Add a regression guard for direct chat greetings <!-- a912151 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
+- **19:47** · Add dedicated regression guard for the Horus direct-chat greeting <!-- d3c9b6f -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first understand what the original text means.
+- **19:47** · Git commit prior to merge <!-- de3a97e -->
+  - _In parole semplici:_ Okay, I need to rephrase this tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Git commit prior to merge".
 - **19:16** · Test: add dedicated regression guard for Quebracho direct-chat greeting <!-- a203029 -->
   - _In parole semplici:_ Okay, let's tackle this query. The user wants me to rewrite a technical changelog entry in a short, simple Italian sentence that's understandable for non-programmers. No technical jargon without explanation, and don't add extra details.
 - **19:16** · Git commit prior to merge <!-- efd9ba5 -->
