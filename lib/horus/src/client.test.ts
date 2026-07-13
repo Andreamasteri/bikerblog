@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createOllamaAgentClient, quebrachoChatRawResilient } from "./client.js";
+import { getHorusTools } from "./tools.js";
 
 /**
  * Regressione: quando il gateway/tunnel (Cloudflare) interrompe una
@@ -229,4 +230,165 @@ test("quebrachoChatRawResilient does NOT use the cloud fallback when tools are r
     delete process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL;
     delete process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY;
   }
+});
+
+/**
+ * Test di integrazione end-to-end (Task #237): verifica che il percorso
+ * completo getHorusTools(message) → quebrachoChatRawResilient(..., { tools })
+ * non produca MAI una risposta cloud silenziosa quando il messaggio richiede
+ * dei tool.
+ *
+ * La regressione che questi test proteggono: se la selezione dei tool
+ * restituisce ≥1 voce ma l'array non viene passato correttamente a
+ * quebrachoChatRawResilient (es. viene azzerato o ignorato), il fallback cloud
+ * potrebbe rispondere silenziosamente senza eseguire alcun tool — l'utente
+ * riceve una risposta vuota/inventata invece del risultato atteso (es. risultati
+ * di ricerca web).
+ *
+ * Struttura comune:
+ *  1. TC irraggiungibile (mockFetchUnreachable)
+ *  2. Cloud configurato + mock openrouter che restituisce un sentinel
+ *     riconoscibile ("silenzioso dal cloud") — se mai il cloud venisse
+ *     raggiunto, l'asserzione lo rileva
+ *  3. getHorusTools(message) → tools non vuoto
+ *  4. quebrachoChatRawResilient(messages, { tools }) → DEVE lanciare
+ */
+
+/** Imposta il mock di OpenRouter con un sentinel riconoscibile e restituisce
+ * il mock in modo che i test possano verificare se è stato effettivamente
+ * invocato. */
+function setupCloudFallbackEnv(t: import("node:test").TestContext): { wasCloudCalled(): boolean } {
+  process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL = "https://openrouter.example.test";
+  process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY = "test-key";
+  t.after(() => {
+    delete process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL;
+    delete process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY;
+  });
+
+  let cloudCalled = false;
+  async function* sentinelStream() {
+    cloudCalled = true;
+    yield { choices: [{ delta: { content: "silenzioso dal cloud" } }] };
+  }
+  t.mock.module("@workspace/integrations-openrouter-ai", {
+    namedExports: {
+      openrouter: {
+        chat: {
+          completions: {
+            create: async () => sentinelStream(),
+          },
+        },
+      },
+    },
+  });
+
+  return { wasCloudCalled: () => cloudCalled };
+}
+
+/** Azzera le env var che potrebbero scatenare capability-check di rete
+ * (sonar_scan) durante getHorusTools, così non interferiscono col mock fetch. */
+function clearCapabilityEnv(t: import("node:test").TestContext) {
+  const saved = {
+    analysisUrl: process.env.HORUS_ANALYSIS_URL,
+    analysisToken: process.env.ANALYSIS_GATE_TOKEN,
+    nadirUrl: process.env.NADIR_URL,
+    nadirToken: process.env.NADIR_GATE_TOKEN,
+  };
+  delete process.env.HORUS_ANALYSIS_URL;
+  delete process.env.ANALYSIS_GATE_TOKEN;
+  delete process.env.NADIR_URL;
+  delete process.env.NADIR_GATE_TOKEN;
+  t.after(() => {
+    if (saved.analysisUrl !== undefined) process.env.HORUS_ANALYSIS_URL = saved.analysisUrl;
+    if (saved.analysisToken !== undefined) process.env.ANALYSIS_GATE_TOKEN = saved.analysisToken;
+    if (saved.nadirUrl !== undefined) process.env.NADIR_URL = saved.nadirUrl;
+    if (saved.nadirToken !== undefined) process.env.NADIR_GATE_TOKEN = saved.nadirToken;
+  });
+}
+
+test("integrazione: richiesta web — getHorusTools seleziona web_search e il cloud non risponde mai (TC down)", async (t) => {
+  const message = "cerca online le ultime notizie MotoGP";
+  clearCapabilityEnv(t);
+  const cloud = setupCloudFallbackEnv(t);
+  mockFetchUnreachable(t);
+
+  const tools = await getHorusTools(message);
+  assert.ok(
+    tools.some((tool) => tool.function.name === "web_search"),
+    "getHorusTools deve selezionare web_search per una richiesta web"
+  );
+  assert.ok(tools.length > 0, "la selezione deve essere non vuota");
+
+  await assert.rejects(
+    () => quebrachoChatRawResilient([{ role: "user", content: message }], { tools }),
+    (err: unknown) => {
+      assert.ok(err instanceof Error, "deve lanciare un errore, non rispondere silenziosamente");
+      assert.doesNotMatch(
+        err.message,
+        /silenzioso dal cloud/i,
+        "il cloud non deve mai essere raggiunto quando i tool sono non vuoti"
+      );
+      return true;
+    }
+  );
+
+  assert.equal(cloud.wasCloudCalled(), false, "il mock OpenRouter non deve mai essere invocato");
+});
+
+test("integrazione: richiesta blog — getHorusTools seleziona read_blog e il cloud non risponde mai (TC down)", async (t) => {
+  const message = "cosa ho scritto sul blog a proposito di enduro?";
+  clearCapabilityEnv(t);
+  const cloud = setupCloudFallbackEnv(t);
+  mockFetchUnreachable(t);
+
+  const tools = await getHorusTools(message);
+  assert.ok(
+    tools.some((tool) => tool.function.name === "read_blog"),
+    "getHorusTools deve selezionare read_blog per una richiesta al blog"
+  );
+  assert.ok(tools.length > 0, "la selezione deve essere non vuota");
+
+  await assert.rejects(
+    () => quebrachoChatRawResilient([{ role: "user", content: message }], { tools }),
+    (err: unknown) => {
+      assert.ok(err instanceof Error, "deve lanciare un errore, non rispondere silenziosamente");
+      assert.doesNotMatch(
+        err.message,
+        /silenzioso dal cloud/i,
+        "il cloud non deve mai essere raggiunto quando i tool sono non vuoti"
+      );
+      return true;
+    }
+  );
+
+  assert.equal(cloud.wasCloudCalled(), false, "il mock OpenRouter non deve mai essere invocato");
+});
+
+test("integrazione: richiesta di memoria — getHorusTools seleziona remember_note e il cloud non risponde mai (TC down)", async (t) => {
+  const message = "ricorda che ho la patente A";
+  clearCapabilityEnv(t);
+  const cloud = setupCloudFallbackEnv(t);
+  mockFetchUnreachable(t);
+
+  const tools = await getHorusTools(message);
+  assert.ok(
+    tools.some((tool) => tool.function.name === "remember_note"),
+    "getHorusTools deve selezionare remember_note per una richiesta di memoria"
+  );
+  assert.ok(tools.length > 0, "la selezione deve essere non vuota");
+
+  await assert.rejects(
+    () => quebrachoChatRawResilient([{ role: "user", content: message }], { tools }),
+    (err: unknown) => {
+      assert.ok(err instanceof Error, "deve lanciare un errore, non rispondere silenziosamente");
+      assert.doesNotMatch(
+        err.message,
+        /silenzioso dal cloud/i,
+        "il cloud non deve mai essere raggiunto quando i tool sono non vuoti"
+      );
+      return true;
+    }
+  );
+
+  assert.equal(cloud.wasCloudCalled(), false, "il mock OpenRouter non deve mai essere invocato");
 });
