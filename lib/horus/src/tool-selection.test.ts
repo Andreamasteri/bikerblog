@@ -25,6 +25,14 @@ const ALL_TOOL_NAMES = [
   "search_manual",
 ] as const;
 
+// Tool set disponibile per Bowie (agente secondario): include i tool di delega
+// inter-agente ma NON call_ares (admin-only).
+const BOWIE_TOOL_NAMES = [
+  ...ALL_TOOL_NAMES,
+  "call_horus",
+  "call_quebracho",
+] as const;
+
 function makeTools(names: readonly string[]): HorusToolSpec[] {
   return names.map((name) => ({
     type: "function",
@@ -103,6 +111,62 @@ test("capability gating stays ABOVE contextual selection: an unavailable tool is
   // il modello dichiari di non poterlo fare.
   const baseOnly = makeTools(["web_search", "github_read", "remember_note", "read_blog"]);
   assert.deepEqual(selectedNames("fai il typecheck del repo bikerblog", baseOnly), []);
+});
+
+// ─── Bowie agent-name detection (name-based fallback, Task #233) ──────────────
+// Bowie è un modello piccolo (qwen3:1.7b) che può ignorare i tool allegati se
+// non fortemente primed.  selectRelevantTools deve comunque allegare call_horus
+// / call_quebracho quando il messaggio menziona il nome dell'agente, anche se
+// la formulazione non corrisponde a nessuna delle frasi esplicite.
+
+test("Bowie: menzione di 'Horus' nel messaggio seleziona call_horus", () => {
+  const bowieTools = makeTools(BOWIE_TOOL_NAMES);
+  // Formulazione interrogativa — "puoi parlare con Horus?"
+  assert.deepEqual(
+    selectedNames("puoi parlare con Horus?", bowieTools),
+    ["call_horus"],
+    '"puoi parlare con Horus?" deve allegare call_horus'
+  );
+  // Formulazione indiretta — "Horus lo sa?"
+  assert.deepEqual(
+    selectedNames("Horus lo sa?", bowieTools),
+    ["call_horus"],
+    '"Horus lo sa?" deve allegare call_horus'
+  );
+});
+
+test("Bowie: 'coinvolgi Quebracho' seleziona call_quebracho", () => {
+  const bowieTools = makeTools(BOWIE_TOOL_NAMES);
+  assert.deepEqual(
+    selectedNames("coinvolgi Quebracho in questa conversazione", bowieTools),
+    ["call_quebracho"],
+    '"coinvolgi Quebracho" deve allegare call_quebracho'
+  );
+});
+
+test("Bowie: 'qq ne sa qualcosa?' seleziona call_quebracho via alias", () => {
+  const bowieTools = makeTools(BOWIE_TOOL_NAMES);
+  assert.deepEqual(
+    selectedNames("qq ne sa qualcosa?", bowieTools),
+    ["call_quebracho"],
+    '"qq ne sa qualcosa?" deve allegare call_quebracho tramite l\'alias \\bqq\\b'
+  );
+});
+
+test("Bowie: call_ares NON selezionato se non in available (admin gate preserved)", () => {
+  // BOWIE_TOOL_NAMES non include call_ares → il gate admin è rispettato anche
+  // se il messaggio menziona "ares" esplicitamente.
+  const bowieTools = makeTools(BOWIE_TOOL_NAMES);
+  assert.deepEqual(
+    selectedNames("chiama ares per analizzare il problema", bowieTools),
+    [],
+    'call_ares non deve mai essere allegato se non è in available (admin-only)'
+  );
+  assert.deepEqual(
+    selectedNames("ares", bowieTools),
+    [],
+    'la sola parola "ares" non deve selezionare call_ares quando non è disponibile'
+  );
 });
 
 test("getHorusTools(message) applies contextual selection; a simple message yields no tools and no sonar ping", async (t) => {
