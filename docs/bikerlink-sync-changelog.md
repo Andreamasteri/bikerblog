@@ -150,6 +150,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:06** · Test: guard agent empty-state text against silent regressions (#236) <!-- 8a9f2ab -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first look at the original text: "Test: guard agent empty-state text against silent regressions (#236)".
+- **19:05** · Update changelog with recent task completions <!-- b1e884b -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Update changelog with recent task completions".
 - **19:03** · Git commit prior to merge <!-- 591d85b -->
   - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Git commit prior to merge".
 - **18:56** · Test(horus): add Quebracho tool-selection regression suite <!-- 97a3938 -->
