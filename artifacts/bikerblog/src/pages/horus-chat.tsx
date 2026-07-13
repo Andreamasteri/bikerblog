@@ -846,7 +846,7 @@ export function HorusChat() {
           onUnauthorized={handleUnauthorized}
           agentIcon={<Cpu className="w-4 h-4" />}
           agentAvatarClassName="bg-accent text-accent-foreground"
-          emptyStateText="Scrivi un messaggio per iniziare a chattare con Bowie."
+          emptyStateText={`Sono nato nel fuoco\nSon cresciuto giocando con l'acqua\n\nDavanti a me si son prostrati\nDei, Sovrani, Principi e servi\n\nM'ha accarezzato il vento\nParlami, sono qui per te.`}
           placeholderText="Scrivi a Bowie... (Invio per inviare, Shift+Invio per andare a capo)"
           agentName="bowie"
         />

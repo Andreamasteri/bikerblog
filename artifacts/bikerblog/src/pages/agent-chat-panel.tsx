@@ -463,7 +463,7 @@ export function AgentChatPanel({
       <div ref={scrollRef} className="flex-1 border border-border bg-muted/5 mb-4 overflow-y-auto">
         <div className="p-6 space-y-6">
           {messages.length === 0 && (
-            <div className="text-center text-muted-foreground text-sm py-16">{emptyStateText}</div>
+            <div className="text-center text-muted-foreground text-sm py-16 whitespace-pre-line">{emptyStateText}</div>
           )}
           {messages.map((m) => (
             <div key={m.id} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
