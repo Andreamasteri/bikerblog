@@ -141,6 +141,8 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Task completati:**
 
+- **Task #240** — Bowie readiness check — complete all reviewer requirements <!-- 3e97475 -->
+  - _In parole semplici:_ Okay, I need to rewrite this tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Bowie readiness check — complete all reviewer requirements".
 - **Task #239** — Test: guard group-conversation greeting against silent wipe <!-- b39c975 -->
   - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. Let me first understand what the original text says.
 - **Task #237** — Test(horus): integration tests for getHorusTools → quebrachoChatRawResilient cloud-block <!-- 78396c0 -->
@@ -152,6 +154,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:47** · Add regression guard for direct chat greetings <!-- cb48ba8 -->
+  - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Add regression guard for direct chat greetings".
+- **19:47** · Git commit prior to merge <!-- 48f6d41 -->
+  - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry in a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Git commit prior to merge".
 - **19:47** · Add a regression guard for direct chat greetings <!-- a912151 -->
   - _In parole semplici:_ Okay, let me try to figure out how to approach this. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. They specified no technical jargon without explanation, no extra details, and just the sentence without quotes or prefixes.
 - **19:47** · Add dedicated regression guard for the Horus direct-chat greeting <!-- d3c9b6f -->
