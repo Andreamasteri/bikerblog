@@ -18,6 +18,9 @@
  *    Verifica esplicitamente che il post diaristico odierno sia tradotto.
  * 6. Genera audio TTS per i post senza audio (nuovi o riscritti)
  *    (podcast:generate — processa solo i post con audio_url IS NULL)
+ * 3.9. Bowie readiness check — verifica Bowie (health ping + inference probe)
+ *    prima dello step 4 (diary); silenzioso se non configurato, warn critico
+ *    se configurato ma irraggiungibile/evitto dalla VRAM (alert pipeline).
  * 7. Self-check produzione (verifica + riparazione automatica)
  * 7.5. Reindicizzazione semantica Nadir (POST /reindex) — mantiene l'indice
  *    allineato ai contenuti pubblicati; silenzioso in caso di successo,
@@ -654,6 +657,72 @@ console.log("[cluster-daily] avvio —", new Date().toISOString());
   }
 }
 
+// ── Step 3.9: Bowie readiness check ──────────────────────────────────────────
+// Verifica che Bowie sia operativo (health ping + inference probe) PRIMA che
+// la pipeline esegua step che dipendono da lui. Senza questo controllo, un
+// Bowie evitto dalla VRAM da Ares/Coder potrebbe causare un cold-load silenzioso
+// da 300s+ o una risposta vuota senza che nessuno se ne accorga. Eseguito qui,
+// prima dello step 4 (diary), così un alert viene inviato tempestivamente.
+// Silenzioso se Bowie non è configurato (BOWIE_OLLAMA_MODEL mancante).
+//
+// Se il check fallisce:
+//   - step status = "failed" (non "warn") — errore hard, non soft
+//   - pipelineHardFailed = true  — la pipeline esce non-zero
+//   - bowieReadinessFailed = true — step 4 viene saltato per evitare di
+//     eseguire una generazione in uno stato VRAM noto come degradato
+//     (si recupererà la notte successiva via step 3.8 catch-up)
+
+/**
+ * Traccia se il check di Bowie (step 3.9) ha rilevato un fallimento.
+ * Quando true, step 4 viene saltato invece di girare in uno stato VRAM
+ * potenzialmente degradato.
+ */
+let bowieReadinessFailed = false;
+
+{
+  const stepStart = Date.now();
+  console.log("[cluster-daily] step 3.9: Bowie readiness check");
+
+  const { checkBowieReadiness } = await import("./bowie-readiness-check.js");
+  const bowieReady = await checkBowieReadiness();
+
+  if (bowieReady.status === "skipped") {
+    console.log(`[cluster-daily] step 3.9: SKIP — ${bowieReady.detail}`);
+    report.addStep({
+      step: 3.9,
+      name: "Bowie readiness check",
+      status: "skipped",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [],
+    });
+  } else if (bowieReady.status === "warn") {
+    const msg = `Bowie non operativo prima della generazione diary (fase: ${bowieReady.failedPhase ?? "sconosciuta"}) — ${bowieReady.detail}`;
+    criticalWarnings.push(`step 3.9 (Bowie readiness check): ${msg}`);
+    pipelineHardFailed = true;
+    bowieReadinessFailed = true;
+    console.error(`[cluster-daily] ✗ step 3.9: ${msg} — step 4 (diary) saltato; il post verrà recuperato domani dallo step 3.8 catch-up`);
+    report.addStep({
+      step: 3.9,
+      name: "Bowie readiness check",
+      status: "failed",
+      duration_ms: Date.now() - stepStart,
+      errors: [msg],
+      warnings: [],
+    });
+  } else {
+    console.log(`[cluster-daily] step 3.9: ${bowieReady.detail}`);
+    report.addStep({
+      step: 3.9,
+      name: "Bowie readiness check",
+      status: "ok",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [],
+    });
+  }
+}
+
 // ── Step 4: generazione post diario del giorno ───────────────────────────────
 // Tracks whether a new diary post was created so step 5 can verify it gets translated.
 
@@ -661,6 +730,25 @@ let diaryPostCreatedThisRun = false;
 
 {
   const stepStart = Date.now();
+
+  // Gate: se step 3.9 ha rilevato Bowie non operativo, salta la generazione
+  // per evitare di girare in uno stato VRAM noto come degradato. Il post
+  // mancante verrà recuperato la notte successiva dallo step 3.8 catch-up.
+  if (bowieReadinessFailed) {
+    console.warn(
+      `[cluster-daily] step 4: SALTATO — Bowie non era operativo (step 3.9 failed); ` +
+      `il post diary-${today} verrà generato domani dallo step 3.8 catch-up`
+    );
+    report.addStep({
+      step: 4,
+      name: "diary post generation",
+      status: "skipped",
+      duration_ms: Date.now() - stepStart,
+      errors: [],
+      warnings: [`diary-${today} saltato: Bowie non operativo (step 3.9 failed) — catch-up atteso domani`],
+    });
+  } else {
+
   console.log(`[cluster-daily] step 4: generazione post diario per ${today}`);
   const postsBefore = await countPosts();
 
@@ -755,6 +843,7 @@ let diaryPostCreatedThisRun = false;
   });
 
   } // end else (diaryResult.status === 0)
+  } // end else (!bowieReadinessFailed)
 }
 
 // ── Step 5: traduzione EN dei post senza contenuto inglese ───────────────────

@@ -27,6 +27,7 @@
     "ares:review-power-tasks": "tsx src/ares-review-power-tasks.ts",
     "coder:escalate": "tsx src/coder-escalate.ts",
     "horus:sse-smoke": "tsx src/horus-sse-smoke.ts",
+    "bowie:readiness-check": "tsx src/bowie-readiness-check.ts",
     "migrate:author-mendo": "tsx src/migrate-author-mendo.ts",
     "changelog:sync": "tsx src/update-sync-changelog.ts",
     "manuals:bikerlink": "tsx src/generate-bikerlink-manuals.ts",
