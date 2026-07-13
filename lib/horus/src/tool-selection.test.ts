@@ -169,6 +169,95 @@ test("Bowie: call_ares NON selezionato se non in available (admin gate preserved
   );
 });
 
+// ─── Quebracho tool surface (granite4:tiny-h, smallest model) ─────────────────
+// Quebracho ha un surface ridotto rispetto ad Horus/Bowie: solo web_search,
+// remember_note e read_blog. I tool di analisi, github_read, search_manual e
+// quelli inter-agente non sono disponibili nel suo surface.
+//
+// Il cloud fallback (quebrachoChatRawResilient) accetta SOLO messaggi senza
+// tool: canUseCloud = (tools.length === 0). Se la selezione restituisce ≥1
+// tool, il chiamante passa al TC e il cloud resta escluso. Questi test
+// verificano sia le keyword rules sia il gate del fallback.
+
+const QUEBRACHO_TOOL_NAMES = ["web_search", "remember_note", "read_blog"] as const;
+
+test("Quebracho: un messaggio conversazionale non allega alcun tool", () => {
+  const tools = makeTools(QUEBRACHO_TOOL_NAMES);
+  for (const msg of ["Ciao!", "Come stai?", "Bella giornata!", "Raccontami qualcosa"]) {
+    assert.deepEqual(
+      selectedNames(msg, tools),
+      [],
+      `"${msg}" non deve allegare alcun tool nel surface Quebracho`
+    );
+  }
+});
+
+test("Quebracho: una richiesta web allega solo web_search", () => {
+  const tools = makeTools(QUEBRACHO_TOOL_NAMES);
+  assert.deepEqual(selectedNames("cerca online le notizie di MotoGP", tools), ["web_search"]);
+  assert.deepEqual(selectedNames("quanto costa una Honda CBR?", tools), ["web_search"]);
+});
+
+test("Quebracho: una richiesta al blog allega solo read_blog", () => {
+  const tools = makeTools(QUEBRACHO_TOOL_NAMES);
+  assert.deepEqual(selectedNames("cosa ho scritto sul blog a proposito di enduro?", tools), ["read_blog"]);
+  assert.deepEqual(selectedNames("leggi i commenti dei lettori sull'ultimo articolo", tools), ["read_blog"]);
+});
+
+test("Quebracho: una richiesta di memoria allega solo remember_note", () => {
+  const tools = makeTools(QUEBRACHO_TOOL_NAMES);
+  assert.deepEqual(selectedNames("ricorda che preferisco uscire la domenica", tools), ["remember_note"]);
+  assert.deepEqual(selectedNames("segnati che ho una Triumph Bonneville", tools), ["remember_note"]);
+});
+
+test("Quebracho: tool assenti dal surface non vengono mai allegati", () => {
+  const tools = makeTools(QUEBRACHO_TOOL_NAMES);
+  // github_read: non nel surface Quebracho
+  assert.deepEqual(
+    selectedNames("leggi il codice di bikerlink e spiegami come funziona", tools),
+    [],
+    "github_read non deve essere allegato: non è nel surface Quebracho"
+  );
+  // search_manual: non nel surface Quebracho
+  assert.deepEqual(
+    selectedNames("cerca per significato nella base di conoscenza cosa avevamo detto", tools),
+    [],
+    "search_manual non deve essere allegato: non è nel surface Quebracho"
+  );
+  // typecheck_repo: non nel surface Quebracho
+  assert.deepEqual(
+    selectedNames("fai il typecheck del repo bikerblog", tools),
+    [],
+    "typecheck_repo non deve essere allegato: non è nel surface Quebracho"
+  );
+});
+
+test("Quebracho cloud-fallback: selezione zero tool lascia canUseCloud = true", () => {
+  // quebrachoChatRawResilient usa il fallback cloud solo quando tools.length === 0.
+  // Un messaggio conversazionale deve restituire [] con il surface Quebracho,
+  // mantenendo aperta la via del cloud se il TC è irraggiungibile.
+  const tools = makeTools(QUEBRACHO_TOOL_NAMES);
+  const selected = selectRelevantTools("Ciao, come stai?", tools);
+  assert.equal(selected.length, 0, "nessun tool selezionato → canUseCloud = true nel chiamante");
+});
+
+test("Quebracho cloud-fallback: selezione non vuota forza il percorso TC (canUseCloud = false)", () => {
+  // Quando selectRelevantTools restituisce ≥1 tool, quebrachoChatRawResilient
+  // NON può usare il cloud (nessuna parity tool-call con OpenRouter).
+  // La selezione corretta è il gate che protegge il fallback da invocazioni
+  // che non può soddisfare.
+  const tools = makeTools(QUEBRACHO_TOOL_NAMES);
+
+  const webSelected = selectRelevantTools("cerca online le ultime notizie MotoGP", tools);
+  assert.ok(webSelected.length > 0, "una richiesta web deve produrre ≥1 tool → canUseCloud = false");
+
+  const blogSelected = selectRelevantTools("cosa ho scritto sul blog?", tools);
+  assert.ok(blogSelected.length > 0, "una richiesta al blog deve produrre ≥1 tool → canUseCloud = false");
+
+  const rememberSelected = selectRelevantTools("ricorda che ho la patente A", tools);
+  assert.ok(rememberSelected.length > 0, "una richiesta di memoria deve produrre ≥1 tool → canUseCloud = false");
+});
+
 test("getHorusTools(message) applies contextual selection; a simple message yields no tools and no sonar ping", async (t) => {
   const originalUrl = process.env["HORUS_ANALYSIS_URL"];
   const originalToken = process.env["ANALYSIS_GATE_TOKEN"];
