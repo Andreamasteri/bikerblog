@@ -141,6 +141,13 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **12:08** · Update script title for dedicated ICS connection <!-- cf52e3b -->
+- **12:05** · Update network fix script to automatically detect router gateway <!-- 602e2e9 -->
+- **11:56** · Update zip file to include new network connection script <!-- 61cb873 -->
+- **11:35** · Update zip bundle title with package information <!-- 132f2cd -->
+- **11:31** · Add a USB bundle for offline network setup <!-- 65f4be1 -->
+- **11:25** · Add USB tethering for Samsung S26 phone connection <!-- 0a82778 -->
+- **11:22** · Update network configuration tool with specific IP address <!-- 929b3e6 -->
 - **10:56** · Update agent briefing and sync changelog with new authentication details <!-- 2d43fa2 -->
 - **03:59** · Update changelog to reflect new agent authentication <!-- d11f955 -->
 - **03:34** · Add alternative authentication for internal agent API endpoint <!-- 0981390 -->
