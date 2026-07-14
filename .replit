@@ -58,3 +58,6 @@ VALHALLA_URL = "https://valhalla.biker-link.net"
 GRAPHHOPPER_URL = "https://gh.biker-link.net"
 HORUS_ANALYSIS_URL = "https://analysis.biker-link.net"
 ARES_OLLAMA_MODEL = "devstral:latest"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-fcf08c12-1ca2-4f4c-a1ef-19318882d464"
