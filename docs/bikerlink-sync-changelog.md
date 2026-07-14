@@ -154,6 +154,10 @@ corrisponde a una modifica registrata dopo il backfill iniziale._
 
 **Altre modifiche:**
 
+- **19:50** · Update documentation for agent skills and PDF processing tools <!-- 86b8fef -->
+  - _In parole semplici:_ Okay, let's tackle this query. The user wants me to rewrite a technical changelog entry into a short, simple Italian sentence that's understandable for non-programmers. No tech jargon without explanation, don't add extra details, and just the sentence without quotes or prefixes.
+- **19:48** · Update project log with completed tasks and recent changes <!-- 1eb2613 -->
+  - _In parole semplici:_ Okay, I need to rewrite this tech changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Update project log with completed tasks and recent changes". Let me break it down.
 - **19:47** · Add regression guard for direct chat greetings <!-- cb48ba8 -->
   - _In parole semplici:_ Okay, I need to rewrite this technical changelog entry into a short, simple Italian sentence that's easy for non-programmers to understand. The original text is "Add regression guard for direct chat greetings".
 - **19:47** · Git commit prior to merge <!-- 48f6d41 -->
