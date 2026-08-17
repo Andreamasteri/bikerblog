@@ -11,7 +11,7 @@ export type AiHubAdapterResult =
   | { ok: true; status: "submitted"; jobId: string }
   | { ok: false; status: "disabled" | "error"; error: string };
 
-const TARGETS: Readonly<Record<AiHubCapability, AiHubAgent>> = {
+const TARGETS: Readonly<Partial<Record<AiHubCapability, AiHubAgent>>> = {
   chat: "bowie",
   route: "horus",
   matching: "ares",
@@ -35,7 +35,8 @@ export async function submitAiHubJob(
   if (request.capability === "indexing.embeddings") {
     return { ok: false, status: "error", error: "indexing_service_is_separate" };
   }
-  if (canonicalAgent(TARGETS[request.capability]) !== requestedAgent) {
+  const target = TARGETS[request.capability];
+  if (!target || canonicalAgent(target) !== requestedAgent) {
     return { ok: false, status: "error", error: "capability_agent_mismatch" };
   }
 
