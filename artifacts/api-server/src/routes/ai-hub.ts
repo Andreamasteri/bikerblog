@@ -48,7 +48,7 @@ router.get("/ai-hub/capabilities", (_req, res) => {
 });
 
 router.post("/ai-hub/jobs", async (req, res) => {
-  const body = req.body as Record<string, unknown>;
+  const body = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
   const capability = body.capability as AiHubCapability;
   const requestedAgent = body.requested_agent as AiHubAgent;
   const option = AI_HUB_CAPABILITY_OPTIONS.find((item) => item.id === capability);
