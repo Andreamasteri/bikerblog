@@ -18,7 +18,6 @@ const TARGETS: Readonly<Record<AiHubCapability, AiHubAgent>> = {
   diagnostics_review: "ares",
   orchestration: "ares",
   "audio.create_soundtrack": "nadir",
-  "indexing.embeddings": "quebracho",
   code_review: "quebracho",
 };
 
@@ -33,6 +32,9 @@ export async function submitAiHubJob(
   }
 
   const requestedAgent = canonicalAgent(request.requested_agent);
+  if (request.capability === "indexing.embeddings") {
+    return { ok: false, status: "error", error: "indexing_service_is_separate" };
+  }
   if (canonicalAgent(TARGETS[request.capability]) !== requestedAgent) {
     return { ok: false, status: "error", error: "capability_agent_mismatch" };
   }
