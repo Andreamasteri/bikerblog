@@ -52,7 +52,7 @@ router.post("/ai-hub/jobs", async (req, res) => {
   const capability = body.capability as AiHubCapability;
   const requestedAgent = body.requested_agent as AiHubAgent;
   const option = AI_HUB_CAPABILITY_OPTIONS.find((item) => item.id === capability);
-  const aliases = option && "aliases" in option ? option.aliases : [];
+  const aliases = option && "aliases" in option ? (option.aliases as readonly string[]) : [];
   if (!option || (option.agent !== requestedAgent && !aliases.includes(requestedAgent))) {
     res.status(400).json({ error: "capability_agent_mismatch" });
     return;
