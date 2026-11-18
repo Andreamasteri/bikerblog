@@ -55,33 +55,29 @@ function coverFor(p){
 }
 function cardExcerpt(p){
  if(p.category!=="diario")return excerpt(p.excerpt);
- const m=[...p.content.matchAll(/«([^»]{10,150})»/g)].map(x=>x[1]).filter(x=>!/(?:qui|oggi|dopo|prima|domani|facile|bene|perché)/i.test(x.slice(0,5)));
- const d=p.slug.slice(-10).split("-").reverse().join("/");
- const opening=p.content.split(/\n\s*\n/)[0].replace(/\*\*/g,"").trim();
- const endings=[
-  "Fra prove sul telefono e domande poco comode, il garage cerca una risposta.",
-  "Il resto della giornata lo raccontano Mendo, Rei e i due supervisori a quattro zampe.",
-  "Il dettaglio tecnico viene prima delle battute, almeno nelle intenzioni.",
-  "Una storia su ciò che era stato cambiato, e su ciò che doveva ancora essere verificato.",
-  "Quebracho propone una passeggiata; l'Agente, naturalmente, un test.",
-  "Dal codice alla strada, con qualche certezza in meno e un controllo in più."
- ];
- const n=p.id%endings.length;
- if(m.length){
-   const names=m.slice(0,2).map(v=>v.length>96?v.slice(0,93)+"…":v);
-   const prefix=[
-     "Quel giorno si è lavorato su ",
-     "Nel codice spuntano ",
-     "Il taccuino tecnico registra ",
-     "Tra i cambiamenti di giornata: ",
-     "I commit raccontano ",
-     "La questione concreta riguarda "
-   ][n];
-   const text=prefix+names.map(x=>"«"+x+"»").join(" e ")+". "+endings[(n+2)%endings.length];
-   return esc(text.slice(0,285));
+ const generic=/una giornata del laboratorio BikerLink|Intermezzo dal garage/i.test(p.excerpt||"");
+ if(!generic)return excerpt(p.excerpt);
+ const paragraphs=p.content.split(/\n\s*\n/).filter(s=>s.trim());
+ const evidence=paragraphs.find(x=>x.startsWith("Il dettaglio concreto che rende questa storia diversa"));
+ const sources=evidence?[...evidence.matchAll(/«([^»]{10,150})»/g)].map(m=>m[1]):[];
+ if(sources.length){
+  const names=sources.slice(0,2).map(x=>x.length>100?x.slice(0,96)+"…":x);
+  const starts=[
+   "Quella giornata il codice si occupa di ",
+   "Tra i lavori documentati troviamo ",
+   "La parte concreta del racconto riguarda ",
+   "La cronologia tecnica segnala ",
+   "Il problema affrontato passa da ",
+   "Sul banco del garage finiscono "
+  ];
+  const prefix=starts[p.id%starts.length];
+  return esc(prefix+names.map(x=>"«"+x+"»").join(" e ")+". Una giornata di prove e di domande, non una funzione dichiarata perfetta.");
  }
- const first=opening.length>90?opening.slice(0,opening.lastIndexOf(" ",185)>90?opening.lastIndexOf(" ",185):185)+"…":opening;
- return esc(first+" "+(p.tags?.includes("intermezzo")?"Intermezzo narrativo, senza commit attestati per questa data.":"")+endings[n]);
+ const focus=paragraphs.find((p,i)=>i>1&&!p.startsWith("##")&&!p.startsWith("Nel nostro racconto")&&!p.startsWith("C'è una distinzione")&&p.length>90)||
+ paragraphs.find(p=>p.length>100&&!p.startsWith("##"))||p.excerpt;
+ let sentence=focus.replace(/\*\*/g,"").replace(/\n/g," ").replace(/\s+/g," ").trim();
+ if(sentence.length>210)sentence=sentence.slice(0,210).replace(/\s+\S*$/,"")+"…";
+ return esc(sentence+(p.tags?.includes("intermezzo")?" · Riflessione narrativa, senza commit attribuiti alla giornata.":""));
 }
 function card(p){const cover=coverFor(p);return '<a class="tile" href="/posts/'+encodeURIComponent(p.slug)+'">'+(cover?'<img loading="lazy" referrerpolicy="no-referrer" src="'+attrs(cover)+'" alt="Illustrazione del garage di BikerBlog">':'')+'<div class="pad"><span class="pill">'+esc(p.category)+'</span><h2>'+esc(p.title)+'</h2><p>'+cardExcerpt(p)+'</p><small class="meta">'+date(p.published_at)+' · '+esc(AUTHORS.get(p.author_id)?.name||"BikerBlog")+'</small></div></a>';}
 function listing(title,arr,desc){return '<section class="intro"><span class="eyebrow">BikerBlog · Archivio</span><h1>'+esc(title)+'</h1><p class="subtitle">'+esc(desc||arr.length+" articoli recuperati dal repository storico.")+'</p></section><form class="search" action="/posts"><input name="q" type="search" placeholder="Cerca negli articoli..." aria-label="Cerca negli articoli"><button>Cerca</button></form><div class="grid">'+(arr.length?arr.map(card).join(""):"<p>Nessun articolo trovato.</p>")+'</div>';}
