@@ -42,7 +42,7 @@ header{box-shadow:0 8px 28px #0003}nav .brand::after{content:"/ diario tecnico";
 .read:hover{background:#ffc271;color:#131313}.article .body{max-width:760px}.article .body h2{margin-top:28px;margin-bottom:13px;color:#f7e3c3}.article .body p{margin-top:0;margin-bottom:21px}.article .body a{color:#f6b865;text-decoration:underline;text-underline-offset:3px}
 .author-signature{font-size:13px;border-top:1px solid #48423b;margin-top:30px;padding-top:20px;color:#bab5ac}
 @media(max-width:700px){nav .brand::after{display:none}.intro::before{position:static;display:block;margin-bottom:12px}.feature.no-image .pad{padding:28px 22px}.day-row{grid-template-columns:56px 1fr;gap:12px}.day-row h3{font-size:19px}.day-stamp{font-size:16px}.month-heading{font-size:21px}}
-.garage-photo{margin:25px 0 32px}.garage-photo .cover{display:block;width:100%;max-width:410px;height:auto;max-height:250px;object-fit:cover;image-rendering:auto;border:1px solid #473c30}.garage-photo figcaption{font:11px/1.6 ui-monospace,Consolas,monospace;color:#aaa19a;margin-top:8px}.gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:25px;margin:30px 0}.gallery-grid figure{margin:0;background:#1e2020;border:1px solid #3b3935;padding:13px}.gallery-grid img{display:block;width:100%;height:260px;object-fit:cover}.gallery-grid figcaption{padding:15px 5px 3px;color:#d9c7aa;font-size:14px}.daythumb{float:right;width:130px;height:83px;object-fit:cover;border:1px solid #514537;margin:0 0 8px 17px;opacity:.93}.feature img{max-height:360px;object-position:center}.tile img{filter:saturate(.85)}@media(max-width:600px){.daythumb{width:86px;height:62px;margin-left:8px}.gallery-grid img{height:210px}}`;
+.garage-photo{margin:25px 0 32px}.garage-photo .cover{display:block;width:100%;max-width:410px;height:auto;max-height:250px;object-fit:cover;image-rendering:auto;border:1px solid #473c30}.garage-photo figcaption{font:11px/1.6 ui-monospace,Consolas,monospace;color:#aaa19a;margin-top:8px}.gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:25px;margin:30px 0}.gallery-grid figure{margin:0;background:#1e2020;border:1px solid #3b3935;padding:13px}.gallery-grid img{display:block;width:100%;height:260px;object-fit:cover}.gallery-grid figcaption{padding:15px 5px 3px;color:#d9c7aa;font-size:14px}.daythumb{float:right;width:130px;height:83px;object-fit:cover;border:1px solid #514537;margin:0 0 8px 17px;opacity:.93}.feature img{max-height:360px;object-position:center}.tile img{filter:saturate(.85)}@media(max-width:600px){.daythumb{width:86px;height:62px;margin-left:8px}.gallery-grid img{height:210px}}.timeline-entries{display:grid;grid-template-columns:1fr;gap:0}.chronicle-row{display:grid;grid-template-columns:105px minmax(0,1fr);gap:22px;padding:19px 12px;border-bottom:1px solid #363737;color:inherit}.chronicle-row:hover{background:#242524}.chronicle-date{font:700 17px/1.5 ui-monospace,Consolas,monospace;color:#e8ac64}.chronicle-detail h3{font-size:21px;margin:6px 0 7px;line-height:1.3}.chronicle-detail p{font-size:15px;margin:0 0 9px;max-width:760px}.chronicle-detail .pill{color:#d8a96d}.chronicle-detail .meta{color:#8f8982}.tile img{aspect-ratio: 1.8/1;object-fit:cover}.tile .pad{min-height:240px;display:flex;flex-direction:column}.tile .pad .meta{margin-top:auto}.tile .pad p{font-size:14px;line-height:1.65}.tile .pad h2{font-size:20px}@media(max-width:600px){.chronicle-row{grid-template-columns:69px minmax(0,1fr);gap:10px;padding:17px 2px}.chronicle-date{font-size:13px}.chronicle-detail h3{font-size:18px}}`;
 function layout(title,body,description,path="/"){
 return '<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>'+esc(title)+' — BikerBlog</title><meta name="description" content="'+attrs(description||"Il diario di BikerLink: moto, sviluppo, viaggi, errori e strada.")+'"><meta name="robots" content="index,follow"><link rel="canonical" href="https://bikerblog.biker-link.net'+attrs(path)+'"><style>'+css+'</style></head><body><header><nav><a class="brand" href="/">⚙ BIKERBLOG</a><a class="menu" href="/posts">Articoli</a><a class="menu" href="/diario">Diario</a><a class="menu" href="/timeline">Timeline</a><a class="menu" href="/authors">Autori</a><a class="menu" href="/galleria">Il garage</a><a class="menu" href="/in-memoria">In memoria</a></nav></header><main>'+body+'</main><footer><strong>BIKERBLOG</strong> — La strada si costruisce un bug alla volta.<p><a href="/posts">Archivio</a><a href="/in-memoria">Per Mauri, grandepuffo</a></p>© '+new Date().getFullYear()+' BikerBlog · Archivio storico recuperato</footer></body></html>';
 }
@@ -53,8 +53,52 @@ function coverFor(p){
   if(p.category!=="diario")return "";
   return (p.author_id===4||p.id%3===0)?"/media/illustrations/nadir-keyboard.webp":"/media/illustrations/que-nadir-garage.webp";
 }
-function card(p){const cover=coverFor(p);return '<a class="tile" href="/posts/'+encodeURIComponent(p.slug)+'">'+(cover?'<img loading="lazy" referrerpolicy="no-referrer" src="'+attrs(cover)+'" alt="Illustrazione del garage di BikerBlog">':'')+'<div class="pad"><span class="pill">'+esc(p.category)+'</span><h2>'+esc(p.title)+'</h2><p>'+excerpt(p.excerpt)+'</p><small class="meta">'+date(p.published_at)+' · '+esc(AUTHORS.get(p.author_id)?.name||"BikerBlog")+'</small></div></a>';}
+function cardExcerpt(p){
+ if(p.category!=="diario")return excerpt(p.excerpt);
+ const m=[...p.content.matchAll(/«([^»]{10,150})»/g)].map(x=>x[1]).filter(x=>!/(?:qui|oggi|dopo|prima|domani|facile|bene|perché)/i.test(x.slice(0,5)));
+ const d=p.slug.slice(-10).split("-").reverse().join("/");
+ const opening=p.content.split(/\n\s*\n/)[0].replace(/\*\*/g,"").trim();
+ const endings=[
+  "Fra prove sul telefono e domande poco comode, il garage cerca una risposta.",
+  "Il resto della giornata lo raccontano Mendo, Rei e i due supervisori a quattro zampe.",
+  "Il dettaglio tecnico viene prima delle battute, almeno nelle intenzioni.",
+  "Una storia su ciò che era stato cambiato, e su ciò che doveva ancora essere verificato.",
+  "Quebracho propone una passeggiata; l'Agente, naturalmente, un test.",
+  "Dal codice alla strada, con qualche certezza in meno e un controllo in più."
+ ];
+ const n=p.id%endings.length;
+ if(m.length){
+   const names=m.slice(0,2).map(v=>v.length>96?v.slice(0,93)+"…":v);
+   const prefix=[
+     "Quel giorno si è lavorato su ",
+     "Nel codice spuntano ",
+     "Il taccuino tecnico registra ",
+     "Tra i cambiamenti di giornata: ",
+     "I commit raccontano ",
+     "La questione concreta riguarda "
+   ][n];
+   const text=prefix+names.map(x=>"«"+x+"»").join(" e ")+". "+endings[(n+2)%endings.length];
+   return esc(text.slice(0,285));
+ }
+ const first=opening.length>90?opening.slice(0,opening.lastIndexOf(" ",185)>90?opening.lastIndexOf(" ",185):185)+"…":opening;
+ return esc(first+" "+(p.tags?.includes("intermezzo")?"Intermezzo narrativo, senza commit attestati per questa data.":"")+endings[n]);
+}
+function card(p){const cover=coverFor(p);return '<a class="tile" href="/posts/'+encodeURIComponent(p.slug)+'">'+(cover?'<img loading="lazy" referrerpolicy="no-referrer" src="'+attrs(cover)+'" alt="Illustrazione del garage di BikerBlog">':'')+'<div class="pad"><span class="pill">'+esc(p.category)+'</span><h2>'+esc(p.title)+'</h2><p>'+cardExcerpt(p)+'</p><small class="meta">'+date(p.published_at)+' · '+esc(AUTHORS.get(p.author_id)?.name||"BikerBlog")+'</small></div></a>';}
 function listing(title,arr,desc){return '<section class="intro"><span class="eyebrow">BikerBlog · Archivio</span><h1>'+esc(title)+'</h1><p class="subtitle">'+esc(desc||arr.length+" articoli recuperati dal repository storico.")+'</p></section><form class="search" action="/posts"><input name="q" type="search" placeholder="Cerca negli articoli..." aria-label="Cerca negli articoli"><button>Cerca</button></form><div class="grid">'+(arr.length?arr.map(card).join(""):"<p>Nessun articolo trovato.</p>")+'</div>';}
+function timelinePage(){
+const sorted=[...POSTS].sort((a,b)=>Date.parse(b.published_at)-Date.parse(a.published_at));
+const grouped=new Map();
+for(const p of sorted){
+ const month=new Date(p.published_at).toLocaleDateString("it-IT",{month:"long",year:"numeric"});
+ if(!grouped.has(month))grouped.set(month,[]);
+ grouped.get(month).push(p);
+}
+return '<section class="intro"><span class="eyebrow">BikerBlog / archivio cronologico</span><h1>La timeline della nostra follia.</h1><p class="subtitle">Un evento dopo l\'altro, non 250 copie della stessa fotografia. Qui si segue la cronologia: data, voce, problema tecnico e racconto.</p></section><div class="paper-note">Le giornate ricostruite sono distinte dagli articoli storici. Il diario è una retrospettiva: non una cronologia di pubblicazioni effettivamente giornaliere.</div>'
++[...grouped.entries()].map(([label,items])=>'<section class="month-section"><h2 class="month-heading">'+esc(label)+'<span class="month-count">'+items.length+' storie</span></h2><div class="timeline-entries">'+items.map((p,i)=>{
+const isDiary=p.category==="diario";
+const sourceTag=isDiary?(p.tags?.includes("intermezzo")?"INTERMEZZO NARRATIVO":"DIARIO TECNICO"):"ARCHIVIO ORIGINALE";
+return '<a class="chronicle-row" href="/posts/'+encodeURIComponent(p.slug)+'"><div class="chronicle-date">'+new Date(p.published_at).toLocaleDateString("it-IT",{day:"2-digit",month:"short"})+'</div><div class="chronicle-detail"><span class="pill">'+sourceTag+' · '+esc(AUTHORS.get(p.author_id)?.name||"BikerBlog")+'</span><h3>'+esc(p.title.replace(/^\d{2}\/\d{2}\/\d{4}\s*[—-]\s*/,""))+'</h3><p>'+cardExcerpt(p)+'</p><span class="meta">'+Number(p.reading_minutes||3)+' MIN · LEGGI IL CAPITOLO</span></div></a>';}).join("")+'</div></section>').join("");
+}
 function diaryIndex(authorKey=""){
 const all=POSTS.filter(p=>p.category==="diario").sort((a,b)=>Date.parse(b.published_at)-Date.parse(a.published_at));
 const selected=ARCHIVE.authors.some(a=>String(a.id)===String(authorKey))?String(authorKey):"";
@@ -101,7 +145,7 @@ if(url.pathname==="/")body=home();
 else if(url.pathname==="/diario"){title="Diario";body=diaryIndex(url.searchParams.get("autore")||"");}
 else if(url.pathname==="/posts"){const q=(url.searchParams.get("q")||"").trim().toLocaleLowerCase("it");const arr=q?POSTS.filter(p=>(p.title+" "+p.excerpt+" "+p.content).toLocaleLowerCase("it").includes(q)):POSTS;title="Articoli";body=listing(q?"Risultati per: "+q:"Tutti gli articoli",arr);}
 else if(url.pathname.startsWith("/posts/")){const slug=decodeURIComponent(url.pathname.slice(7));const p=POSTS.find(x=>x.slug===slug);if(p){title=p.title;body=article(p);}else status=404;}
-else if(url.pathname==="/timeline"){title="Timeline";body=listing("Timeline",POSTS,"Il percorso storico di BikerBlog, un articolo alla volta.");}
+else if(url.pathname==="/timeline"){title="Timeline";body=timelinePage();}
 else if(url.pathname.startsWith("/tags/")){const t=decodeURIComponent(url.pathname.slice(6));title="Tag: "+t;body=listing("Tag: "+t,POSTS.filter(p=>p.tags?.includes(t)));}
 else if(url.pathname.startsWith("/categories/")){const t=decodeURIComponent(url.pathname.slice(12));title="Categoria: "+t;body=listing("Categoria: "+t,POSTS.filter(p=>p.category===t));}
 else if(url.pathname==="/galleria"){title="Scene dal garage";body=galleryPage();}
