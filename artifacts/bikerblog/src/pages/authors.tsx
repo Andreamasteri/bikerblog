@@ -1,55 +1,58 @@
 import { useListAuthors } from "@workspace/api-client-react";
-import { MapPin, Bike, FileText } from "lucide-react";
+import { MapPin, Bike, FileText, ArrowUpRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
+
+const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
 export function Authors() {
   const { t } = useTranslation();
   const { data: authors, isLoading } = useListAuthors();
 
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="mb-16">
-        <h1 className="text-4xl md:text-6xl font-display font-bold uppercase tracking-tight mb-4 leading-none">{t("authors.title")}</h1>
-        <p className="text-muted-foreground max-w-xl text-lg">{t("authors.subtitle")}</p>
-      </div>
+    <div className="container mx-auto px-4 py-10 md:py-14">
+      <header className="bb-page-intro bb-page-intro-compact bb-authors-intro">
+        <div className="bb-page-intro-copy">
+          <p className="bb-section-kicker">{t("authors.eyebrow")}</p>
+          <h1>{t("authors.title")}</h1>
+          <p className="bb-page-intro-description">{t("authors.subtitle")}</p>
+        </div>
+        <div className="bb-page-intro-media" aria-hidden="true">
+          <img src={MEDIA + "/redazione.webp"} alt="" />
+          <span>{t("authors.imageCaption")}</span>
+        </div>
+      </header>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-muted p-8 animate-pulse h-64"></div>
+        <div className="bb-contributor-grid" aria-label={t("authors.loading")}>
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="bb-contributor-skeleton" aria-hidden="true" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {authors?.map(author => (
-            <div key={author.id} id={author.id.toString()} className="bg-card border border-border p-6 md:p-8 flex flex-col sm:flex-row gap-6 hover:border-primary transition-colors group">
-              <img src={author.avatarUrl} alt={author.name} className="w-24 h-24 sm:w-32 sm:h-32 rounded-none object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
-              <div className="flex-1">
-                <div className="flex justify-between items-start mb-2">
-                  <h2 className="text-2xl font-display font-bold uppercase tracking-wider">{author.name}</h2>
-                  <span className="text-xs font-mono bg-primary text-primary-foreground px-2 py-1 flex items-center gap-1">
-                    <FileText className="w-3 h-3" /> {author.postCount}
+        <div className="bb-contributor-grid">
+          {authors?.map((author) => (
+            <article key={author.id} id={author.id.toString()} className="bb-contributor-card">
+              <div className="bb-contributor-photo">
+                <img src={author.avatarUrl} alt={author.name} loading="lazy" />
+              </div>
+              <div className="bb-contributor-copy">
+                <div className="bb-contributor-heading">
+                  <div>
+                    <p className="bb-section-kicker">{t("authors.contributor")}</p>
+                    <h2>{author.name}</h2>
+                  </div>
+                  <span className="bb-contributor-count" aria-label={t("authors.postCount", { count: author.postCount })}>
+                    <FileText className="h-3.5 w-3.5" aria-hidden="true" />{author.postCount}
                   </span>
                 </div>
-                
-                <p className="text-muted-foreground mb-4 text-sm leading-relaxed">{author.bio}</p>
-                
-                <div className="flex flex-col gap-2 text-xs font-mono text-muted-foreground border-t border-border/50 pt-4">
-                  {author.location && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-primary" /> 
-                      <span className="uppercase">{author.location}</span>
-                    </div>
-                  )}
-                  {author.bike && (
-                    <div className="flex items-center gap-2">
-                      <Bike className="w-4 h-4 text-primary" /> 
-                      <span className="uppercase">{author.bike}</span>
-                    </div>
-                  )}
+                <p className="bb-contributor-bio">{author.bio}</p>
+                <div className="bb-contributor-facts">
+                  {author.location && <span><MapPin className="h-4 w-4" aria-hidden="true" />{author.location}</span>}
+                  {author.bike && <span><Bike className="h-4 w-4" aria-hidden="true" />{author.bike}</span>}
                 </div>
               </div>
-            </div>
+              <ArrowUpRight className="bb-contributor-mark h-5 w-5" aria-hidden="true" />
+            </article>
           ))}
         </div>
       )}
