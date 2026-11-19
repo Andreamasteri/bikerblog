@@ -1,0 +1,257 @@
+{
+  "capturedAt": "2026-11-19",
+  "purpose": "Exact pre-publication state for the approved BikerBlog gallery illustrations and varied diary asides",
+  "worker": {
+    "name": "bikerblog-recovery",
+    "versionId": "04bd4255-6d3f-4760-bd31-4d9f5904ca52",
+    "versionNumber": 13,
+    "deploymentId": "5cc66c0b-b120-456c-b59c-d51ba27db625",
+    "deploymentCreatedOn": "2026-11-19T19:01:08.961976Z",
+    "trafficPercent": 100,
+    "sourceGitCommit": "a52c96113c21f38ef03004069c95d4581045b3a2",
+    "repositoryHeadContainingIdenticalSource": "309b428ca4d53e7b4fde83d8a2dbdac72dd6ce64",
+    "sourcePath": "deploy/bikerblog-live/worker.mjs",
+    "sourceBytes": 872148,
+    "sourceSha256": "4dbc92c8dc51082475c1bad7633f6e0b66315230f581ff79be5644939714d95e",
+    "compatibilityDate": "2026-11-01",
+    "usageModel": "standard",
+    "workersDev": false,
+    "secrets": [],
+    "bindings": [
+      {
+        "bucket_name": "bikerblog-media",
+        "name": "BLOG_MEDIA",
+        "type": "r2_bucket"
+      }
+    ]
+  },
+  "domain": {
+    "id": "4a486b045777cf649372197d0f322b9b0e250977",
+    "zone_id": "e2ced3f458b06555c6c8e8a403f4b489",
+    "zone_name": "biker-link.net",
+    "hostname": "bikerblog.biker-link.net",
+    "service": "bikerblog-recovery",
+    "environment": "production",
+    "cert_id": "f751350e-c5ea-4f91-9902-73a3dbef6a28",
+    "previews_enabled": false,
+    "enabled": true
+  },
+  "workerRoutePatterns": [],
+  "note": "The hostname is attached through a Worker Domain; BikerBlog has no zone Worker Route. The complete zone route inventory is preserved in backup-metadata.json.",
+  "media": {
+    "bucket": "bikerblog-media",
+    "private": true,
+    "r2DevEnabled": true,
+    "managedDomain": {
+      "enabled": false,
+      "bucketId": "9a47c48f0f1749b08161c3e8007ae143",
+      "domain": "pub-9a47c48f0f1749b08161c3e8007ae143.r2.dev"
+    },
+    "customDomains": [],
+    "objectCount": 37,
+    "totalBytes": 3819656,
+    "objectInventory": [
+      {
+        "key": "editorial/01_motore_serie1.webp",
+        "size": 66122,
+        "etag": "0a978c38e5295ef355c04e465385cc48"
+      },
+      {
+        "key": "editorial/02_laboratorio_elettronico_serie1.webp",
+        "size": 59434,
+        "etag": "0ce1948d949d8d5c80341b97bbd729bd"
+      },
+      {
+        "key": "editorial/03_strada_montagna_serie1.webp",
+        "size": 40558,
+        "etag": "c2c1d31f88083a65195630b731595414"
+      },
+      {
+        "key": "editorial/04_telemetria_serie1.webp",
+        "size": 41440,
+        "etag": "ec4d5b60866dd8a950c0c920ff2f3b6b"
+      },
+      {
+        "key": "editorial/05_server_serie2.webp",
+        "size": 44220,
+        "etag": "ee46ae9d63cfc00f1cb4f96e76a305e3"
+      },
+      {
+        "key": "editorial/06_debug_code_serie2.webp",
+        "size": 50784,
+        "etag": "616149c790592186019c0c70250435b0"
+      },
+      {
+        "key": "editorial/07_itinerario_serie2.webp",
+        "size": 68276,
+        "etag": "afde605fe9ce441e57d657ce2745058a"
+      },
+      {
+        "key": "editorial/08_team_serie2.webp",
+        "size": 63936,
+        "etag": "9017bf599c2db3317406919559640a8c"
+      },
+      {
+        "key": "editorial/09_motore_serie3.webp",
+        "size": 65474,
+        "etag": "7fba57f956defa51391ba3689a9ba8f0"
+      },
+      {
+        "key": "editorial/10_strada_montagna_serie3.webp",
+        "size": 55836,
+        "etag": "c2d67953996935a4bf8c3c7dc06ad261"
+      },
+      {
+        "key": "editorial/11_debug_code_serie3.webp",
+        "size": 49196,
+        "etag": "5103e7f3da6c128033d28541e17fa56f"
+      },
+      {
+        "key": "editorial/12_team_serie3.webp",
+        "size": 63492,
+        "etag": "14e4d4bf0ab1e708980a3a1b680be475"
+      },
+      {
+        "key": "editorial/13_laboratorio_elettronico_serie4.webp",
+        "size": 58598,
+        "etag": "f4bc5941f9b400b7ba8c1714953ad795"
+      },
+      {
+        "key": "editorial/14_server_serie4.webp",
+        "size": 45726,
+        "etag": "2f8a4d285be06f1b976246b882e77fcf"
+      },
+      {
+        "key": "editorial/15_itinerario_serie4.webp",
+        "size": 71588,
+        "etag": "c4f4db8b91f5481e3c0f3de58ac6c626"
+      },
+      {
+        "key": "editorial/16_telemetria_serie4.webp",
+        "size": 48590,
+        "etag": "57cdd540e7b2b4ef024a01c16a5b67d5"
+      },
+      {
+        "key": "editorial/17_motore_serie5.webp",
+        "size": 75334,
+        "etag": "fec57e2508a80515cf00cc2df027061a"
+      },
+      {
+        "key": "editorial/18_strada_montagna_serie5.webp",
+        "size": 70820,
+        "etag": "32428579d56422d57ef40f7fd4f34f97"
+      },
+      {
+        "key": "editorial/19_debug_code_serie5.webp",
+        "size": 52642,
+        "etag": "263a4aff052b67c5b29c06a45de0444f"
+      },
+      {
+        "key": "editorial/20_team_serie5.webp",
+        "size": 61294,
+        "etag": "7bbe197ce47e119788f8c515dd67dd85"
+      },
+      {
+        "key": "editorial/21_laboratorio_elettronico_serie6.webp",
+        "size": 55524,
+        "etag": "d98aab74e9518bf655d8cf9b1d27c3b8"
+      },
+      {
+        "key": "editorial/22_server_serie6.webp",
+        "size": 55718,
+        "etag": "95c73a8c95d5697faad0d04bfc30dad3"
+      },
+      {
+        "key": "editorial/23_itinerario_serie6.webp",
+        "size": 65790,
+        "etag": "40062d588df0487af52f78c0bc8335c2"
+      },
+      {
+        "key": "editorial/24_telemetria_serie6.webp",
+        "size": 77350,
+        "etag": "2a78e091220719d14aa93ba36b31d0cb"
+      },
+      {
+        "key": "editorial/25_cockpit_alpine_gps_originale.webp",
+        "size": 208612,
+        "etag": "cf5aa65e1e3a860c8c198c9354c3ab58"
+      },
+      {
+        "key": "editorial/26_motore_officina_dettaglio_originale.webp",
+        "size": 481868,
+        "etag": "33a6d84fbd2a0f7342eda21bc6d99b96"
+      },
+      {
+        "key": "editorial/animal-box-panorama.webp",
+        "size": 115682,
+        "etag": "f6cb05ded7f906220cb81a82839f7b58"
+      },
+      {
+        "key": "editorial/animal-cables-workshop.webp",
+        "size": 198508,
+        "etag": "b1bb0aa846e3b58116e24aa8032cf61a"
+      },
+      {
+        "key": "editorial/animal-collage-four-scenes.webp",
+        "size": 246746,
+        "etag": "1b5324cb76f94fb404f121567659d34d"
+      },
+      {
+        "key": "editorial/animal-keyboard-telemetry.webp",
+        "size": 186572,
+        "etag": "f4987f04cf0d9d9e6ba5549e77f15c05"
+      },
+      {
+        "key": "editorial/animal-night-shift.webp",
+        "size": 185532,
+        "etag": "05e14dea79336488b5685edf17c70bec"
+      },
+      {
+        "key": "editorial/animal-robot-panorama.webp",
+        "size": 96656,
+        "etag": "5994604c3bb1830170a2b54d0ac98201"
+      },
+      {
+        "key": "editorial/animal-robot-vacuum.webp",
+        "size": 208108,
+        "etag": "9b3c05f3b8d1dfea7d3a75045846fa52"
+      },
+      {
+        "key": "editorial/bikerblog-garage-mendo-rei-2026-11-19.webp",
+        "size": 277010,
+        "etag": "bfd15669952f5c5e832d01f274a245e8"
+      },
+      {
+        "key": "editorial/bikerblog-garage-quebracho-nadir-2026-11-19.webp",
+        "size": 200186,
+        "etag": "a3575d65afa1c5cb8f17235228eb6416"
+      },
+      {
+        "key": "illustrations/nadir-keyboard.webp",
+        "size": 3152,
+        "etag": "df2e4957503da870091d318a3d2d1580"
+      },
+      {
+        "key": "illustrations/que-nadir-garage.webp",
+        "size": 3282,
+        "etag": "5ff21a1e52a64d652a38e0c452f2b39e"
+      }
+    ]
+  },
+  "restore": {
+    "preferred": "Restore the exact retained Cloudflare production version 13 at 100%. This restores the pre-gallery Worker without changing its domain, binding or R2 contents.",
+    "apiMethod": "POST",
+    "apiPath": "/accounts/d116d3d97b133c543d02934be4bc98d2/workers/scripts/bikerblog-recovery/deployments",
+    "body": {
+      "versions": [
+        {
+          "version_id": "04bd4255-6d3f-4760-bd31-4d9f5904ca52",
+          "percentage": 100
+        }
+      ],
+      "annotations": {
+        "workers/message": "Rollback to verified pre-gallery BikerBlog version 13"
+      }
+    }
+  }
+}
