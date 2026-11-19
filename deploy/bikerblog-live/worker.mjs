@@ -220,7 +220,7 @@ let body="",title="BikerBlog",description="BikerBlog racconta la nascita e lo sv
   title=q?"Risultati di ricerca | BikerBlog":"Archivio BikerBlog | Articoli su BikerLink";description=q?"Articoli dell'archivio BikerBlog che corrispondono alla ricerca: "+q:"Archivio storico e diario di sviluppo di BikerLink: scelte di prodotto, lavoro tecnico, problemi e decisioni che hanno accompagnato il progetto.";body=listing(q?"Risultati per: "+q:"Tutti gli articoli",arr,arr.length+" articoli nell'archivio BikerBlog.");if(q)noindex=true;
  }
  else if(url.pathname.startsWith("/posts/")){
-  const slug=decodeURIComponent(url.pathname.slice(7)),p=POSTS.find(x=>x.slug===slug);if(p){title=titleCut(displayTitle(p)+" | BikerBlog",60);description=articleDescription(p);body=article(p);shareImage=coverFor(p);}else status=404;
+  const slug=decodeURIComponent(url.pathname.slice(7)),p=POSTS.find(x=>x.slug===slug);if(p){const diaryPrefix=p.category==="diario"?(p.slug?.slice(-10)+" | "):"";title=titleCut(diaryPrefix+displayTitle(p)+" | BikerBlog",60);description=articleDescription(p);body=article(p);shareImage=coverFor(p);}else status=404;
  }
  else if(url.pathname==="/timeline"){
   title="Timeline di BikerLink | BikerBlog";description="Una cronologia retrospettiva degli articoli originali e delle voci di diario sullo sviluppo di BikerLink.";body=timelinePage();
