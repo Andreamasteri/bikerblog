@@ -67,7 +67,11 @@
     "subtitle": "Rides, routes, practical know-how, and biker life. Search a subject or browse the latest stories.",
     "searchPlaceholder": "Search stories...",
     "deadEnd": "No stories here",
-    "noResults": "We couldn't find a story for that search. Try another term."
+    "noResults": "We couldn't find a story for that search. Try another term.",
+    "eyebrow": "BikerBlog archive",
+    "imageCaption": "One road, a thousand stories",
+    "archiveNote": "Every article is a stop along the way. Pick where to start.",
+    "loading": "Loading stories..."
   },
   "postDetail": {
     "back": "Back",
@@ -98,7 +102,12 @@
   },
   "authors": {
     "title": "The voices",
-    "subtitle": "Meet the people behind BikerBlog's stories."
+    "subtitle": "Meet the people behind BikerBlog's stories.",
+    "eyebrow": "The people behind the blog",
+    "imageCaption": "Every story starts with someone",
+    "loading": "Loading contributors...",
+    "contributor": "Contributor",
+    "postCount": "{{count}} stories"
   },
   "timeline": {
     "days": "Archive",
@@ -115,11 +124,13 @@
   },
   "tags": {
     "label": "Tag",
-    "noResults": "No stories found with this tag."
+    "noResults": "No stories found with this tag.",
+    "subtitle": "Stories connected by a shared subject."
   },
   "categories": {
     "label": "Category",
-    "noResults": "No stories found in this category."
+    "noResults": "No stories found in this category.",
+    "subtitle": "Stories collected around this subject."
   },
   "podcast": {
     "title": "Podcast",
@@ -128,7 +139,10 @@
     "episode": "Episode",
     "readPost": "Read story",
     "empty": "No episodes",
-    "emptyDesc": "No audio episodes yet. Check back soon."
+    "emptyDesc": "No audio episodes yet. Check back soon.",
+    "eyebrow": "Audio from the blog",
+    "imageCaption": "Stories to take along in your headphones",
+    "loading": "Loading episodes..."
   },
   "notFound": {
     "title": "404 — Page not found",
