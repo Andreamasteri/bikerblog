@@ -1,0 +1,77 @@
+{
+  "capturedAt": "2026-11-19",
+  "purpose": "Verified BikerBlog production state after PR #7 and final cleanup of temporary crawl routes",
+  "worker": {
+    "name": "bikerblog-recovery",
+    "versionId": "04bd4255-6d3f-4760-bd31-4d9f5904ca52",
+    "versionNumber": 13,
+    "deploymentId": "5cc66c0b-b120-456c-b59c-d51ba27db625",
+    "trafficPercent": 100,
+    "sourceGitCommit": "a52c96113c21f38ef03004069c95d4581045b3a2",
+    "sourcePath": "deploy/bikerblog-live/worker.mjs",
+    "sourceBytes": 872148,
+    "sourceSha256": "4dbc92c8dc51082475c1bad7633f6e0b66315230f581ff79be5644939714d95e",
+    "compatibilityDate": "2026-11-01",
+    "usageModel": "standard",
+    "workersDev": false,
+    "secrets": [],
+    "bindings": [
+      {
+        "type": "r2_bucket",
+        "name": "BLOG_MEDIA",
+        "bucketName": "bikerblog-media"
+      }
+    ]
+  },
+  "domain": {
+    "id": "4a486b045777cf649372197d0f322b9b0e250977",
+    "hostname": "bikerblog.biker-link.net",
+    "zoneId": "e2ced3f458b06555c6c8e8a403f4b489",
+    "zoneName": "biker-link.net",
+    "service": "bikerblog-recovery",
+    "environment": "production",
+    "enabled": true,
+    "previewsEnabled": false
+  },
+  "media": {
+    "bucket": "bikerblog-media",
+    "private": true,
+    "r2DevEnabled": false,
+    "customDomains": [],
+    "objectCount": 35,
+    "totalBytes": 3342460,
+    "assignedArticleCovers": 31,
+    "galleryIllustrations": 2,
+    "unassignedEditorialObjects": 2,
+    "manifestPath": "deploy/bikerblog-live/media-manifest.json"
+  },
+  "content": {
+    "publishedPosts": 253,
+    "diaryEntries": 235,
+    "uniqueSlugs": 253,
+    "sitemapUrls": 261,
+    "sitemapPath": "/sitemap.xml",
+    "robotsPath": "/robots.txt"
+  },
+  "rollback": {
+    "preferred": "The current clean source is in the named GitHub main commit and Cloudflare retains version 13. If a regression requires returning to the pre-diary-edit release, deploy version 10 below; this restores the verified pre-revision source and does not alter R2.",
+    "versionId": "0592e5d9-5648-4340-9f8d-3e27bf5511c7",
+    "versionNumber": 10,
+    "deploymentId": "8ae534fb-5622-4871-b186-4b57b2704556",
+    "sourceGitCommit": "15ba0bb396584403f27fdd1ab201fdc7cd3e0041",
+    "sourceSha256": "f7ae9f5c251e6335ff72cfd5949b5579c11ff5198108bfba80469cc35e9ce9ee",
+    "apiMethod": "POST",
+    "apiPath": "/accounts/{account_id}/workers/scripts/bikerblog-recovery/deployments",
+    "body": {
+      "versions": [
+        {
+          "version_id": "0592e5d9-5648-4340-9f8d-3e27bf5511c7",
+          "percentage": 100
+        }
+      ],
+      "annotations": {
+        "workers/message": "Rollback to verified pre-diary-edit BikerBlog version 10"
+      }
+    }
+  }
+}
