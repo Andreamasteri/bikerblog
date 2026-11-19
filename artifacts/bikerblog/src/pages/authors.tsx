@@ -1,11 +1,13 @@
 import { useListAuthors } from "@workspace/api-client-react";
 import { MapPin, Bike, FileText, ArrowUpRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
 export function Authors() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  usePageMeta(t("authors.title"), t("authors.subtitle"), { language: i18n.language });
   const { data: authors, isLoading } = useListAuthors();
 
   return (
