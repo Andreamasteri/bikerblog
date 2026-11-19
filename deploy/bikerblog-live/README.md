@@ -1,6 +1,6 @@
 # BikerBlog: live Worker backup and integration
 
-This directory separates the exact Cloudflare production snapshot from its reviewed successor. The snapshot is the recovery source; `worker.mjs` is the integration candidate. Neither file is the older `recovery/cloudflare-bikerblog-worker.mjs` checked into the repository.
+This directory separates the exact Cloudflare production snapshot from its reviewed successor. The snapshot is the recovery source; `worker.mjs` is the deployed successor. Neither file is the older `recovery/cloudflare-bikerblog-worker.mjs` checked into the repository.
 
 ## Captured production state
 
@@ -92,9 +92,11 @@ The local Worker passed `node --check`. A direct comparison against the captured
 
 ## Isolated preview verification (2026-11-19)
 
-The production domain still serves the captured v8 deployment. The successor was built from a clean detached worktree at commit `11beb5ca3944d14034f98db49e4b84a6f68c3b5e`; `node --check` and direct Worker requests passed. Source SHA-256: `f6632b4fb8a76c80a7b88e0515469a337ffeee0d6a66b37c5ebc145371cdcc86`.
+Before publication, the production domain served the captured v8 deployment. The initial successor preview was built from a clean detached worktree at commit `11beb5ca3944d14034f98db49e4b84a6f68c3b5e`; `node --check` and direct Worker requests passed. Source SHA-256: `f6632b4fb8a76c80a7b88e0515469a337ffeee0d6a66b37c5ebc145371cdcc86`.
 
 The preview ran on the separate Worker `bikerblog-editorial-preview` at `bikerblog-editorial-preview.andreamasteri-nadir-radio.workers.dev`, deployment `b23e8c6b-89bb-4c08-a7ea-847906ec8245`, version `02959dc5-e590-4c52-a216-8514463e061d` at 100%. Every preview response had `X-Robots-Tag: noindex, nofollow`. No production route, domain, DNS record or bucket configuration was changed.
+
+After OpenSEO identified duplicate titles among some diary entries, the final candidate from commit `15ba0bb396584403f27fdd1ab201fdc7cd3e0041` was staged on the same preview Worker as deployment `fcdfd03a-0237-4d88-af38-0bc9c259fa06`, version `927ba615-cdd4-41eb-81b4-15b8a0d0ed90`, at 100%. All 235 diary pages returned 200 with distinct server-rendered titles; API counts, sitemap count, routes and R2 access controls remained correct.
 
 The route matrix returned 200 for the home, archive, diary, timeline, category, tag, authors, gallery (IT/EN), memorial (IT/EN), podcast (IT/EN), two representative articles, sitemap, robots, health endpoint and all three current APIs. Unknown routes returned 404. The initial HTML already contains its title, description, canonical, hreflang and social tags. The memorial's Italian text is unchanged; the English version was checked at desktop and mobile widths.
 
@@ -102,4 +104,14 @@ The full `/api/posts` response is byte-equivalent at the JSON-data level to the 
 
 All 33 allowlisted R2 paths (31 assigned covers + 2 gallery illustrations) returned 200 through the preview; both unassigned editorial objects and an unknown key returned 404. The 31 article-to-cover mappings match the captured source exactly. The live bucket inventory still matches the backup on all 35 keys, sizes and ETags (3,342,460 bytes); `r2.dev` remains disabled and no custom domains are attached.
 
-Playwright checks at 1440×1000 and 390×844 showed no horizontal overflow. All ten home-page images decoded successfully. The English home, English memorial, diary, podcast and origin article also rendered at desktop and mobile widths without overflow. Production deployment and the post-publication OpenSEO crawl remain to be completed.
+Playwright checks at 1440×1000 and 390×844 showed no horizontal overflow. All ten home-page images decoded successfully. The English home, English memorial, diary, podcast and origin article also rendered at desktop and mobile widths without overflow. Production deployment and the post-publication OpenSEO crawl were completed later; see below.
+
+## Production deployment and post-publication checks (2026-11-19)
+
+The exact Worker source from commit `15ba0bb396584403f27fdd1ab201fdc7cd3e0041` was deployed after a clean detached worktree passed `node --check`. Its SHA-256 is `f7ae9f5c251e6335ff72cfd5949b5579c11ff5198108bfba80469cc35e9ce9ee` and its size is 902,394 bytes. The production deployment is `8ae534fb-5622-4871-b186-4b57b2704556`, version `0592e5d9-5648-4340-9f8d-3e27bf5511c7`, at 100%. The existing hostname remains attached to `bikerblog-recovery`; `BLOG_MEDIA` still binds to the private `bikerblog-media` bucket. No DNS, domain or R2 configuration was changed.
+
+Production returned 200 for the home (Italian and English), archive, diary, timeline, category, tag, authors, gallery, memorial (Italian and English), podcast (Italian and English), origin article, representative diary article, sitemap, robots, health endpoint, featured-post API and stats API. `/api/posts` still returns 253 records, including 235 diary entries; all 253 slugs are unique. The 235 diary article pages returned 200 and have unique server-rendered titles. The post list, featured post, stats and health endpoints match the pre-publication contract and counts. Sitemap XML parses with 261 URLs: all 257 original URLs plus four translated static variants. The public robots file still references that sitemap.
+
+The first post-publication OpenSEO root crawl read 50/50 pages with no blocked, rate-limited or failed fetches. Its 50 URLs exactly match the original 50-page sample. The earlier sample reported 48 short descriptions and 38 long titles; the new sample reports none of those issues and no duplicate titles. The only content issue in that sample is the 72-word memorial, which remains a concise dedication. Across 18 crawls (five capped at 50 pages and 13 targeted at 10 pages), the deduplicated union covers 58/261 sitemap URLs: 0 blocked, 0 rate-limited, 0 errors and 203 not reached. The crawler repeatedly returned to the same recent article links, so the repeated rows are not counted as added coverage. Other short-page flags concern the memorial and brief utility pages whose missing factual content was not padded.
+
+OpenSEO reported one 1,851 ms response for `/posts/diario-2026-11-04`; three immediate production rechecks returned 112–227 ms. This was transient. The author-filter URLs canonicalize to `/diario`, as intended. All 33 allowed media paths returned 200 after publication; the two unassigned R2 objects remain private and their public paths return 404. The bucket still has 35 objects, its `r2.dev` domain is disabled and no custom domains are attached.
