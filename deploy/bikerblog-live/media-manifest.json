@@ -69,13 +69,40 @@
     "editorial/animal-night-shift.webp",
     "editorial/animal-robot-panorama.webp",
     "editorial/animal-robot-vacuum.webp",
-    "illustrations/nadir-keyboard.webp",
-    "illustrations/que-nadir-garage.webp"
+    "editorial/bikerblog-garage-mendo-rei-2026-11-19.webp",
+    "editorial/bikerblog-garage-quebracho-nadir-2026-11-19.webp"
   ],
   "unusedEditorialObjects": [
     "editorial/15_itinerario_serie4.webp",
     "editorial/17_motore_serie5.webp"
   ],
   "missingR2Objects": [],
-  "source": "worker-v8-live-snapshot-2026-11-19.mjs"
+  "source": "deploy/bikerblog-live/worker.mjs",
+  "galleryImages": [
+    {
+      "key": "editorial/bikerblog-garage-mendo-rei-2026-11-19.webp",
+      "width": 1536,
+      "height": 1024,
+      "contentType": "image/webp",
+      "description": "Mendo and masculine AI co-pilot Rei with Quebracho and Nadir in the BikerLink garage"
+    },
+    {
+      "key": "editorial/bikerblog-garage-quebracho-nadir-2026-11-19.webp",
+      "width": 1536,
+      "height": 1024,
+      "contentType": "image/webp",
+      "description": "Quebracho and Nadir in a programming garage; Nadir rests off the keyboard"
+    }
+  ],
+  "galleryImageCount": 2,
+  "retiredGalleryObjects": [
+    {
+      "key": "illustrations/que-nadir-garage.webp",
+      "status": "retained privately in R2; replaced in gallery"
+    },
+    {
+      "key": "illustrations/nadir-keyboard.webp",
+      "status": "retained privately in R2; removed from gallery and public allowlist"
+    }
+  ]
 }
