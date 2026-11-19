@@ -98,7 +98,8 @@
     "deadEnd": "Nessun risultato",
     "notFound": "Questa storia non è disponibile o è stata spostata.",
     "backToArchives": "Torna alle storie",
-    "translatedNote": "Traduzione automatica. Il contenuto originale è in italiano."
+    "translatedNote": "Traduzione automatica. Il contenuto originale è in italiano.",
+    "translationUnavailable": "La versione inglese di questa storia non è ancora disponibile."
   },
   "authors": {
     "title": "Le voci",
@@ -149,5 +150,10 @@
   "notFound": {
     "title": "404 — Pagina non trovata",
     "desc": "Questa pagina non è disponibile. Torna alla home e riparti da lì."
+  },
+  "memorial": {
+    "title": "In memoria di Mauri",
+    "nickname": "grandepuffo",
+    "dedication": "Dedicato a un grande amico che non c'è più. Che ha avuto sempre una parola buona, mi ha sempre allungato una mano nel momento del bisogno, e un orecchio nei momenti di gioia."
   }
 }
