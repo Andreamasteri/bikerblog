@@ -1,6 +1,7 @@
 import { useGetPost, useLikePost, useListPostComments, useCreatePostComment, useLikeComment, getGetPostQueryKey, getListPostCommentsQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { format } from "date-fns";
+import { enUS, it } from "date-fns/locale";
 import { Clock, MapPin, Bike, ThumbsUp, MessageSquare, ChevronLeft, Quote, Languages } from "lucide-react";
 import { PodcastPlayer } from "@/components/podcast-player";
 import { LanguageSwitch } from "@/components/language-switch";
@@ -15,12 +16,38 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 
-function usePostMeta(slug: string | undefined) {
+function usePostMeta(
+  slug: string | undefined,
+  title: string,
+  description: string,
+  image: string | undefined,
+  lang: string
+) {
   useEffect(() => {
-    if (!slug) return;
+    if (!slug || !title) return;
+
     const base = window.location.origin + window.location.pathname;
+    const previousTitle = document.title;
+    document.title = `${title} | BikerBlog`;
+
+    const previousMeta = new Map<string, string | null>();
+    const updateMeta = (selector: string, value: string) => {
+      const element = document.querySelector<HTMLMetaElement>(selector);
+      if (!element) return;
+      previousMeta.set(selector, element.getAttribute("content"));
+      element.setAttribute("content", value);
+    };
+    updateMeta('meta[name="description"]', description);
+    updateMeta('meta[property="og:title"]', document.title);
+    updateMeta('meta[property="og:description"]', description);
+    if (image) updateMeta('meta[property="og:image"]', image);
+    updateMeta('meta[name="twitter:title"]', document.title);
+    updateMeta('meta[name="twitter:description"]', description);
+    if (image) updateMeta('meta[name="twitter:image"]', image);
 
     let canonicalEl = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
+    const createdCanonical = !canonicalEl;
+    const previousCanonical = canonicalEl?.getAttribute("href") ?? null;
     if (!canonicalEl) {
       canonicalEl = document.createElement("link");
       canonicalEl.rel = "canonical";
@@ -33,38 +60,57 @@ function usePostMeta(slug: string | undefined) {
       ["en", `${base}?lang=en`],
       ["x-default", base],
     ];
+    const previousHreflang = new Map<string, { element: HTMLLinkElement; href: string | null; created: boolean }>();
     for (const [hreflang, href] of langs) {
       const id = `hreflang-${hreflang}`;
-      let el = document.getElementById(id) as HTMLLinkElement | null;
-      if (!el) {
-        el = document.createElement("link");
-        el.id = id;
-        el.rel = "alternate";
-        el.setAttribute("hreflang", hreflang);
-        document.head.appendChild(el);
+      let element = document.getElementById(id) as HTMLLinkElement | null;
+      const created = !element;
+      if (!element) {
+        element = document.createElement("link");
+        element.id = id;
+        element.rel = "alternate";
+        element.setAttribute("hreflang", hreflang);
+        document.head.appendChild(element);
       }
-      el.href = href;
+      previousHreflang.set(id, { element, href: element.getAttribute("href"), created });
+      element.href = href;
     }
 
     return () => {
-      canonicalEl?.remove();
-      for (const [hreflang] of langs) {
-        document.getElementById(`hreflang-${hreflang}`)?.remove();
+      document.title = previousTitle;
+      for (const [selector, value] of previousMeta) {
+        const element = document.querySelector<HTMLMetaElement>(selector);
+        if (!element) continue;
+        if (value === null) element.removeAttribute("content");
+        else element.setAttribute("content", value);
+      }
+      if (canonicalEl) {
+        if (createdCanonical) canonicalEl.remove();
+        else if (previousCanonical !== null) canonicalEl.setAttribute("href", previousCanonical);
+      }
+      for (const [id, previous] of previousHreflang) {
+        if (previous.created) previous.element.remove();
+        else if (previous.href !== null) previous.element.setAttribute("href", previous.href);
       }
     };
-  }, [slug]);
+  }, [slug, title, description, image, lang]);
 }
-
 export function PostDetail() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  const dateLocale = lang.startsWith("it") ? it : enUS;
   const { slug } = useParams();
-  usePostMeta(slug);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: post, isLoading: postLoading, error: postError } = useGetPost(slug || "", { query: { enabled: !!slug, queryKey: ["post", slug] } });
   const { data: comments, isLoading: commentsLoading } = useListPostComments(slug || "", { query: { enabled: !!slug, queryKey: ["post-comments", slug] } });
+
+  const useEn = lang === "en";
+  const displayTitle = post ? (useEn && post.titleEn ? post.titleEn : post.title) : "";
+  const displayExcerpt = post ? (useEn && post.excerptEn ? post.excerptEn : post.excerpt) : "";
+  usePostMeta(slug, displayTitle, displayExcerpt, post?.coverImageUrl, lang);
+
 
   const likeMutation = useLikePost();
   const commentMutation = useCreatePostComment();
@@ -144,16 +190,13 @@ export function PostDetail() {
     );
   }
 
-  const useEn = lang === "en";
-  const displayTitle = useEn && post.titleEn ? post.titleEn : post.title;
-  const displayExcerpt = useEn && post.excerptEn ? post.excerptEn : post.excerpt;
   const displayBody = useEn && post.bodyEn ? post.bodyEn : post.content;
   const hasTranslation = !!(post.titleEn && post.excerptEn && post.bodyEn);
 
   return (
     <article className="pb-24">
       {/* Hero Section */}
-      <header className="relative h-[70vh] min-h-[500px] w-full mb-16 flex items-end">
+      <header className="bb-post-hero relative h-[70vh] min-h-[500px] w-full mb-16 flex items-end">
         <img src={post.coverImageUrl} alt={displayTitle} className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
         <div className="container max-w-4xl mx-auto px-4 relative z-10 pb-12">
@@ -193,7 +236,7 @@ export function PostDetail() {
             <div>
               <Link href={`/authors#${post.author.id}`} className="font-bold uppercase tracking-wider hover:text-primary transition-colors block">{post.author.name}</Link>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{format(new Date(post.publishedAt), "MMMM d, yyyy")}</span>
+                <span>{format(new Date(post.publishedAt), "d MMMM yyyy", { locale: dateLocale })}</span>
                 <span>&bull;</span>
                 <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {post.readingMinutes} {t("postDetail.minRead")}</span>
               </div>
@@ -255,7 +298,7 @@ export function PostDetail() {
         )}
 
         {/* Content */}
-        <div className="prose prose-lg dark:prose-invert prose-headings:font-display prose-headings:uppercase prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-none max-w-none mb-16">
+        <div className="bb-article-body prose prose-lg dark:prose-invert prose-headings:font-display prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-none max-w-none mb-16">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {displayBody}
           </ReactMarkdown>
