@@ -98,7 +98,8 @@
     "deadEnd": "No results",
     "notFound": "This story isn't available or has moved.",
     "backToArchives": "Back to stories",
-    "translatedNote": "Automatically translated. The original content is in Italian."
+    "translatedNote": "Automatically translated. The original content is in Italian.",
+    "translationUnavailable": "The English version of this story isn't available yet."
   },
   "authors": {
     "title": "The voices",
@@ -149,5 +150,10 @@
   "notFound": {
     "title": "404 — Page not found",
     "desc": "This page isn't available. Head back to the home page and start again."
+  },
+  "memorial": {
+    "title": "In memory of Mauri",
+    "nickname": "grandepuffo",
+    "dedication": "Dedicated to a great friend who is no longer with us. He always had a kind word, always lent me a hand when I needed one, and listened whenever I had something joyful to share."
   }
 }
