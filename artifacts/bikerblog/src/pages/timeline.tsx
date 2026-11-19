@@ -6,11 +6,13 @@ import { Calendar, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
 export function Timeline() {
   const { t, i18n } = useTranslation();
+  usePageMeta(t("timeline.title"), t("timeline.subtitle"), { language: i18n.language });
   const dateLocale = i18n.language.startsWith("it") ? it : enUS;
   const { postTitle, postExcerpt } = usePostLocale();
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
