@@ -110,7 +110,7 @@
     "postCount": "{{count}} stories"
   },
   "timeline": {
-    "days": "Archive",
+    "days": "Chronological archive",
     "title": "Timeline",
     "subtitle": "A route through the articles and moments shared on BikerBlog.",
     "all": "All",
@@ -120,7 +120,9 @@
     "posts_one": "post",
     "posts_other": "posts",
     "noPost": "No stories",
-    "noPostDesc": "There are no stories for this period."
+    "noPostDesc": "There are no stories for this period.",
+    "filterByMonth": "Filter by month",
+    "loading": "Loading timeline..."
   },
   "tags": {
     "label": "Tag",
