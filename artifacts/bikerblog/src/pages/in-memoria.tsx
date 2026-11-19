@@ -1,8 +1,10 @@
 import { Bike } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 export function InMemoria() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  usePageMeta(t("memorial.title"), t("memorial.dedication"), { language: i18n.language });
 
   return (
     <div className="container mx-auto px-4 py-16 md:py-24">
