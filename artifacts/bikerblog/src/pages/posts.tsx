@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
 export function Posts() {
   const { t, i18n } = useTranslation();
+  usePageMeta(t("posts.title"), t("posts.subtitle"), { language: i18n.language });
   const { postTitle, postExcerpt } = usePostLocale();
   const searchString = useSearch();
   const searchParams = new URLSearchParams(searchString);
