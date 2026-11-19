@@ -6,11 +6,13 @@ import { Headphones, Clock, Rss, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
 import { PodcastPlayer } from "@/components/podcast-player";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
 export function Podcast() {
   const { t, i18n } = useTranslation();
+  usePageMeta(t("podcast.title"), t("podcast.subtitle"), { language: i18n.language });
   const { postTitle, postExcerpt } = usePostLocale();
   const { data: allPosts, isLoading } = useListPosts({});
   const podcastPosts = allPosts?.filter((post) => post.audioUrl) ?? [];
