@@ -6,11 +6,14 @@ import { Clock, ArrowUpRight } from "lucide-react";
 import { ListPostsCategory } from "@workspace/api-client-react";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
 export function Categories() {
   const { t, i18n } = useTranslation();
+  const categoryLabel = category?.replace(/-/g, " ") ?? "";
+  usePageMeta(categoryLabel || t("categories.label"), `${t("categories.subtitle")} ${categoryLabel}`, { language: i18n.language });
   const { postTitle, postExcerpt } = usePostLocale();
   const { category } = useParams();
   const validCategory = category as ListPostsCategory;
