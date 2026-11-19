@@ -90,4 +90,16 @@ Cloudflare keeps prior Worker versions and deployments, but this repository snap
 
 The local Worker passed `node --check`. A direct comparison against the captured Worker confirmed 253 posts, all 253 slugs, the featured-post response and API stats are unchanged. The route and metadata review covered the home, archive, diary, timeline, category, tag, author, article, gallery, memorial, podcast, sitemap, robots and APIs. The generated sitemap parses as XML and contains 261 URLs: all 257 original URLs plus four translated pages. Across the 257 Italian pages, titles are at most 60 characters, descriptions are at least 70 characters with no duplicates, and every image has an `alt` attribute. Mocked R2 checks returned 200 for assigned/used keys and 404 for unassigned or unknown keys.
 
-The isolated Cloudflare preview deployment, visual desktop/mobile checks and production/post-deployment SEO crawl are recorded in the PR after those steps complete.
+## Isolated preview verification (2026-11-19)
+
+The production domain still serves the captured v8 deployment. The successor was built from a clean detached worktree at commit `11beb5ca3944d14034f98db49e4b84a6f68c3b5e`; `node --check` and direct Worker requests passed. Source SHA-256: `f6632b4fb8a76c80a7b88e0515469a337ffeee0d6a66b37c5ebc145371cdcc86`.
+
+The preview ran on the separate Worker `bikerblog-editorial-preview` at `bikerblog-editorial-preview.andreamasteri-nadir-radio.workers.dev`, deployment `b23e8c6b-89bb-4c08-a7ea-847906ec8245`, version `02959dc5-e590-4c52-a216-8514463e061d` at 100%. Every preview response had `X-Robots-Tag: noindex, nofollow`. No production route, domain, DNS record or bucket configuration was changed.
+
+The route matrix returned 200 for the home, archive, diary, timeline, category, tag, authors, gallery (IT/EN), memorial (IT/EN), podcast (IT/EN), two representative articles, sitemap, robots, health endpoint and all three current APIs. Unknown routes returned 404. The initial HTML already contains its title, description, canonical, hreflang and social tags. The memorial's Italian text is unchanged; the English version was checked at desktop and mobile widths.
+
+The full `/api/posts` response is byte-equivalent at the JSON-data level to the snapshot: all 253 records and slugs match, including 235 diary entries. The featured-post and stats APIs are unchanged. The original 257 sitemap URLs are all retained; XML parses and includes four additional translated static pages, for 261 URLs total. Across 261 rendered pages checked, no title exceeds 60 characters, no description is shorter than 70 characters, descriptions are unique, and no image lacks an `alt` attribute.
+
+All 33 allowlisted R2 paths (31 assigned covers + 2 gallery illustrations) returned 200 through the preview; both unassigned editorial objects and an unknown key returned 404. The 31 article-to-cover mappings match the captured source exactly. The live bucket inventory still matches the backup on all 35 keys, sizes and ETags (3,342,460 bytes); `r2.dev` remains disabled and no custom domains are attached.
+
+Playwright checks at 1440×1000 and 390×844 showed no horizontal overflow. All ten home-page images decoded successfully. The English home, English memorial, diary, podcast and origin article also rendered at desktop and mobile widths without overflow. Production deployment and the post-publication OpenSEO crawl remain to be completed.
