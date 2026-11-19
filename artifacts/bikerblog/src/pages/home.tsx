@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
@@ -76,6 +77,7 @@ function AuthorMark({ name, avatarUrl }: { name: string; avatarUrl?: string | nu
 
 export function Home() {
   const { t, i18n } = useTranslation();
+  usePageMeta(t("home.heroTitle"), t("home.heroDesc"), { language: i18n.language });
   const { postTitle, postExcerpt } = usePostLocale();
   const { data: featuredPost, isLoading: featuredLoading } = useGetFeaturedPost();
   const { data: recentPosts, isLoading: recentLoading } = useListPosts({});
