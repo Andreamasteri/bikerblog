@@ -37,7 +37,7 @@ export function usePageMeta(
       : `${normalizedTitle}${brandSuffix}`;
     const safeTitle = fullTitle.length <= 60
       ? fullTitle
-      : `${truncate(normalizedTitle, 60 - brandSuffix.length - 1)}…${brandSuffix}`;
+      : `${truncate(normalizedTitle, 60 - brandSuffix.length)}${brandSuffix}`;
 
     let safeDescription = normalize(description);
     if (safeDescription.length < 70) {
