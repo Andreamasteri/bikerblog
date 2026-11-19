@@ -1,0 +1,554 @@
+{
+  "accountId": "d116d3d97b133c543d02934be4bc98d2",
+  "worker": {
+    "name": "bikerblog-recovery",
+    "settings": {
+      "placement": {},
+      "compatibility_date": "2026-11-01",
+      "compatibility_flags": [],
+      "usage_model": "standard",
+      "tags": [],
+      "tail_consumers": [],
+      "logpush": false,
+      "annotations": {
+        "workers/triggered_by": "upload"
+      },
+      "bindings": [
+        {
+          "bucket_name": "bikerblog-media",
+          "name": "BLOG_MEDIA",
+          "type": "r2_bucket"
+        }
+      ]
+    },
+    "secrets": [],
+    "deployment": {
+      "id": "d87a13a5-1490-4b72-9ade-fd4d3c64bfec",
+      "source": "api",
+      "strategy": "percentage",
+      "author_email": "andreamasteri81@gmail.com",
+      "annotations": {
+        "workers/message": "Automatic deployment on upload.",
+        "workers/triggered_by": "upload"
+      },
+      "versions": [
+        {
+          "version_id": "11fa7928-fdcd-4d18-bbda-fbf46597ef5a",
+          "percentage": 100
+        }
+      ],
+      "created_on": "2026-11-18T12:13:13.646019Z"
+    },
+    "olderDeployments": [
+      {
+        "id": "0e935d9b-08fd-4eea-8fd6-3047765883a5",
+        "source": "api",
+        "strategy": "percentage",
+        "author_email": "andreamasteri81@gmail.com",
+        "annotations": {
+          "workers/message": "Automatic deployment on upload.",
+          "workers/triggered_by": "upload"
+        },
+        "versions": [
+          {
+            "version_id": "df4588b1-1738-4cf1-afcd-ecb298fb48d3",
+            "percentage": 100
+          }
+        ],
+        "created_on": "2026-11-18T11:25:51.225243Z"
+      },
+      {
+        "id": "36d69489-d59e-432d-a27e-cd042a14af72",
+        "source": "api",
+        "strategy": "percentage",
+        "author_email": "andreamasteri81@gmail.com",
+        "annotations": {
+          "workers/message": "Automatic deployment on upload.",
+          "workers/triggered_by": "upload"
+        },
+        "versions": [
+          {
+            "version_id": "6e8e31df-0d26-4b3a-9bbc-3d5a631b6cb8",
+            "percentage": 100
+          }
+        ],
+        "created_on": "2026-11-18T10:41:36.243619Z"
+      },
+      {
+        "id": "9ff24486-c0e0-4d78-8bd2-65a0fb284fb9",
+        "source": "api",
+        "strategy": "percentage",
+        "author_email": "andreamasteri81@gmail.com",
+        "annotations": {
+          "workers/message": "Automatic deployment on upload.",
+          "workers/triggered_by": "upload"
+        },
+        "versions": [
+          {
+            "version_id": "df2b92eb-9fca-4d30-b786-1b33cd8bc46d",
+            "percentage": 100
+          }
+        ],
+        "created_on": "2026-11-18T02:16:19.729738Z"
+      },
+      {
+        "id": "064c3a8e-bb99-436d-ad1c-98d441da1dc6",
+        "source": "api",
+        "strategy": "percentage",
+        "author_email": "andreamasteri81@gmail.com",
+        "annotations": {
+          "workers/message": "Automatic deployment on upload.",
+          "workers/triggered_by": "upload"
+        },
+        "versions": [
+          {
+            "version_id": "874236ad-fed2-46df-a8db-8df4d2c194ff",
+            "percentage": 100
+          }
+        ],
+        "created_on": "2026-11-18T02:00:21.096677Z"
+      },
+      {
+        "id": "325f4419-ae0c-4d1d-abc4-7bc7488b0433",
+        "source": "api",
+        "strategy": "percentage",
+        "author_email": "andreamasteri81@gmail.com",
+        "annotations": {
+          "workers/message": "Automatic deployment on upload.",
+          "workers/triggered_by": "upload"
+        },
+        "versions": [
+          {
+            "version_id": "76012627-25d2-469c-a440-3930c0dd7b22",
+            "percentage": 100
+          }
+        ],
+        "created_on": "2026-11-18T01:59:58.359743Z"
+      },
+      {
+        "id": "809db575-dace-4dfa-a877-4f87a4ebdd00",
+        "source": "api",
+        "strategy": "percentage",
+        "author_email": "andreamasteri81@gmail.com",
+        "annotations": {
+          "workers/message": "Automatic deployment on upload.",
+          "workers/triggered_by": "upload"
+        },
+        "versions": [
+          {
+            "version_id": "113a27e3-fb94-4a3f-84e3-52117cf20f5a",
+            "percentage": 100
+          }
+        ],
+        "created_on": "2026-11-18T01:59:43.930545Z"
+      },
+      {
+        "id": "b138a741-003f-401d-a010-2d9520aa5a99",
+        "source": "api",
+        "strategy": "percentage",
+        "author_email": "andreamasteri81@gmail.com",
+        "annotations": {
+          "workers/message": "Automatic deployment on upload.",
+          "workers/triggered_by": "upload"
+        },
+        "versions": [
+          {
+            "version_id": "65989cb5-5597-46eb-b540-a57b3d2b9bbd",
+            "percentage": 100
+          }
+        ],
+        "created_on": "2026-11-18T01:51:29.540674Z"
+      }
+    ],
+    "domain": {
+      "id": "4a486b045777cf649372197d0f322b9b0e250977",
+      "zone_id": "e2ced3f458b06555c6c8e8a403f4b489",
+      "zone_name": "biker-link.net",
+      "hostname": "bikerblog.biker-link.net",
+      "service": "bikerblog-recovery",
+      "environment": "production",
+      "cert_id": "f751350e-c5ea-4f91-9902-73a3dbef6a28",
+      "previews_enabled": false,
+      "enabled": true
+    },
+    "workerDev": {
+      "enabled": false,
+      "previews_enabled": false
+    },
+    "accountSubdomain": {
+      "subdomain": "andreamasteri-nadir-radio"
+    },
+    "zoneRoutes": [
+      {
+        "id": "b12002f7a00644bdb8471a1adf42c3ee",
+        "pattern": "radio.biker-link.net/listen",
+        "script": "nadir-radio-playlist-publisher",
+        "request_limit_fail_open": false
+      },
+      {
+        "id": "b45769dd1099497d8ad272bb177c72c8",
+        "pattern": "radio.biker-link.net/assets/*",
+        "script": "nadir-radio-playlist-publisher",
+        "request_limit_fail_open": false
+      },
+      {
+        "id": "3fa361f4434a49c8b409450cb1de299a",
+        "pattern": "radio.biker-link.net/",
+        "script": "nadir-radio-playlist-publisher",
+        "request_limit_fail_open": false
+      },
+      {
+        "id": "47c35d0258734665bf8535d43351e001",
+        "pattern": "radio.biker-link.net/api/control/*",
+        "script": "nadir-radio-playlist-publisher",
+        "request_limit_fail_open": false
+      },
+      {
+        "id": "96c99d636bd64f7f8a517de5770930b9",
+        "pattern": "radio.biker-link.net/control*",
+        "script": "nadir-radio-playlist-publisher",
+        "request_limit_fail_open": false
+      },
+      {
+        "id": "74b9e5f57f764977b7a2b15f2459ee14",
+        "pattern": "radio.biker-link.net/api/app-sessions/heartbeat",
+        "script": "nadir-radio-playlist-publisher",
+        "request_limit_fail_open": false
+      }
+    ]
+  },
+  "bucket": {
+    "name": "bikerblog-media",
+    "creation_date": "2026-11-18T10:38:11.291Z",
+    "location": "WEUR",
+    "storage_class": "Standard",
+    "jurisdiction": "default",
+    "managedDomain": {
+      "enabled": false,
+      "bucketId": "9a47c48f0f1749b08161c3e8007ae143",
+      "domain": "pub-9a47c48f0f1749b08161c3e8007ae143.r2.dev"
+    },
+    "customDomains": {
+      "domains": []
+    },
+    "corsConfigured": false,
+    "objects": [
+      {
+        "key": "editorial/01_motore_serie1.webp",
+        "etag": "0a978c38e5295ef355c04e465385cc48",
+        "size": 66122,
+        "lastModified": "2026-11-18T12:08:02.512Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/02_laboratorio_elettronico_serie1.webp",
+        "etag": "0ce1948d949d8d5c80341b97bbd729bd",
+        "size": 59434,
+        "lastModified": "2026-11-18T12:09:54.534Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/03_strada_montagna_serie1.webp",
+        "etag": "c2c1d31f88083a65195630b731595414",
+        "size": 40558,
+        "lastModified": "2026-11-18T12:09:54.546Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/04_telemetria_serie1.webp",
+        "etag": "ec4d5b60866dd8a950c0c920ff2f3b6b",
+        "size": 41440,
+        "lastModified": "2026-11-18T12:09:54.585Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/05_server_serie2.webp",
+        "etag": "ee46ae9d63cfc00f1cb4f96e76a305e3",
+        "size": 44220,
+        "lastModified": "2026-11-18T12:09:54.587Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/06_debug_code_serie2.webp",
+        "etag": "616149c790592186019c0c70250435b0",
+        "size": 50784,
+        "lastModified": "2026-11-18T12:09:54.719Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/07_itinerario_serie2.webp",
+        "etag": "afde605fe9ce441e57d657ce2745058a",
+        "size": 68276,
+        "lastModified": "2026-11-18T12:10:03.103Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/08_team_serie2.webp",
+        "etag": "9017bf599c2db3317406919559640a8c",
+        "size": 63936,
+        "lastModified": "2026-11-18T12:10:03.177Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/09_motore_serie3.webp",
+        "etag": "7fba57f956defa51391ba3689a9ba8f0",
+        "size": 65474,
+        "lastModified": "2026-11-18T12:10:03.165Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/10_strada_montagna_serie3.webp",
+        "etag": "c2d67953996935a4bf8c3c7dc06ad261",
+        "size": 55836,
+        "lastModified": "2026-11-18T12:10:03.227Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/11_debug_code_serie3.webp",
+        "etag": "5103e7f3da6c128033d28541e17fa56f",
+        "size": 49196,
+        "lastModified": "2026-11-18T12:10:03.213Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/12_team_serie3.webp",
+        "etag": "14e4d4bf0ab1e708980a3a1b680be475",
+        "size": 63492,
+        "lastModified": "2026-11-18T12:10:06.329Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/13_laboratorio_elettronico_serie4.webp",
+        "etag": "f4bc5941f9b400b7ba8c1714953ad795",
+        "size": 58598,
+        "lastModified": "2026-11-18T12:10:06.331Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/14_server_serie4.webp",
+        "etag": "2f8a4d285be06f1b976246b882e77fcf",
+        "size": 45726,
+        "lastModified": "2026-11-18T12:10:06.280Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/15_itinerario_serie4.webp",
+        "etag": "c4f4db8b91f5481e3c0f3de58ac6c626",
+        "size": 71588,
+        "lastModified": "2026-11-18T12:10:06.328Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/16_telemetria_serie4.webp",
+        "etag": "57cdd540e7b2b4ef024a01c16a5b67d5",
+        "size": 48590,
+        "lastModified": "2026-11-18T12:10:06.291Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/17_motore_serie5.webp",
+        "etag": "fec57e2508a80515cf00cc2df027061a",
+        "size": 75334,
+        "lastModified": "2026-11-18T12:10:16.630Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/18_strada_montagna_serie5.webp",
+        "etag": "32428579d56422d57ef40f7fd4f34f97",
+        "size": 70820,
+        "lastModified": "2026-11-18T12:10:16.658Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/19_debug_code_serie5.webp",
+        "etag": "263a4aff052b67c5b29c06a45de0444f",
+        "size": 52642,
+        "lastModified": "2026-11-18T12:10:16.582Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/20_team_serie5.webp",
+        "etag": "7bbe197ce47e119788f8c515dd67dd85",
+        "size": 61294,
+        "lastModified": "2026-11-18T12:10:16.589Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/21_laboratorio_elettronico_serie6.webp",
+        "etag": "d98aab74e9518bf655d8cf9b1d27c3b8",
+        "size": 55524,
+        "lastModified": "2026-11-18T12:10:16.610Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/22_server_serie6.webp",
+        "etag": "95c73a8c95d5697faad0d04bfc30dad3",
+        "size": 55718,
+        "lastModified": "2026-11-18T12:10:21.470Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/23_itinerario_serie6.webp",
+        "etag": "40062d588df0487af52f78c0bc8335c2",
+        "size": 65790,
+        "lastModified": "2026-11-18T12:10:21.401Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/24_telemetria_serie6.webp",
+        "etag": "2a78e091220719d14aa93ba36b31d0cb",
+        "size": 77350,
+        "lastModified": "2026-11-18T12:10:21.428Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/25_cockpit_alpine_gps_originale.webp",
+        "etag": "cf5aa65e1e3a860c8c198c9354c3ab58",
+        "size": 208612,
+        "lastModified": "2026-11-18T12:10:21.401Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/26_motore_officina_dettaglio_originale.webp",
+        "etag": "33a6d84fbd2a0f7342eda21bc6d99b96",
+        "size": 481868,
+        "lastModified": "2026-11-18T12:10:21.457Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/animal-box-panorama.webp",
+        "etag": "f6cb05ded7f906220cb81a82839f7b58",
+        "size": 115682,
+        "lastModified": "2026-11-18T12:10:32.481Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/animal-cables-workshop.webp",
+        "etag": "b1bb0aa846e3b58116e24aa8032cf61a",
+        "size": 198508,
+        "lastModified": "2026-11-18T12:10:32.483Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/animal-collage-four-scenes.webp",
+        "etag": "1b5324cb76f94fb404f121567659d34d",
+        "size": 246746,
+        "lastModified": "2026-11-18T12:10:32.502Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/animal-keyboard-telemetry.webp",
+        "etag": "f4987f04cf0d9d9e6ba5549e77f15c05",
+        "size": 186572,
+        "lastModified": "2026-11-18T12:10:32.493Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/animal-night-shift.webp",
+        "etag": "05e14dea79336488b5685edf17c70bec",
+        "size": 185532,
+        "lastModified": "2026-11-18T12:10:37.015Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/animal-robot-panorama.webp",
+        "etag": "5994604c3bb1830170a2b54d0ac98201",
+        "size": 96656,
+        "lastModified": "2026-11-18T12:10:37.021Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "editorial/animal-robot-vacuum.webp",
+        "etag": "9b3c05f3b8d1dfea7d3a75045846fa52",
+        "size": 208108,
+        "lastModified": "2026-11-18T12:10:37.008Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "illustrations/nadir-keyboard.webp",
+        "etag": "df2e4957503da870091d318a3d2d1580",
+        "size": 3152,
+        "lastModified": "2026-11-18T10:39:15.500Z",
+        "contentType": "image/webp"
+      },
+      {
+        "key": "illustrations/que-nadir-garage.webp",
+        "etag": "5ff21a1e52a64d652a38e0c452f2b39e",
+        "size": 3282,
+        "lastModified": "2026-11-18T10:38:46.390Z",
+        "contentType": "image/webp"
+      }
+    ],
+    "objectCount": 35,
+    "totalBytes": 3342460
+  },
+  "dns": [
+    {
+      "id": "e977dbb6a7895bbb070ee18e95e40081",
+      "name": "bikerblog.biker-link.net",
+      "type": "AAAA",
+      "content": "100::",
+      "proxiable": true,
+      "proxied": true,
+      "ttl": 1,
+      "settings": {},
+      "meta": {
+        "origin_worker_id": "4a486b045777cf649372197d0f322b9b0e250977",
+        "read_only": true
+      },
+      "comment": null,
+      "tags": [],
+      "created_on": "2026-11-18T01:51:36.132631Z",
+      "modified_on": "2026-11-18T01:51:36.132631Z"
+    }
+  ],
+  "snapshot": {
+    "capturedDate": "2026-11-19",
+    "sourceEndpoint": "GET /accounts/{account_id}/workers/scripts/bikerblog-recovery/content/v2",
+    "sourceFile": "worker-v8-live-snapshot-2026-11-19.mjs",
+    "sourceBytes": 885436,
+    "sourceSha256": "f50ac3c61e2368cb05e98ed937583edef1979620a9c82243593dc65e1c1f4c81",
+    "activeVersionId": "11fa7928-fdcd-4d18-bbda-fbf46597ef5a",
+    "activeVersionNumber": 8,
+    "activeDeploymentId": "d87a13a5-1490-4b72-9ade-fd4d3c64bfec",
+    "archive": {
+      "articles": 253,
+      "diaryEntries": 235,
+      "authors": 4,
+      "comments": 6,
+      "latestSlug": "diario-2026-11-18",
+      "earliestSlug": "diario-2026-03-03"
+    },
+    "apiRoutes": [
+      "/healthz",
+      "/api/posts",
+      "/api/posts/featured",
+      "/api/meta/stats"
+    ],
+    "htmlRoutes": [
+      "/",
+      "/posts",
+      "/posts/{slug}",
+      "/diario",
+      "/timeline",
+      "/tags/{tag}",
+      "/categories/{category}",
+      "/galleria",
+      "/authors",
+      "/in-memoria",
+      "/podcast"
+    ],
+    "staticRoutes": [
+      "/robots.txt",
+      "/sitemap.xml",
+      "/media/illustrations/que-nadir-garage.webp",
+      "/media/illustrations/nadir-keyboard.webp",
+      "/media/editorial/{filename}.webp"
+    ],
+    "backupNotes": [
+      "Worker source includes the full ARCHIVE and the 31 article cover assignments.",
+      "R2 object contents are not copied; their private bucket, object keys, ETags, sizes and last-modified metadata are recorded.",
+      "No Worker secret bindings were present. The only Worker binding is BLOG_MEDIA to the private bikerblog-media bucket."
+    ]
+  }
+}
