@@ -231,7 +231,7 @@ let body="",title="BikerBlog",description="BikerBlog racconta la nascita e lo sv
   const t=decodeURIComponent(url.pathname.slice(12)),arr=POSTS.filter(p=>p.category===t);title="Categoria "+t+" | BikerBlog";description=arr.length+" articoli nella categoria "+t+" dell'archivio BikerBlog su BikerLink.";body=listing("Categoria: "+t,arr,arr.length+" articoli in questa categoria.");
  }
  else if(url.pathname==="/galleria"){
-  title=lang==="en"?"The garage and its residents | BikerBlog":"Il garage e i suoi inquilini | BikerBlog";description=lang==="en"?"Editorial mockups of Quebracho and Nadir in the BikerBlog garage; they are narrative illustrations, not development photographs.":"Illustrazioni editoriali di Quebracho e Nadir nel garage di BikerBlog: mockup narrativi, non fotografie documentali.";body=galleryPage(lang);translated=true;
+  title=lang==="en"?"The garage and its residents | BikerBlog":"Il garage e i suoi inquilini | BikerBlog";description=lang==="en"?"Editorial illustrations of Mendo, masculine AI co-pilot Rei, Quebracho and Nadir in BikerLink’s coding garage; Nadir rests away from the keyboard.":"Illustrazioni editoriali di Mendo, Rei rappresentato al maschile, Quebracho e Nadir nel garage di BikerLink. Nadir riposa lontano dalla tastiera.";body=galleryPage(lang);translated=true;
  }
  else if(url.pathname==="/authors"){
   title="Autori di BikerBlog | BikerLink";description="Le persone e i personaggi che animano il blog dedicato alla nascita e allo sviluppo di BikerLink.";body='<section class="intro"><span class="eyebrow">Le persone dietro il blog</span><h1>Gli autori</h1></section><div class="grid">'+ARCHIVE.authors.map(a=>'<div class="tile"><div class="pad"><h2>'+esc(a.name)+'</h2><p>'+esc(a.bio)+'</p></div></div>').join("")+'</div>';
