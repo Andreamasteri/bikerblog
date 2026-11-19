@@ -67,7 +67,11 @@
     "subtitle": "Racconti, itinerari, tecnica e vita da biker. Cerca un tema o sfoglia le ultime storie.",
     "searchPlaceholder": "Cerca tra le storie...",
     "deadEnd": "Nessun risultato",
-    "noResults": "Non troviamo storie per questa ricerca. Prova con un altro termine."
+    "noResults": "Non troviamo storie per questa ricerca. Prova con un altro termine.",
+    "eyebrow": "Archivio BikerBlog",
+    "imageCaption": "Una strada, mille storie",
+    "archiveNote": "Ogni articolo è una tappa. Scegli da dove partire.",
+    "loading": "Caricamento storie..."
   },
   "postDetail": {
     "back": "Indietro",
@@ -98,7 +102,12 @@
   },
   "authors": {
     "title": "Le voci",
-    "subtitle": "Le persone che danno forma alle storie di BikerBlog."
+    "subtitle": "Le persone che danno forma alle storie di BikerBlog.",
+    "eyebrow": "Le persone dietro il blog",
+    "imageCaption": "Ogni storia parte da una persona",
+    "loading": "Caricamento autori...",
+    "contributor": "Autore",
+    "postCount": "{{count}} storie"
   },
   "timeline": {
     "days": "Archivio",
@@ -115,11 +124,13 @@
   },
   "tags": {
     "label": "Tag",
-    "noResults": "Non troviamo storie con questo tag."
+    "noResults": "Non troviamo storie con questo tag.",
+    "subtitle": "Racconti collegati da un tema comune."
   },
   "categories": {
     "label": "Categoria",
-    "noResults": "Non troviamo storie in questa categoria."
+    "noResults": "Non troviamo storie in questa categoria.",
+    "subtitle": "Storie selezionate da questo argomento."
   },
   "podcast": {
     "title": "Podcast",
@@ -128,7 +139,10 @@
     "episode": "Episodio",
     "readPost": "Leggi la storia",
     "empty": "Nessun episodio",
-    "emptyDesc": "Non ci sono ancora episodi audio. Torna a trovarci."
+    "emptyDesc": "Non ci sono ancora episodi audio. Torna a trovarci.",
+    "eyebrow": "Audio dal blog",
+    "imageCaption": "Storie da portare in cuffia",
+    "loading": "Caricamento episodi..."
   },
   "notFound": {
     "title": "404 — Pagina non trovata",
