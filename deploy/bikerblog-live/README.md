@@ -2,11 +2,11 @@
 
 This directory separates the exact Cloudflare production snapshot from its reviewed successor. The snapshot is the recovery source; `worker.mjs` is the deployed successor. Neither file is the older `recovery/cloudflare-bikerblog-worker.mjs` checked into the repository.
 
-## Captured production state
+## Original production snapshot (Worker version 8)
 
 - Worker: `bikerblog-recovery`
-- Active version: `11fa7928-fdcd-4d18-bbda-fbf46597ef5a` (version 8)
-- Active deployment: `d87a13a5-1490-4b72-9ade-fd4d3c64bfec`
+- Captured version: `11fa7928-fdcd-4d18-bbda-fbf46597ef5a` (version 8)
+- Captured deployment: `d87a13a5-1490-4b72-9ade-fd4d3c64bfec`
 - Snapshot: `worker-v8-live-snapshot-2026-11-19.mjs`
 - Snapshot size: 885,436 bytes
 - Snapshot SHA-256: `f50ac3c61e2368cb05e98ed937583edef1979620a9c82243593dc65e1c1f4c81`
@@ -16,7 +16,7 @@ This directory separates the exact Cloudflare production snapshot from its revie
 - `workers.dev` and R2 `r2.dev` are disabled on production; the bucket has no custom domains
 - R2 inventory: 35 objects (33 editorial WebP + 2 pre-existing illustrations), 3,342,460 bytes
 
-`backup-metadata.json` records the active deployment, route/domain, binding and R2 object metadata without secrets. `media-manifest.json` records all 31 article-cover assignments, the 2 gallery illustrations, the 2 unused editorial objects and the R2 inventory. The source and manifests were verified against Cloudflare; the production archive contains 253 posts (235 diary entries), four authors and six comments.
+`backup-metadata.json` records the original v8 snapshot's deployment, domain, binding and R2 object metadata without secrets. `media-manifest.json` records all 31 article-cover assignments, the 2 gallery illustrations, the 2 unused editorial objects and the R2 inventory. The source and manifests were verified against Cloudflare; the production archive contains 253 posts (235 diary entries), four authors and six comments.
 
 ## Architecture choice
 
@@ -112,6 +112,20 @@ The exact Worker source from commit `15ba0bb396584403f27fdd1ab201fdc7cd3e0041` w
 
 Production returned 200 for the home (Italian and English), archive, diary, timeline, category, tag, authors, gallery, memorial (Italian and English), podcast (Italian and English), origin article, representative diary article, sitemap, robots, health endpoint, featured-post API and stats API. `/api/posts` still returns 253 records, including 235 diary entries; all 253 slugs are unique. The 235 diary article pages returned 200 and have unique server-rendered titles. The post list, featured post, stats and health endpoints match the pre-publication contract and counts. Sitemap XML parses with 261 URLs: all 257 original URLs plus four translated static variants. The public robots file still references that sitemap.
 
-The first post-publication OpenSEO root crawl read 50/50 pages with no blocked, rate-limited or failed fetches. Its 50 URLs exactly match the original 50-page sample. The earlier sample reported 48 short descriptions and 38 long titles; the new sample reports none of those issues and no duplicate titles. The only content issue in that sample is the 72-word memorial, which remains a concise dedication. Across 18 crawls (five capped at 50 pages and 13 targeted at 10 pages), the deduplicated union covers 58/261 sitemap URLs: 0 blocked, 0 rate-limited, 0 errors and 203 not reached. The crawler repeatedly returned to the same recent article links, so the repeated rows are not counted as added coverage. Other short-page flags concern the memorial and brief utility pages whose missing factual content was not padded.
+The first post-publication OpenSEO root crawl read 50/50 pages with no blocked, rate-limited or failed fetches. Its 50 URLs exactly match the original 50-page sample. The earlier sample reported 48 short descriptions and 38 long titles; the new sample reports none of those issues and no duplicate titles. The only content issue in that sample is the 72-word memorial, which remains a concise dedication. Across 20 production crawls (seven capped at 50 pages and 13 targeted at 10 pages), the deduplicated union covers 58/261 sitemap URLs, plus 9 routes not listed in the sitemap: 0 blocked, 0 rate-limited, 0 errors and 203 sitemap URLs not reached. The crawler repeatedly returned to the same recent article links, so repeated rows are not counted as added coverage. Other short-page flags concern the memorial and brief utility pages whose missing factual content was not padded.
 
 OpenSEO reported one 1,851 ms response for `/posts/diario-2026-11-04`; three immediate production rechecks returned 112–227 ms. This was transient. The author-filter URLs canonicalize to `/diario`, as intended. All 33 allowed media paths returned 200 after publication; the two unassigned R2 objects remain private and their public paths return 404. The bucket still has 35 objects, its `r2.dev` domain is disabled and no custom domains are attached.
+
+## Diary aside revision and current rollback point (2026-11-19)
+
+The production Worker is version 10, deployment `8ae534fb-5622-4871-b186-4b57b2704556`, serving 100% traffic. Its source is commit `15ba0bb396584403f27fdd1ab201fdc7cd3e0041`, SHA-256 `f7ae9f5c251e6335ff72cfd5949b5579c11ff5198108bfba80469cc35e9ce9ee`. Cloudflare's live source hash matched the checked-in file before this revision.
+
+`pre-editorial-revision-state-2026-11-19.json` captures the current version, source commit and hash, production hostname, R2 binding, private-bucket status and inventory. The source is recoverable from the named Git commit; Cloudflare also retains version `0592e5d9-5648-4340-9f8d-3e27bf5511c7`. To roll back, create a 100% deployment with that `version_id` at `/accounts/{account_id}/workers/scripts/bikerblog-recovery/deployments`, using the JSON body recorded in the metadata file. This restores the exact pre-revision code without changing the domain or R2 objects. Verify `/healthz`, `/api/posts`, the 261-URL sitemap, robots, an assigned cover and the R2 private-domain setting after rollback.
+
+Before revision, all 235 diary entries used the same “Commento non richiesto dalla redazione” heading. The section contained 21 distinct lines; nine repeated between 14 and 28 times. The edit removes the repeated heading, keeps the 12 one-off comments and one context-selected instance of each recurring line, and removes 214 duplicate occurrences. Technical narratives, sources, metadata, article paths, cover assignments and the memorial remain unchanged. `scripts/revise-bikerblog-asides.mjs` reproduces and checks the editorial transformation.
+
+## Completing the OpenSEO sitemap crawl
+
+The last 18 audits read 58 distinct sitemap URLs out of 261. Their 50-page runs repeatedly returned to recent articles from the same navigation links; 203 sitemap URLs were not reached, with no blocked, rate-limited or failed fetches.
+
+The crawl plan uses six disjoint groups: five groups of 49 sitemap URLs and one group of 16. A temporary, unlisted `noindex,follow` seed page supplies one exact group per audit, so each run stays within OpenSEO's 50-page cap (one seed plus at most 49 targets). The seed pages are tested on the isolated preview first. On production, compare the union of the crawled URL set with the 261 exact `<loc>` entries, record each audit ID and fetch class, then remove the temporary route and deploy the reviewed Worker. Final checks confirm the seed route returns 404 and the public sitemap, robots, page canonicals, APIs and R2 behavior are unchanged.
