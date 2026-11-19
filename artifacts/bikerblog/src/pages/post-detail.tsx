@@ -16,85 +16,6 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 
-function usePostMeta(
-  slug: string | undefined,
-  title: string,
-  description: string,
-  image: string | undefined,
-  lang: string
-) {
-  useEffect(() => {
-    if (!slug || !title) return;
-
-    const base = window.location.origin + window.location.pathname;
-    const previousTitle = document.title;
-    document.title = `${title} | BikerBlog`;
-
-    const previousMeta = new Map<string, string | null>();
-    const updateMeta = (selector: string, value: string) => {
-      const element = document.querySelector<HTMLMetaElement>(selector);
-      if (!element) return;
-      previousMeta.set(selector, element.getAttribute("content"));
-      element.setAttribute("content", value);
-    };
-    updateMeta('meta[name="description"]', description);
-    updateMeta('meta[property="og:title"]', document.title);
-    updateMeta('meta[property="og:description"]', description);
-    if (image) updateMeta('meta[property="og:image"]', image);
-    updateMeta('meta[name="twitter:title"]', document.title);
-    updateMeta('meta[name="twitter:description"]', description);
-    if (image) updateMeta('meta[name="twitter:image"]', image);
-
-    let canonicalEl = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
-    const createdCanonical = !canonicalEl;
-    const previousCanonical = canonicalEl?.getAttribute("href") ?? null;
-    if (!canonicalEl) {
-      canonicalEl = document.createElement("link");
-      canonicalEl.rel = "canonical";
-      document.head.appendChild(canonicalEl);
-    }
-    canonicalEl.href = base;
-
-    const langs: Array<[string, string]> = [
-      ["it", `${base}?lang=it`],
-      ["en", `${base}?lang=en`],
-      ["x-default", base],
-    ];
-    const previousHreflang = new Map<string, { element: HTMLLinkElement; href: string | null; created: boolean }>();
-    for (const [hreflang, href] of langs) {
-      const id = `hreflang-${hreflang}`;
-      let element = document.getElementById(id) as HTMLLinkElement | null;
-      const created = !element;
-      if (!element) {
-        element = document.createElement("link");
-        element.id = id;
-        element.rel = "alternate";
-        element.setAttribute("hreflang", hreflang);
-        document.head.appendChild(element);
-      }
-      previousHreflang.set(id, { element, href: element.getAttribute("href"), created });
-      element.href = href;
-    }
-
-    return () => {
-      document.title = previousTitle;
-      for (const [selector, value] of previousMeta) {
-        const element = document.querySelector<HTMLMetaElement>(selector);
-        if (!element) continue;
-        if (value === null) element.removeAttribute("content");
-        else element.setAttribute("content", value);
-      }
-      if (canonicalEl) {
-        if (createdCanonical) canonicalEl.remove();
-        else if (previousCanonical !== null) canonicalEl.setAttribute("href", previousCanonical);
-      }
-      for (const [id, previous] of previousHreflang) {
-        if (previous.created) previous.element.remove();
-        else if (previous.href !== null) previous.element.setAttribute("href", previous.href);
-      }
-    };
-  }, [slug, title, description, image, lang]);
-}
 export function PostDetail() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
@@ -109,7 +30,7 @@ export function PostDetail() {
   const useEn = lang === "en";
   const displayTitle = post ? (useEn && post.titleEn ? post.titleEn : post.title) : "";
   const displayExcerpt = post ? (useEn && post.excerptEn ? post.excerptEn : post.excerpt) : "";
-  usePostMeta(slug, displayTitle, displayExcerpt, post?.coverImageUrl, lang);
+  usePageMeta(displayTitle, displayExcerpt, { image: post?.coverImageUrl ?? undefined, language: lang });
 
 
   const likeMutation = useLikePost();
