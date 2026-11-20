@@ -1,0 +1,127 @@
+{
+  "capturedAt": "2026-11-20",
+  "purpose": "Verified production state after publication of approved BikerBlog gallery images and varied diary asides",
+  "repository": {
+    "name": "Andreamasteri/bikerblog",
+    "branch": "main",
+    "commit": "2cfaa37c88d76d7d2ae3b3657ccc2484060e4871",
+    "pullRequest": 9
+  },
+  "worker": {
+    "name": "bikerblog-recovery",
+    "versionId": "e86c35b5-5d06-4bab-bbd7-c2f0ecffed9b",
+    "versionNumber": 16,
+    "deploymentId": "3ce57ff2-b676-44c5-b571-1dbeec82face",
+    "trafficPercent": 100,
+    "sourceGitCommit": "2cfaa37c88d76d7d2ae3b3657ccc2484060e4871",
+    "sourcePath": "deploy/bikerblog-live/worker.mjs",
+    "sourceBytes": 888664,
+    "sourceSha256": "4b9b964105494a1de85cbb9348b69b5dcbe3ebd5d3a3fb56989eb32f3099949c",
+    "compatibilityDate": "2026-11-01",
+    "usageModel": "standard",
+    "workersDev": false,
+    "secrets": [],
+    "bindings": [
+      {
+        "type": "r2_bucket",
+        "name": "BLOG_MEDIA",
+        "bucketName": "bikerblog-media"
+      }
+    ]
+  },
+  "domain": {
+    "id": "4a486b045777cf649372197d0f322b9b0e250977",
+    "hostname": "bikerblog.biker-link.net",
+    "zoneId": "e2ced3f458b06555c6c8e8a403f4b489",
+    "zoneName": "biker-link.net",
+    "service": "bikerblog-recovery",
+    "environment": "production",
+    "enabled": true,
+    "previewsEnabled": false
+  },
+  "media": {
+    "bucket": "bikerblog-media",
+    "private": true,
+    "r2DevEnabled": false,
+    "customDomains": [],
+    "objectCount": 37,
+    "totalBytes": 3819656,
+    "galleryIllustrations": [
+      {
+        "key": "editorial/bikerblog-garage-mendo-rei-2026-11-19.webp",
+        "bytes": 277010,
+        "httpStatus": 200
+      },
+      {
+        "key": "editorial/bikerblog-garage-quebracho-nadir-2026-11-19.webp",
+        "bytes": 200186,
+        "httpStatus": 200
+      }
+    ],
+    "retiredGalleryPathsReturn404": [
+      "/media/illustrations/nadir-keyboard.webp",
+      "/media/illustrations/que-nadir-garage.webp"
+    ],
+    "manifestPath": "deploy/bikerblog-live/media-manifest.json"
+  },
+  "content": {
+    "publishedPosts": 253,
+    "diaryEntries": 235,
+    "uniqueSlugs": 253,
+    "uniqueDiaryAsides": 235,
+    "authors": 4,
+    "sitemapUrls": 261,
+    "sitemapPath": "/sitemap.xml",
+    "robotsPath": "/robots.txt"
+  },
+  "productionVerification": {
+    "checkedAt": "2026-11-20",
+    "routeCount": 20,
+    "allRoutesHttp200": true,
+    "checkedGroups": [
+      "home and archive",
+      "diary, timeline and category",
+      "authors",
+      "Italian and English gallery, podcast and memorial",
+      "representative articles",
+      "sitemap and robots",
+      "posts, featured, stats and health APIs"
+    ],
+    "galleryImageResolution": "1536x1024",
+    "desktopViewport": "1440x1000",
+    "mobileViewport": "390x844",
+    "imagesLoaded": true,
+    "imageAltTextPresent": true,
+    "horizontalOverflow": false,
+    "initialHtmlMetadata": [
+      "title",
+      "description",
+      "canonical",
+      "hreflang it",
+      "hreflang en"
+    ],
+    "openSeoPostDeployCrawl": "Not rerun for this gallery release; the last live crawl result remains 58/261 read, 203 not reached."
+  },
+  "rollback": {
+    "preferred": "Deploy retained production version 13 at 100%. This restores the exact pre-gallery Worker without changing the hostname, BLOG_MEDIA binding or R2 objects.",
+    "versionId": "04bd4255-6d3f-4760-bd31-4d9f5904ca52",
+    "versionNumber": 13,
+    "deploymentId": "5cc66c0b-b120-456c-b59c-d51ba27db625",
+    "sourceGitCommit": "a52c96113c21f38ef03004069c95d4581045b3a2",
+    "sourceSha256": "4dbc92c8dc51082475c1bad7633f6e0b66315230f581ff79be5644939714d95e",
+    "apiMethod": "POST",
+    "apiPath": "/accounts/d116d3d97b133c543d02934be4bc98d2/workers/scripts/bikerblog-recovery/deployments",
+    "body": {
+      "versions": [
+        {
+          "version_id": "04bd4255-6d3f-4760-bd31-4d9f5904ca52",
+          "percentage": 100
+        }
+      ],
+      "annotations": {
+        "workers/message": "Rollback to verified pre-gallery BikerBlog version 13"
+      }
+    },
+    "preReleaseBackupPath": "deploy/bikerblog-live/pre-gallery-release-state-2026-11-19.json"
+  }
+}
