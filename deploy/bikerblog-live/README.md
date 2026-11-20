@@ -160,9 +160,11 @@ PR #9 was squash-merged as `2cfaa37c88d76d7d2ae3b3657ccc2484060e4871`. The deplo
 
 Post-deploy checks against `https://bikerblog.biker-link.net` passed for 20 URLs: home, archive, diary, timeline, diary category, authors, Italian and English gallery/podcast/memorial, representative original and diary articles, sitemap, robots, posts/featured/stats APIs and health. All returned HTTP 200. The API reports 253 posts, 235 diary entries, 253 unique slugs and 4 authors; all 235 diary asides are distinct. The sitemap contains 261 URLs and `robots.txt` still references it. The two approved R2 images returned HTTP 200 at 277,010 and 200,186 bytes; the two old low-resolution gallery paths and an unlisted key returned 404 through the Worker. Italian and English initial HTML include title, description, canonical and language alternates. Chromium verified both images decode at 1536×1024 on desktop (1440×1000) and mobile (390×844), with no horizontal overflow or missing alt text.
 
+As a separate availability check, each of the 261 exact `<loc>` URLs in the live sitemap was requested directly by browser navigation at four concurrent requests. All 261 returned HTTP 200; there were no network errors or non-200 responses. This confirms the 203 URLs OpenSEO did not reach are crawl-coverage gaps, not inaccessible pages.
+
 The pre-release backup `pre-gallery-release-state-2026-11-19.json` records the prior version 13, its deployment, source hash, Worker Domain and binding. Rollback is a 100% deployment of retained version `04bd4255-6d3f-4760-bd31-4d9f5904ca52`; the exact API request body is in that file. This restores the pre-gallery Worker without changing the domain or R2 objects. The current live state is recorded in `current-live-state-2026-11-20.json`.
 
-The live OpenSEO crawl coverage remains the separate result recorded above (58 of 261 sitemap URLs read, 203 not reached). The post-deploy checks here were direct route/API/image checks and are not an additional OpenSEO crawl.
+The latest live OpenSEO crawl remains 58 of 261 sitemap URLs read and 203 not reached. That result describes OpenSEO coverage only: the direct live check above reached all 261 sitemap URLs successfully. OpenSEO was not rerun for this image release.
 
 ## Daily editorial update
 

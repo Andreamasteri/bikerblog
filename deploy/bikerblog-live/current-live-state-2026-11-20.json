@@ -78,6 +78,13 @@
     "checkedAt": "2026-11-20",
     "routeCount": 20,
     "allRoutesHttp200": true,
+    "directSitemapUrlCheck": {
+      "urlsRequested": 261,
+      "http200": 261,
+      "non200": 0,
+      "networkErrors": 0,
+      "method": "Direct browser GET navigations with four concurrent pages"
+    },
     "checkedGroups": [
       "home and archive",
       "diary, timeline and category",
@@ -100,7 +107,7 @@
       "hreflang it",
       "hreflang en"
     ],
-    "openSeoPostDeployCrawl": "Not rerun for this gallery release; the last live crawl result remains 58/261 read, 203 not reached."
+    "openSeoPostDeployCrawl": "Not rerun for this gallery release; the last live OpenSEO crawl remains 58/261 read, 203 not reached. The separate direct check successfully requested all 261 sitemap URLs."
   },
   "rollback": {
     "preferred": "Deploy retained production version 13 at 100%. This restores the exact pre-gallery Worker without changing the hostname, BLOG_MEDIA binding or R2 objects.",
