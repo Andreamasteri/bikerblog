@@ -41,7 +41,7 @@
   "media": {
     "bucket": "bikerblog-media",
     "private": true,
-    "r2DevEnabled": true,
+    "r2DevEnabled": false,
     "managedDomain": {
       "enabled": false,
       "bucketId": "9a47c48f0f1749b08161c3e8007ae143",
