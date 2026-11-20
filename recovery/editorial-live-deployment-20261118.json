@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-18",
+  "account_id": "d116d3d97b133c543d02934be4bc98d2",
+  "bucket": "bikerblog-media",
+  "prefix": "editorial/",
+  "uploaded_objects": 33,
+  "remote_sha256_verified": 33,
+  "remote_sha256_failures": 0,
+  "asset_bytes": 3336026,
+  "preexisting_objects_untouched": [
+    "illustrations/nadir-keyboard.webp",
+    "illustrations/que-nadir-garage.webp"
+  ],
+  "worker": "bikerblog-recovery",
+  "domain": "bikerblog.biker-link.net",
+  "deployment_id": "11fa7928fdcd4d18bbdafbf46597ef5a",
+  "worker_tag": "1e31937026a14e81993a7ad5b0dc5af1",
+  "deployed_source_bytes": 876835,
+  "cover_assignments": 31,
+  "cover_images_unique": 31,
+  "original_cover_assignments": 25,
+  "latest_2026_11_12_to_17_additional_assignments": 6,
+  "live_worker_binding": "BLOG_MEDIA",
+  "worker_domain_enabled": true,
+  "smoke_check": "Cloudflare Browser Rendering returned successful HTML for /diario; further page checks were rate limited with 429; source, R2 content and domain verified through Cloudflare API.",
+  "rollback": "Restore the previous Cloudflare Worker version if necessary; the R2 images are not deleted.",
+  "notes": "The live Worker was patched from its current source, not the stale checked-in recovery Worker."
+}
