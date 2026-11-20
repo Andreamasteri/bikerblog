@@ -15,6 +15,7 @@ import remarkGfm from "remark-gfm";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
+import { usePageMeta } from "@/lib/use-page-meta";
 
 export function PostDetail() {
   const { t, i18n } = useTranslation();

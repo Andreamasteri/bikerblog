@@ -11,10 +11,10 @@ const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.
 
 export function Tags() {
   const { t, i18n } = useTranslation();
+  const { tag } = useParams();
   const tagLabel = tag?.replace(/-/g, " ") ?? "";
   usePageMeta(tagLabel ? `#${tagLabel}` : t("tags.label"), `${t("tags.subtitle")} ${tagLabel}`, { language: i18n.language });
   const { postTitle, postExcerpt } = usePostLocale();
-  const { tag } = useParams();
   const { data: posts, isLoading } = useListPosts({ tag });
   const dateLocale = i18n.language.startsWith("it") ? it : enUS;
 

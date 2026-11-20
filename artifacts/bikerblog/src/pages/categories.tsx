@@ -12,10 +12,10 @@ const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.
 
 export function Categories() {
   const { t, i18n } = useTranslation();
+  const { category } = useParams();
   const categoryLabel = category?.replace(/-/g, " ") ?? "";
   usePageMeta(categoryLabel || t("categories.label"), `${t("categories.subtitle")} ${categoryLabel}`, { language: i18n.language });
   const { postTitle, postExcerpt } = usePostLocale();
-  const { category } = useParams();
   const validCategory = category as ListPostsCategory;
   const { data: posts, isLoading } = useListPosts({ category: validCategory });
   const dateLocale = i18n.language.startsWith("it") ? it : enUS;
