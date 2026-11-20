@@ -1,47 +1,83 @@
-import { useGetBlogStats, useGetFeaturedPost, useListPopularPosts, useListPosts, useListTags, useRecordVisit } from "@workspace/api-client-react";
+import {
+  useGetBlogStats,
+  useGetFeaturedPost,
+  useListPopularPosts,
+  useListPosts,
+  useListTags,
+  useRecordVisit,
+} from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { useEffect } from "react";
 import { format } from "date-fns";
-import { Calendar, Clock, MessageSquare, ThumbsUp, Headphones, ChevronRight, Wrench, Eye } from "lucide-react";
+import { enUS, it } from "date-fns/locale";
+import {
+  ArrowUpRight,
+  Bike,
+  Calendar,
+  ChevronRight,
+  Clock,
+  Compass,
+  Gauge,
+  Headphones,
+  MessageSquare,
+  ThumbsUp,
+  Wrench,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
-import { LanguageSwitch } from "@/components/language-switch";
+import { usePageMeta } from "@/lib/use-page-meta";
 
-function StaticHero() {
-  const { t } = useTranslation();
+const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
+
+const PILLARS = [
+  {
+    key: "road",
+    image: MEDIA + "/route.webp",
+    icon: Compass,
+    label: "home.pillarRoadLabel",
+    title: "home.pillarRoadTitle",
+    description: "home.pillarRoadDesc",
+  },
+  {
+    key: "tech",
+    image: MEDIA + "/telemetry.webp",
+    icon: Gauge,
+    label: "home.pillarTechLabel",
+    title: "home.pillarTechTitle",
+    description: "home.pillarTechDesc",
+  },
+  {
+    key: "garage",
+    image: MEDIA + "/workshop.webp",
+    icon: Wrench,
+    label: "home.pillarGarageLabel",
+    title: "home.pillarGarageTitle",
+    description: "home.pillarGarageDesc",
+  },
+];
+
+function dateLabel(value: string, language: string) {
+  return format(new Date(value), "d MMM yyyy", {
+    locale: language.startsWith("it") ? it : enUS,
+  });
+}
+
+function AuthorMark({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
+  if (avatarUrl) {
+    return <img src={avatarUrl} alt="" className="bb-author-avatar" />;
+  }
+
   return (
-    <section className="mb-16">
-      <div className="relative h-[60vh] overflow-hidden bg-black flex items-end">
-        <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-black" />
-        <div className="absolute inset-0 opacity-10" style={{
-          backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,.15) 39px,rgba(255,255,255,.15) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,.15) 39px,rgba(255,255,255,.15) 40px)"
-        }} />
-        <div className="relative z-10 p-8 md:p-12 w-full max-w-4xl">
-          <div className="flex items-center gap-3 mb-6">
-            <Wrench className="h-6 w-6 text-primary" />
-            <span className="text-xs font-bold uppercase tracking-[0.3em] text-primary">{t("home.heroTagline")}</span>
-          </div>
-          <h1 className="text-5xl md:text-7xl font-display font-bold text-white mb-4 leading-tight uppercase tracking-tighter">
-            BikerBlog
-          </h1>
-          <p className="text-lg md:text-xl text-gray-300 mb-8 max-w-2xl font-serif italic">
-            {t("home.heroDesc")}
-          </p>
-          <Link
-            href="/posts"
-            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors"
-          >
-            {t("home.readArticles")} <ChevronRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </div>
-    </section>
+    <span className="bb-author-avatar bb-author-initial" aria-hidden="true">
+      {name.slice(0, 1).toUpperCase()}
+    </span>
   );
 }
 
 export function Home() {
   const { t, i18n } = useTranslation();
+  usePageMeta(t("home.heroTitle"), t("home.heroDesc"), { language: i18n.language });
   const { postTitle, postExcerpt } = usePostLocale();
   const { data: featuredPost, isLoading: featuredLoading } = useGetFeaturedPost();
   const { data: recentPosts, isLoading: recentLoading } = useListPosts({});
@@ -56,175 +92,237 @@ export function Home() {
     recordVisit(undefined, { onSuccess: () => { void refetchStats(); } });
   }, [recordVisit, refetchStats]);
 
-  const podcastPosts = recentPosts?.filter(p => p.audioUrl).slice(0, 3) ?? [];
-  const anyHasEn = recentPosts?.some(p => !!p.bodyEn) ?? false;
+  const podcastPosts = recentPosts?.filter((post) => post.audioUrl).slice(0, 3) ?? [];
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm md:text-base italic text-muted-foreground/70 tracking-widest font-serif select-none">
-          {t("home.motto")}
-        </p>
-        <div className="flex items-center gap-3">
-          {stats?.totalVisits !== undefined && stats.totalVisits > 0 && (
-            <span className="flex items-center gap-1.5 text-xs font-mono font-semibold text-green-500 border border-green-500/30 bg-green-500/5 px-2.5 py-1 rounded-sm select-none">
-              <Eye className="w-3.5 h-3.5" />
-              {stats.totalVisits.toLocaleString("it-IT")}
-            </span>
-          )}
-          <LanguageSwitch
-            lang={i18n.language as "it" | "en"}
-            onChange={(l) => { void i18n.changeLanguage(l); }}
-            hasEn={anyHasEn}
-          />
+    <div className="bb-home">
+      <div className="container mx-auto px-4">
+        <div className="bb-home-mastline">
+          <span>{t("home.motto")}</span>
+          <span className="bb-mastline-label">{t("home.mastlineLabel")}</span>
         </div>
       </div>
 
-      {featuredLoading ? (
-        <div className="h-[60vh] bg-muted animate-pulse mb-12"></div>
-      ) : featuredPost ? (
-        <section className="mb-16">
-          <Link href={`/posts/${featuredPost.slug}`} className="group relative block h-[60vh] overflow-hidden bg-black">
-            <img src={featuredPost.coverImageUrl} alt={postTitle(featuredPost)} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity duration-700" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-            <div className="absolute bottom-0 left-0 p-8 md:p-12 w-full max-w-4xl">
-              <Badge className="mb-4 bg-primary text-primary-foreground uppercase tracking-widest">{featuredPost.category.replace('-', ' ')}</Badge>
-              <h1 className="text-4xl md:text-6xl font-display font-bold text-white mb-4 leading-tight group-hover:text-primary transition-colors">{postTitle(featuredPost)}</h1>
-              <p className="text-lg md:text-xl text-gray-300 mb-6 line-clamp-2 max-w-2xl">{postExcerpt(featuredPost)}</p>
-              <div className="flex items-center gap-6 text-gray-400 text-sm font-medium">
-                <div className="flex items-center gap-2">
-                  <img src={featuredPost.author.avatarUrl} alt={featuredPost.author.name} className="w-8 h-8 rounded-full" />
-                  <span>{featuredPost.author.name}</span>
+      <section className="bb-hero" aria-labelledby="home-title">
+        <img className="bb-hero-image" src={MEDIA + "/road.webp"} alt="" aria-hidden="true" />
+        <div className="bb-hero-shade" aria-hidden="true" />
+        <div className="container mx-auto px-4 bb-hero-inner">
+          <div className="bb-hero-copy">
+            <p className="bb-eyebrow">
+              <Bike className="h-4 w-4" aria-hidden="true" />
+              {t("home.heroTagline")}
+            </p>
+            <h1 id="home-title" className="bb-hero-title">{t("home.heroTitle")}</h1>
+            <p className="bb-hero-description">{t("home.heroDesc")}</p>
+            <div className="bb-hero-actions">
+              <Link href="/posts" className="bb-button bb-button-primary">
+                {t("home.readArticles")}
+                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+              <a href="#ultime-storie" className="bb-text-link">
+                {t("home.latestStories")}
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+          <div className="bb-hero-index" aria-hidden="true">
+            <span>01</span>
+            <span className="bb-hero-index-line" />
+            <span>03</span>
+          </div>
+          <div className="bb-hero-caption">{t("home.heroCaption")}</div>
+        </div>
+      </section>
+
+      <section className="container mx-auto px-4 bb-pillars" aria-labelledby="pillars-title">
+        <div className="bb-section-heading">
+          <div>
+            <p className="bb-section-kicker">{t("home.sectionsEyebrow")}</p>
+            <h2 id="pillars-title">{t("home.sectionsTitle")}</h2>
+          </div>
+          <p>{t("home.sectionsDesc")}</p>
+        </div>
+
+        <div className="bb-pillar-grid">
+          {PILLARS.map((pillar, index) => {
+            const Icon = pillar.icon;
+            return (
+              <article key={pillar.key} className="bb-pillar-card">
+                <Link href="/posts" className="bb-pillar-image-link" aria-label={t(pillar.title)}>
+                  <img src={pillar.image} alt="" loading="lazy" />
+                  <span className="bb-pillar-number">0{index + 1}</span>
+                  <span className="bb-pillar-open" aria-hidden="true">
+                    <ArrowUpRight className="h-5 w-5" />
+                  </span>
+                </Link>
+                <div className="bb-pillar-copy">
+                  <p className="bb-pillar-label"><Icon className="h-4 w-4" aria-hidden="true" />{t(pillar.label)}</p>
+                  <h3><Link href="/posts">{t(pillar.title)}</Link></h3>
+                  <p>{t(pillar.description)}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  <span>{format(new Date(featuredPost.publishedAt), "MMM d, yyyy")}</span>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      {(featuredLoading || featuredPost) && (
+        <section className="container mx-auto px-4 bb-featured" aria-labelledby="featured-title">
+          <div className="bb-section-heading bb-section-heading-compact">
+            <div>
+              <p className="bb-section-kicker">{t("home.featuredEyebrow")}</p>
+              <h2 id="featured-title">{t("home.featuredTitle")}</h2>
+            </div>
+            <Link href="/posts" className="bb-text-link">
+              {t("home.viewAll")} <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+
+          {featuredLoading ? (
+            <div className="bb-featured-skeleton" aria-hidden="true" />
+          ) : featuredPost && (
+            <article className="bb-featured-card">
+              <Link href={`/posts/${featuredPost.slug}`} className="bb-featured-image">
+                <img src={featuredPost.coverImageUrl} alt={postTitle(featuredPost)} loading="lazy" />
+              </Link>
+              <div className="bb-featured-copy">
+                <Badge className="bb-category-badge">{featuredPost.category.replace(/-/g, " ")}</Badge>
+                <h3><Link href={`/posts/${featuredPost.slug}`}>{postTitle(featuredPost)}</Link></h3>
+                <p>{postExcerpt(featuredPost)}</p>
+                <div className="bb-post-meta">
+                  <span className="bb-author-meta"><AuthorMark name={featuredPost.author.name} avatarUrl={featuredPost.author.avatarUrl} />{featuredPost.author.name}</span>
+                  <span><Calendar className="h-3.5 w-3.5" aria-hidden="true" />{dateLabel(featuredPost.publishedAt, i18n.language)}</span>
+                  <span><Clock className="h-3.5 w-3.5" aria-hidden="true" />{featuredPost.readingMinutes} {t("postDetail.minRead")}</span>
                 </div>
               </div>
-            </div>
-          </Link>
+            </article>
+          )}
         </section>
-      ) : (
-        <StaticHero />
       )}
 
-      {/* Podcast section */}
       {!recentLoading && podcastPosts.length > 0 && (
-        <section className="mb-16">
-          <div className="flex items-center justify-between mb-8 border-b pb-4">
-            <h2 className="text-3xl font-display font-bold uppercase tracking-tight flex items-center gap-3">
-              <Headphones className="w-7 h-7 text-primary" />
-              {t("home.listen")}
-            </h2>
-            <Link href="/podcast" className="text-primary hover:underline font-bold uppercase text-sm tracking-wider">{t("home.allPosts")}</Link>
+        <section className="container mx-auto px-4 bb-podcast-strip" aria-labelledby="podcast-strip-title">
+          <div className="bb-section-heading bb-section-heading-compact">
+            <div>
+              <p className="bb-section-kicker">{t("home.audioEyebrow")}</p>
+              <h2 id="podcast-strip-title"><Headphones className="h-6 w-6" aria-hidden="true" />{t("home.listen")}</h2>
+            </div>
+            <Link href="/podcast" className="bb-text-link">{t("home.allEpisodes")} <ChevronRight className="h-4 w-4" aria-hidden="true" /></Link>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {podcastPosts.map(post => (
-              <Link key={post.id} href={`/posts/${post.slug}`} className="group flex flex-col border border-border hover:border-primary transition-colors bg-muted/10 hover:bg-muted/30 p-5">
-                <div className="flex items-center gap-2 mb-3 text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
-                  <Headphones className="w-3.5 h-3.5" />
-                  <span>{t("home.audioEpisode")}</span>
-                </div>
-                <h3 className="font-display font-bold text-base leading-tight mb-2 group-hover:text-primary transition-colors line-clamp-2">{postTitle(post)}</h3>
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-4 flex-1">{postExcerpt(post)}</p>
-                <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mt-auto">
-                  <span className="uppercase tracking-wider">{post.author.name}</span>
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {post.readingMinutes} min</span>
-                </div>
+          <div className="bb-audio-grid">
+            {podcastPosts.map((post) => (
+              <Link key={post.id} href={`/posts/${post.slug}`} className="bb-audio-card">
+                <span className="bb-audio-icon"><Headphones className="h-4 w-4" aria-hidden="true" /></span>
+                <span className="bb-audio-content">
+                  <span className="bb-audio-label">{t("home.audioEpisode")}</span>
+                  <span className="bb-audio-title">{postTitle(post)}</span>
+                  <span className="bb-audio-byline">{post.author.name} <span aria-hidden="true">·</span> {post.readingMinutes} {t("postDetail.minRead")}</span>
+                </span>
+                <ChevronRight className="h-4 w-4 bb-audio-arrow" aria-hidden="true" />
               </Link>
             ))}
           </div>
         </section>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-        <div className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-8 border-b pb-4">
-            <h2 className="text-3xl font-display font-bold uppercase tracking-tight">{t("home.recentDispatches")}</h2>
-            <Link href="/posts" className="text-primary hover:underline font-bold uppercase text-sm tracking-wider">{t("home.viewAll")}</Link>
+      <section id="ultime-storie" className="container mx-auto px-4 bb-stories" aria-labelledby="stories-title">
+        <div className="bb-section-heading bb-section-heading-compact">
+          <div>
+            <p className="bb-section-kicker">{t("home.recentEyebrow")}</p>
+            <h2 id="stories-title">{t("home.recentDispatches")}</h2>
           </div>
+          <Link href="/posts" className="bb-text-link">{t("home.viewAll")} <ChevronRight className="h-4 w-4" aria-hidden="true" /></Link>
+        </div>
 
-          <div className="space-y-12">
+        <div className="bb-main-grid">
+          <div className="bb-story-list">
             {recentLoading ? (
-              Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-64 bg-muted animate-pulse"></div>)
-            ) : recentPosts?.slice(0, 5).map(post => (
-              <article key={post.id} className="grid md:grid-cols-5 gap-6 group">
-                <Link href={`/posts/${post.slug}`} className="md:col-span-2 block overflow-hidden bg-muted aspect-[4/3] md:aspect-auto h-full">
-                  <img src={post.coverImageUrl} alt={postTitle(post)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              Array.from({ length: 3 }).map((_, index) => <div key={index} className="bb-story-skeleton" aria-hidden="true" />)
+            ) : recentPosts?.slice(0, 5).map((post) => (
+              <article key={post.id} className="bb-story-row">
+                <Link href={`/posts/${post.slug}`} className="bb-story-image">
+                  <img src={post.coverImageUrl} alt={postTitle(post)} loading="lazy" />
                 </Link>
-                <div className="md:col-span-3 flex flex-col justify-center">
-                  <Link href={`/categories/${post.category}`} className="text-xs font-bold uppercase tracking-widest text-primary mb-2 hover:underline">{post.category.replace('-', ' ')}</Link>
-                  <Link href={`/posts/${post.slug}`}>
-                    <h3 className="text-2xl font-display font-bold mb-3 group-hover:text-primary transition-colors leading-tight">{postTitle(post)}</h3>
-                  </Link>
-                  <p className="text-muted-foreground mb-4 line-clamp-2">{postExcerpt(post)}</p>
-                  <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground mt-auto">
-                    <span className="uppercase tracking-wider">{post.author.name}</span>
-                    <span>&bull;</span>
-                    <span>{format(new Date(post.publishedAt), "MMM d")}</span>
-                    <span>&bull;</span>
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {post.readingMinutes} min</span>
-                    {post.audioUrl && (
-                      <>
-                        <span>&bull;</span>
-                        <span className="flex items-center gap-1 text-primary"><Headphones className="w-3 h-3" /> audio</span>
-                      </>
-                    )}
+                <div className="bb-story-copy">
+                  <Link href={`/categories/${post.category}`} className="bb-story-category">{post.category.replace(/-/g, " ")}</Link>
+                  <h3><Link href={`/posts/${post.slug}`}>{postTitle(post)}</Link></h3>
+                  <p>{postExcerpt(post)}</p>
+                  <div className="bb-post-meta">
+                    <span>{post.author.name}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{dateLabel(post.publishedAt, i18n.language)}</span>
+                    <span aria-hidden="true">·</span>
+                    <span><Clock className="h-3.5 w-3.5" aria-hidden="true" />{post.readingMinutes} {t("postDetail.minRead")}</span>
                   </div>
                 </div>
               </article>
             ))}
           </div>
-        </div>
 
-        <aside className="space-y-12">
-          <div>
-            <h3 className="text-xl font-display font-bold uppercase tracking-tight mb-6 border-b pb-2">{t("home.mostRead")}</h3>
-            <div className="space-y-6">
-              {popularLoading ? (
-                 Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 bg-muted animate-pulse"></div>)
-              ) : popularPosts?.map((post, i) => (
-                <Link key={post.id} href={`/posts/${post.slug}`} className="flex gap-4 group">
-                  <span className="text-4xl font-display font-bold text-muted/30 group-hover:text-primary/20 transition-colors">0{i + 1}</span>
-                  <div>
-                    <h4 className="font-display font-bold group-hover:text-primary transition-colors leading-tight mb-1">{postTitle(post)}</h4>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><ThumbsUp className="w-3 h-3"/> {post.likeCount}</span>
-                      <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3"/> {post.commentCount}</span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-xl font-display font-bold uppercase tracking-tight mb-6 border-b pb-2">{t("home.categories")}</h3>
-            <ul className="space-y-2">
-              {stats?.categories.map(cat => (
-                <li key={cat.category}>
-                  <Link href={`/categories/${cat.category}`} className="flex items-center justify-between group py-2">
-                    <span className="font-medium uppercase tracking-wider text-sm group-hover:text-primary transition-colors">{cat.category.replace('-', ' ')}</span>
-                    <span className="text-xs bg-muted px-2 py-1 text-muted-foreground font-mono">{cat.count}</span>
+          <aside className="bb-sidebar">
+            <section className="bb-sidebar-panel" aria-labelledby="popular-title">
+              <div className="bb-sidebar-heading">
+                <p className="bb-section-kicker">{t("home.readerChoice")}</p>
+                <h3 id="popular-title">{t("home.mostRead")}</h3>
+              </div>
+              <div className="bb-popular-list">
+                {popularLoading ? (
+                  Array.from({ length: 3 }).map((_, index) => <div key={index} className="bb-popular-skeleton" aria-hidden="true" />)
+                ) : popularPosts?.map((post, index) => (
+                  <Link key={post.id} href={`/posts/${post.slug}`} className="bb-popular-row">
+                    <span className="bb-popular-index">0{index + 1}</span>
+                    <span className="bb-popular-copy">
+                      <span className="bb-popular-title">{postTitle(post)}</span>
+                      <span className="bb-popular-stats">
+                        <span><ThumbsUp className="h-3 w-3" aria-hidden="true" />{post.likeCount}</span>
+                        <span><MessageSquare className="h-3 w-3" aria-hidden="true" />{post.commentCount}</span>
+                      </span>
+                    </span>
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+                ))}
+              </div>
+            </section>
 
-          <div>
-            <h3 className="text-xl font-display font-bold uppercase tracking-tight mb-6 border-b pb-2">{t("home.tags")}</h3>
-            <div className="flex flex-wrap gap-2">
-              {tags?.map(tag => (
-                <Link key={tag.tag} href={`/tags/${tag.tag}`}>
-                  <Badge variant="outline" className="uppercase text-xs tracking-wider hover:border-primary hover:text-primary transition-colors cursor-pointer rounded-none">
+            <section className="bb-sidebar-panel" aria-labelledby="categories-title">
+              <div className="bb-sidebar-heading">
+                <p className="bb-section-kicker">{t("home.findYourWay")}</p>
+                <h3 id="categories-title">{t("home.categories")}</h3>
+              </div>
+              <ul className="bb-category-list">
+                {stats?.categories?.map((category) => (
+                  <li key={category.category}>
+                    <Link href={`/categories/${category.category}`}>
+                      <span>{category.category.replace(/-/g, " ")}</span>
+                      <span className="bb-category-count">{category.count}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="bb-sidebar-panel" aria-labelledby="tags-title">
+              <div className="bb-sidebar-heading">
+                <p className="bb-section-kicker">{t("home.keywordsEyebrow")}</p>
+                <h3 id="tags-title">{t("home.tags")}</h3>
+              </div>
+              <div className="bb-tag-list">
+                {tags?.map((tag) => (
+                  <Link key={tag.tag} href={`/tags/${tag.tag}`}>
                     {tag.tag}
-                  </Badge>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </aside>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <div className="bb-home-signoff">
+        <div className="container mx-auto px-4">
+          <p><Bike className="h-4 w-4" aria-hidden="true" />{t("home.signoff")}</p>
+          <Link href="/posts">{t("home.readArticles")} <ArrowUpRight className="h-4 w-4" aria-hidden="true" /></Link>
+        </div>
       </div>
     </div>
   );

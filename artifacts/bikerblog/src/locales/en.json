@@ -1,104 +1,159 @@
 {
   "nav": {
-    "posts": "Posts",
+    "posts": "Stories",
     "podcast": "Podcast",
     "timeline": "Timeline",
-    "authors": "Authors"
+    "authors": "Contributors",
+    "brandCaption": "The BikerLink blog",
+    "main": "Main navigation",
+    "downloadApp": "Get the app",
+    "language": "Choose a language",
+    "switchItalian": "Switch to Italian",
+    "switchEnglish": "Switch to English",
+    "skipToContent": "Skip to content"
   },
   "menu": {
     "open": "Open menu",
     "close": "Close menu"
   },
   "footer": {
-    "tagline": "For those who live for the open road. Ride reports, gear reviews, and technical tips.",
-    "copyright": "© {{year}} BikerBlog. All rights reserved.",
+    "tagline": "Stories from the road, ideas, practical know-how, and the people we meet along the way.",
+    "copyright": "© {{year}} BikerBlog, the BikerLink blog. All rights reserved.",
     "inMemoria": "In memory of Mauri",
-    "downloadApk": "Download Android APK"
+    "downloadApk": "Download the Android app",
+    "moreLinks": "More links"
   },
   "home": {
-    "motto": "— How we built it",
-    "heroTagline": "Est. on the open road",
-    "heroDesc": "Ride reports, gear reviews, and technical tips for those who live for the open road.",
-    "readArticles": "Read the posts",
-    "listen": "Listen",
+    "motto": "The road moves on. The stories stay.",
+    "heroTagline": "The BikerLink blog",
+    "heroDesc": "Rides, passion, and biker life, told by people who see every outing as a story worth sharing.",
+    "readArticles": "Explore the blog",
+    "listen": "Stories to listen to",
     "allPosts": "All posts",
     "audioEpisode": "Audio episode",
-    "recentDispatches": "Recent Dispatches",
-    "viewAll": "View All",
-    "mostRead": "Most Read",
+    "recentDispatches": "Latest stories",
+    "viewAll": "All stories",
+    "mostRead": "Most read",
     "categories": "Categories",
-    "tags": "Tags"
+    "tags": "Tags",
+    "mastlineLabel": "BikerLink / Road journal",
+    "heroTitle": "Road. People. Two wheels.",
+    "latestStories": "Latest stories",
+    "heroCaption": "Ride when you want. Never ride alone.",
+    "sectionsEyebrow": "Three ways to live the ride",
+    "sectionsTitle": "From the map to the garage",
+    "sectionsDesc": "Ideas and stories for those who love to ride, understand their bike, and keep it ready for the next turn.",
+    "pillarRoadLabel": "Out on the road",
+    "pillarRoadTitle": "Open route",
+    "pillarRoadDesc": "Routes, stops, and roads worth riding again.",
+    "pillarTechLabel": "Tech and know-how",
+    "pillarTechTitle": "Behind the visor",
+    "pillarTechDesc": "Tools, data, and useful ideas explained in biker language.",
+    "pillarGarageLabel": "Bike care",
+    "pillarGarageTitle": "In the garage",
+    "pillarGarageDesc": "Gear, maintenance, and the details that make a difference.",
+    "featuredEyebrow": "The editors' pick",
+    "featuredTitle": "In the spotlight",
+    "audioEyebrow": "For your next ride",
+    "allEpisodes": "All episodes",
+    "recentEyebrow": "Fresh from the blog",
+    "readerChoice": "Reader favorites",
+    "findYourWay": "Browse by subject",
+    "keywordsEyebrow": "Follow a thread",
+    "signoff": "BikerBlog — the BikerLink blog. See you out there."
   },
   "posts": {
-    "title": "The Archives",
-    "subtitle": "Every ride, every wrench turned, every story from the road. Search the archives or browse by latest.",
-    "searchPlaceholder": "Search dispatches...",
-    "deadEnd": "Dead End",
-    "noResults": "No posts found matching your search. Try a different route."
+    "title": "Stories from the road",
+    "subtitle": "Rides, routes, practical know-how, and biker life. Search a subject or browse the latest stories.",
+    "searchPlaceholder": "Search stories...",
+    "deadEnd": "No stories here",
+    "noResults": "We couldn't find a story for that search. Try another term.",
+    "eyebrow": "BikerBlog archive",
+    "imageCaption": "One road, a thousand stories",
+    "archiveNote": "Every article is a stop along the way. Pick where to start.",
+    "loading": "Loading stories..."
   },
   "postDetail": {
     "back": "Back",
     "minRead": "min read",
     "likes": "Likes",
     "comments": "Comments",
-    "dailyMaxim": "Quote of the day",
+    "dailyMaxim": "A thought to take with you",
     "listenEpisode": "Listen to this episode",
     "play": "Play",
     "pause": "Pause",
-    "aboutAuthor": "About the Author",
-    "discuss": "Discuss ({{count}})",
-    "leaveComment": "Leave a comment",
+    "aboutAuthor": "About the writer",
+    "discuss": "Discussion ({{count}})",
+    "leaveComment": "Add your comment",
     "yourName": "Your Name",
-    "yourThoughts": "What's on your mind?",
-    "posting": "Posting...",
-    "postComment": "Post Comment",
+    "yourThoughts": "What do you think?",
+    "posting": "Sending...",
+    "postComment": "Post comment",
     "commentPosted": "Comment posted",
-    "commentPostedDesc": "Your voice has been added to the mix.",
+    "commentPostedDesc": "Your comment has been added.",
     "commentError": "Error",
-    "commentErrorDesc": "Failed to post comment. Try again.",
+    "commentErrorDesc": "Your comment couldn't be posted. Try again.",
     "commentLikeError": "Failed to like comment. Try again.",
-    "noComments": "No comments yet. Be the first.",
-    "deadEnd": "Dead End",
-    "notFound": "The post you're looking for doesn't exist or has been moved.",
-    "backToArchives": "Back to Archives",
-    "translatedNote": "Auto-translated — original content in Italian."
+    "noComments": "No comments yet. Start the conversation.",
+    "deadEnd": "No results",
+    "notFound": "This story isn't available or has moved.",
+    "backToArchives": "Back to stories",
+    "translatedNote": "Automatically translated. The original content is in Italian.",
+    "translationUnavailable": "The English version of this story isn't available yet."
   },
   "authors": {
-    "title": "The Writers",
-    "subtitle": "The grease monkeys, long-haulers, and speed freaks behind the dispatches."
+    "title": "The voices",
+    "subtitle": "Meet the people behind BikerBlog's stories.",
+    "eyebrow": "The people behind the blog",
+    "imageCaption": "Every story starts with someone",
+    "loading": "Loading contributors...",
+    "contributor": "Contributor",
+    "postCount": "{{count}} stories"
   },
   "timeline": {
-    "days": "73 days",
+    "days": "Chronological archive",
     "title": "Timeline",
-    "subtitle": "The full story of BikerBlog — from March 12 to May 23, 2026. Every day, every sprint, every twist.",
+    "subtitle": "A route through the articles and moments shared on BikerBlog.",
     "all": "All",
     "march": "March",
     "april": "April",
     "may": "May",
     "posts_one": "post",
     "posts_other": "posts",
-    "noPost": "No posts",
-    "noPostDesc": "No posts found for this month."
+    "noPost": "No stories",
+    "noPostDesc": "There are no stories for this period.",
+    "filterByMonth": "Filter by month",
+    "loading": "Loading timeline..."
   },
   "tags": {
     "label": "Tag",
-    "noResults": "No posts found with this tag."
+    "noResults": "No stories found with this tag.",
+    "subtitle": "Stories connected by a shared subject."
   },
   "categories": {
     "label": "Category",
-    "noResults": "No posts found in this category."
+    "noResults": "No stories found in this category.",
+    "subtitle": "Stories collected around this subject."
   },
   "podcast": {
     "title": "Podcast",
-    "subtitle": "All BikerBlog audio episodes. Listen to the best dispatches from the road.",
-    "rss": "RSS Feed",
+    "subtitle": "Audio episodes and stories for the road.",
+    "rss": "RSS feed",
     "episode": "Episode",
-    "readPost": "Read post",
+    "readPost": "Read story",
     "empty": "No episodes",
-    "emptyDesc": "No audio episodes available yet. Check back soon."
+    "emptyDesc": "No audio episodes yet. Check back soon.",
+    "eyebrow": "Audio from the blog",
+    "imageCaption": "Stories to take along in your headphones",
+    "loading": "Loading episodes..."
   },
   "notFound": {
-    "title": "404 Page Not Found",
-    "desc": "Did you forget to add the page to the router?"
+    "title": "404 — Page not found",
+    "desc": "This page isn't available. Head back to the home page and start again."
+  },
+  "memorial": {
+    "title": "In memory of Mauri",
+    "nickname": "grandepuffo",
+    "dedication": "Dedicated to a great friend who is no longer with us. He always had a kind word, always lent me a hand when I needed one, and listened whenever I had something joyful to share."
   }
 }

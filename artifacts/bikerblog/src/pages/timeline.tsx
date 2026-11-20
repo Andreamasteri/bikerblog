@@ -1,53 +1,49 @@
 import { useListPosts } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { format, parseISO, getMonth } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { enUS, it } from "date-fns/locale";
 import { Calendar, ChevronRight } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
-import { LanguageSwitch } from "@/components/language-switch";
+import { usePageMeta } from "@/lib/use-page-meta";
+
+const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
 export function Timeline() {
   const { t, i18n } = useTranslation();
-  const lang = i18n.language;
-  const dateLocale = lang === "en" ? enUS : it;
+  usePageMeta(t("timeline.title"), t("timeline.subtitle"), { language: i18n.language });
+  const dateLocale = i18n.language.startsWith("it") ? it : enUS;
   const { postTitle, postExcerpt } = usePostLocale();
-
-  const MONTHS = [
-    { key: "timeline.all", value: null },
-    { key: "timeline.march", value: 2 },
-    { key: "timeline.april", value: 3 },
-    { key: "timeline.may", value: 4 },
-  ];
-
-  const [activeMonth, setActiveMonth] = useState<number | null>(null);
-
+  const [activeMonth, setActiveMonth] = useState<string | null>(null);
   const { data: posts, isLoading } = useListPosts();
-
-  const anyHasEn = posts?.some(p => !!p.bodyEn) ?? false;
 
   const sortedPosts = useMemo(() => {
     if (!posts) return [];
     return [...posts].sort(
-      (a, b) =>
-        new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime()
+      (a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime()
     );
   }, [posts]);
 
+  const monthOptions = useMemo(() => {
+    const unique = new Map<string, string>();
+    for (const post of sortedPosts) {
+      const date = parseISO(post.publishedAt);
+      const key = format(date, "yyyy-MM");
+      if (!unique.has(key)) unique.set(key, format(date, "MMMM yyyy", { locale: dateLocale }));
+    }
+    return Array.from(unique, ([key, label]) => ({ key, label }));
+  }, [sortedPosts, dateLocale]);
+
   const filteredPosts = useMemo(() => {
     if (activeMonth === null) return sortedPosts;
-    return sortedPosts.filter(
-      (p) => getMonth(parseISO(p.publishedAt)) === activeMonth
-    );
+    return sortedPosts.filter((post) => format(parseISO(post.publishedAt), "yyyy-MM") === activeMonth);
   }, [sortedPosts, activeMonth]);
 
   const grouped = useMemo(() => {
     const map: Record<string, typeof filteredPosts> = {};
     for (const post of filteredPosts) {
-      const key = format(parseISO(post.publishedAt), "MMMM yyyy", {
-        locale: dateLocale,
-      });
+      const key = format(parseISO(post.publishedAt), "MMMM yyyy", { locale: dateLocale });
       if (!map[key]) map[key] = [];
       map[key].push(post);
     }
@@ -55,113 +51,74 @@ export function Timeline() {
   }, [filteredPosts, dateLocale]);
 
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="mb-12 border-b border-border pb-8">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-primary">
-            <Calendar className="w-4 h-4" />
-            <span className="text-sm font-bold uppercase tracking-widest">
-              {t("timeline.days")}
-            </span>
-          </div>
-          <LanguageSwitch
-            lang={lang as "it" | "en"}
-            onChange={(l) => { void i18n.changeLanguage(l); }}
-            hasEn={anyHasEn}
-          />
+    <div className="container mx-auto px-4 py-10 md:py-14">
+      <header className="bb-page-intro bb-page-intro-compact">
+        <div className="bb-page-intro-copy">
+          <p className="bb-section-kicker"><Calendar className="h-4 w-4" aria-hidden="true" />{t("timeline.days")}</p>
+          <h1>{t("timeline.title")}</h1>
+          <p className="bb-page-intro-description">{t("timeline.subtitle")}</p>
         </div>
-        <h1 className="text-4xl md:text-6xl font-display font-bold uppercase tracking-tight leading-none mb-4">
-          {t("timeline.title")}
-        </h1>
-        <p className="text-muted-foreground max-w-xl">
-          {t("timeline.subtitle")}
-        </p>
-      </div>
+        <div className="bb-page-intro-media" aria-hidden="true">
+          <img src={MEDIA + "/route.webp"} alt="" />
+          <span>{t("posts.imageCaption")}</span>
+        </div>
+      </header>
 
-      <div className="flex flex-wrap gap-2 mb-10">
-        {MONTHS.map((m) => (
+      <div className="bb-timeline-filters" role="group" aria-label={t("timeline.filterByMonth")}>
+        <button
+          type="button"
+          onClick={() => setActiveMonth(null)}
+          className={activeMonth === null ? "bb-filter-button is-active" : "bb-filter-button"}
+          aria-pressed={activeMonth === null}
+        >
+          {t("timeline.all")}
+        </button>
+        {monthOptions.map((month) => (
           <button
-            key={String(m.value)}
-            onClick={() => setActiveMonth(m.value)}
-            className={`px-4 py-1.5 text-sm font-bold uppercase tracking-widest border transition-colors ${
-              activeMonth === m.value
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
-            }`}
+            type="button"
+            key={month.key}
+            onClick={() => setActiveMonth(month.key)}
+            className={activeMonth === month.key ? "bb-filter-button is-active" : "bb-filter-button"}
+            aria-pressed={activeMonth === month.key}
           >
-            {t(m.key)}
+            {month.label}
           </button>
         ))}
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="animate-pulse flex gap-6 py-4 border-b border-border/40">
-              <div className="h-4 bg-muted w-24 shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-5 bg-muted w-2/3" />
-                <div className="h-3 bg-muted w-full" />
-              </div>
-            </div>
-          ))}
+        <div className="bb-timeline-skeletons" aria-label={t("timeline.loading")}>
+          {Array.from({ length: 8 }).map((_, index) => <div key={index} className="bb-timeline-skeleton" aria-hidden="true" />)}
         </div>
       ) : filteredPosts.length === 0 ? (
-        <div className="text-center py-24 bg-muted/20 border border-dashed">
-          <h3 className="text-2xl font-display font-bold uppercase mb-2">
-            {t("timeline.noPost")}
-          </h3>
-          <p className="text-muted-foreground">
-            {t("timeline.noPostDesc")}
-          </p>
+        <div className="bb-empty-state">
+          <h2>{t("timeline.noPost")}</h2>
+          <p>{t("timeline.noPostDesc")}</p>
         </div>
       ) : (
-        <div className="space-y-12">
+        <div className="bb-timeline">
           {grouped.map(([month, monthPosts]) => (
-            <section key={month}>
-              <h2 className="text-xs font-bold uppercase tracking-widest text-primary mb-4 pb-2 border-b border-primary/30">
-                {month} · {monthPosts.length} {t("timeline.posts_other")}
-              </h2>
-              <div className="divide-y divide-border/40">
+            <section key={month} className="bb-timeline-group">
+              <h2>{month}<span>{monthPosts.length} {t(monthPosts.length === 1 ? "timeline.posts_one" : "timeline.posts_other")}</span></h2>
+              <div className="bb-timeline-entries">
                 {monthPosts.map((post) => (
-                  <article key={post.id} className="group py-4 flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-6">
-                    <time
-                      dateTime={post.publishedAt}
-                      className="text-xs font-mono text-muted-foreground tabular-nums shrink-0 pt-1 w-24"
-                    >
-                      {format(parseISO(post.publishedAt), "dd MMM", {
-                        locale: dateLocale,
-                      })}
+                  <article key={post.id} className="bb-timeline-row">
+                    <time dateTime={post.publishedAt}>
+                      {format(parseISO(post.publishedAt), "dd MMM", { locale: dateLocale })}
                     </time>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <Link href={`/posts/${post.slug}`}>
-                            <h3 className="font-display font-bold text-base leading-snug group-hover:text-primary transition-colors truncate">
-              {postTitle(post)}
-                            </h3>
-                          </Link>
-                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                            {postExcerpt(post)}
-                          </p>
+                    <div className="bb-timeline-copy">
+                      <div className="bb-timeline-title-row">
+                        <div>
+                          <Link href={`/posts/${post.slug}`} className="bb-timeline-title">{postTitle(post)}</Link>
+                          <p>{postExcerpt(post)}</p>
                         </div>
-                        <Link
-                          href={`/posts/${post.slug}`}
-                          className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors mt-0.5"
-                        >
-                          <ChevronRight className="w-4 h-4" />
+                        <Link href={`/posts/${post.slug}`} className="bb-timeline-open" aria-label={postTitle(post)}>
+                          <ChevronRight className="h-4 w-4" aria-hidden="true" />
                         </Link>
                       </div>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span className="uppercase tracking-wider font-medium text-primary/70">
-                          {post.category}
-                        </span>
-                        {post.location && (
-                          <>
-                            <span>·</span>
-                            <span>{post.location}</span>
-                          </>
-                        )}
+                      <div className="bb-timeline-meta">
+                        <Link href={`/categories/${post.category}`}>{post.category.replace(/-/g, " ")}</Link>
+                        {post.location && <><span aria-hidden="true">·</span><span>{post.location}</span></>}
                       </div>
                     </div>
                   </article>

@@ -1,53 +1,60 @@
 import { useListPosts } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { format } from "date-fns";
+import { enUS, it } from "date-fns/locale";
+import { Clock, ArrowUpRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { usePostLocale } from "@/lib/post-i18n";
+import { usePageMeta } from "@/lib/use-page-meta";
+
+const MEDIA = "https://bikerblog-image-assets.andreamasteri-nadir-radio.workers.dev/assets";
 
 export function Tags() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const tagLabel = tag?.replace(/-/g, " ") ?? "";
+  usePageMeta(tagLabel ? `#${tagLabel}` : t("tags.label"), `${t("tags.subtitle")} ${tagLabel}`, { language: i18n.language });
   const { postTitle, postExcerpt } = usePostLocale();
   const { tag } = useParams();
-  const { data: posts, isLoading } = useListPosts({ tag: tag });
+  const { data: posts, isLoading } = useListPosts({ tag });
+  const dateLocale = i18n.language.startsWith("it") ? it : enUS;
 
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="mb-12 border-b border-border pb-8">
-        <p className="text-sm font-bold uppercase tracking-widest text-primary mb-2">{t("tags.label")}</p>
-        <h1 className="text-4xl md:text-6xl font-display font-bold uppercase tracking-tight leading-none">#{tag}</h1>
-      </div>
+    <div className="container mx-auto px-4 py-10 md:py-14">
+      <header className="bb-page-intro bb-page-intro-compact">
+        <div className="bb-page-intro-copy">
+          <p className="bb-section-kicker">{t("tags.label")}</p>
+          <h1>#{tag}</h1>
+          <p className="bb-page-intro-description">{t("tags.subtitle")}</p>
+        </div>
+        <div className="bb-page-intro-media" aria-hidden="true">
+          <img src={MEDIA + "/route.webp"} alt="" />
+          <span>{t("posts.imageCaption")}</span>
+        </div>
+      </header>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="animate-pulse">
-              <div className="bg-muted aspect-[4/3] w-full mb-4"></div>
-              <div className="h-4 bg-muted w-1/4 mb-3"></div>
-              <div className="h-8 bg-muted w-3/4 mb-2"></div>
-            </div>
-          ))}
+        <div className="bb-card-grid" aria-label={t("posts.loading")}>
+          {Array.from({ length: 6 }).map((_, index) => <div key={index} className="bb-article-skeleton" aria-hidden="true" />)}
         </div>
       ) : posts?.length === 0 ? (
-        <div className="text-center py-24 bg-muted/20 border border-dashed">
-          <p className="text-muted-foreground">{t("tags.noResults")}</p>
-        </div>
+        <div className="bb-empty-state"><p>{t("tags.noResults")}</p></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
+        <div className="bb-card-grid">
           {posts?.map((post) => (
-            <article key={post.id} className="group flex flex-col h-full">
-              <Link href={`/posts/${post.slug}`} className="block overflow-hidden bg-muted aspect-[4/3] w-full mb-6">
-                <img src={post.coverImageUrl} alt={postTitle(post)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <article key={post.id} className="bb-article-card">
+              <Link href={`/posts/${post.slug}`} className="bb-article-image">
+                <img src={post.coverImageUrl} alt={postTitle(post)} loading="lazy" />
+                <span className="bb-article-open" aria-hidden="true"><ArrowUpRight className="h-4 w-4" /></span>
               </Link>
-              <div className="flex-1 flex flex-col">
-                <Link href={`/categories/${post.category}`} className="text-xs font-bold uppercase tracking-widest text-primary mb-3 hover:underline">{post.category.replace('-', ' ')}</Link>
-                <Link href={`/posts/${post.slug}`}>
-                  <h3 className="text-2xl font-display font-bold mb-3 group-hover:text-primary transition-colors leading-tight">{postTitle(post)}</h3>
-                </Link>
-                <p className="text-muted-foreground mb-6 line-clamp-3">{postExcerpt(post)}</p>
-                <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground mt-auto pt-4 border-t border-border/50">
-                  <span className="uppercase tracking-wider">{post.author.name}</span>
-                  <span>&bull;</span>
-                  <span>{format(new Date(post.publishedAt), "MMM d, yyyy")}</span>
+              <div className="bb-article-copy">
+                <Link href={`/categories/${post.category}`} className="bb-story-category">{post.category.replace(/-/g, " ")}</Link>
+                <h2><Link href={`/posts/${post.slug}`}>{postTitle(post)}</Link></h2>
+                <p>{postExcerpt(post)}</p>
+                <div className="bb-post-meta">
+                  <span>{post.author.name}</span><span aria-hidden="true">·</span>
+                  <span>{format(new Date(post.publishedAt), "d MMM yyyy", { locale: dateLocale })}</span>
+                  <span aria-hidden="true">·</span>
+                  <span><Clock className="h-3.5 w-3.5" aria-hidden="true" />{post.readingMinutes} {t("postDetail.minRead")}</span>
                 </div>
               </div>
             </article>

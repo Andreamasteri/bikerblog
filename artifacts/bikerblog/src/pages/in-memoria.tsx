@@ -1,19 +1,21 @@
+import { Bike } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { usePageMeta } from "@/lib/use-page-meta";
+
 export function InMemoria() {
+  const { t, i18n } = useTranslation();
+  usePageMeta(t("memorial.title"), t("memorial.dedication"), { language: i18n.language });
+
   return (
-    <div className="container mx-auto px-4 py-24 max-w-2xl">
-      <article className="text-center space-y-8">
-        <h1 className="font-display font-bold text-4xl md:text-5xl tracking-tighter uppercase">
-          In memoria di Mauri
-          <span className="block text-xl md:text-2xl mt-2 text-muted-foreground normal-case tracking-normal font-normal">
-            grandepuffo
-          </span>
+    <div className="container mx-auto px-4 py-16 md:py-24">
+      <article className="bb-memorial">
+        <p className="bb-section-kicker"><Bike className="h-4 w-4" aria-hidden="true" />{t("footer.inMemoria")}</p>
+        <h1>
+          {t("memorial.title")}
+          <span>{t("memorial.nickname")}</span>
         </h1>
-        <div className="h-px w-24 bg-border mx-auto" />
-        <p className="text-lg leading-relaxed text-muted-foreground italic">
-          Dedicato a un grande amico che non c'è più. Che ha avuto sempre una
-          parola buona, mi ha sempre allungato una mano nel momento del bisogno,
-          e un orecchio nei momenti di gioia.
-        </p>
+        <div className="bb-memorial-rule" aria-hidden="true" />
+        <blockquote>{t("memorial.dedication")}</blockquote>
       </article>
     </div>
   );

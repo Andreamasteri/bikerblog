@@ -1,104 +1,159 @@
 {
   "nav": {
-    "posts": "Posts",
+    "posts": "Articoli",
     "podcast": "Podcast",
-    "timeline": "Timeline",
-    "authors": "Authors"
+    "timeline": "Cronologia",
+    "authors": "Autori",
+    "brandCaption": "Il blog di BikerLink",
+    "main": "Navigazione principale",
+    "downloadApp": "Scarica l'app",
+    "language": "Seleziona la lingua",
+    "switchItalian": "Passa all'italiano",
+    "switchEnglish": "Passa all'inglese",
+    "skipToContent": "Vai al contenuto"
   },
   "menu": {
     "open": "Apri menu",
     "close": "Chiudi menu"
   },
   "footer": {
-    "tagline": "Per chi vive per la strada aperta. Ride report, recensioni di gear e consigli tecnici.",
-    "copyright": "© {{year}} BikerBlog. Tutti i diritti riservati.",
+    "tagline": "Racconti di strada, idee, tecnica e persone incontrate lungo il percorso.",
+    "copyright": "© {{year}} BikerBlog, il blog di BikerLink. Tutti i diritti riservati.",
     "inMemoria": "In memoria di Mauri",
-    "downloadApk": "Scarica APK Android"
+    "downloadApk": "Scarica l'app Android",
+    "moreLinks": "Altri collegamenti"
   },
   "home": {
-    "motto": "— Come lo feci",
-    "heroTagline": "Est. on the open road",
-    "heroDesc": "Ride reports, recensioni di gear e consigli tecnici per chi vive per la strada aperta.",
-    "readArticles": "Leggi gli articoli",
-    "listen": "Ascolta",
+    "motto": "La strada cambia. Le storie restano.",
+    "heroTagline": "Il blog di BikerLink",
+    "heroDesc": "Viaggi, passione e vita da biker, raccontati da chi vive ogni uscita come una storia da condividere.",
+    "readArticles": "Entra nel blog",
+    "listen": "Voci in viaggio",
     "allPosts": "Tutti i post",
     "audioEpisode": "Episodio audio",
-    "recentDispatches": "Dispatches recenti",
-    "viewAll": "Vedi tutti",
-    "mostRead": "Più letti",
+    "recentDispatches": "Le ultime storie",
+    "viewAll": "Tutte le storie",
+    "mostRead": "Le più lette",
     "categories": "Categorie",
-    "tags": "Tag"
+    "tags": "Tag",
+    "mastlineLabel": "BikerLink / Diario di viaggio",
+    "heroTitle": "Strada. Persone. Due ruote.",
+    "latestStories": "Le ultime storie",
+    "heroCaption": "Parti quando vuoi. Non partire da solo.",
+    "sectionsEyebrow": "Tre modi di vivere la moto",
+    "sectionsTitle": "Dalla mappa al box",
+    "sectionsDesc": "Idee e racconti per chi ama partire, capire come funziona la moto e tenerla pronta per la prossima curva.",
+    "pillarRoadLabel": "In viaggio",
+    "pillarRoadTitle": "Rotta aperta",
+    "pillarRoadDesc": "Itinerari, soste e strade che meritano un'altra partenza.",
+    "pillarTechLabel": "Tecnica e tecnologia",
+    "pillarTechTitle": "Sotto la visiera",
+    "pillarTechDesc": "Strumenti, dati e curiosità spiegati con parole da biker.",
+    "pillarGarageLabel": "Cura della moto",
+    "pillarGarageTitle": "Dentro il box",
+    "pillarGarageDesc": "Attrezzatura, manutenzione e dettagli che fanno la differenza.",
+    "featuredEyebrow": "La storia scelta",
+    "featuredTitle": "In primo piano",
+    "audioEyebrow": "Da ascoltare",
+    "allEpisodes": "Tutti gli episodi",
+    "recentEyebrow": "Nuove dal blog",
+    "readerChoice": "Scelte dai lettori",
+    "findYourWay": "Sfoglia per argomento",
+    "keywordsEyebrow": "Parole da seguire",
+    "signoff": "BikerBlog — il blog di BikerLink. Ci si vede in strada."
   },
   "posts": {
-    "title": "The Archives",
-    "subtitle": "Ogni viaggio, ogni chiave girata, ogni storia dalla strada. Cerca negli archivi o sfoglia per data.",
-    "searchPlaceholder": "Cerca dispatches...",
-    "deadEnd": "Vicolo cieco",
-    "noResults": "Nessun post trovato per la tua ricerca. Prova un percorso diverso."
+    "title": "Storie di strada",
+    "subtitle": "Racconti, itinerari, tecnica e vita da biker. Cerca un tema o sfoglia le ultime storie.",
+    "searchPlaceholder": "Cerca tra le storie...",
+    "deadEnd": "Nessun risultato",
+    "noResults": "Non troviamo storie per questa ricerca. Prova con un altro termine.",
+    "eyebrow": "Archivio BikerBlog",
+    "imageCaption": "Una strada, mille storie",
+    "archiveNote": "Ogni articolo è una tappa. Scegli da dove partire.",
+    "loading": "Caricamento storie..."
   },
   "postDetail": {
     "back": "Indietro",
     "minRead": "min di lettura",
     "likes": "Mi piace",
     "comments": "Commenti",
-    "dailyMaxim": "Massima del giorno",
+    "dailyMaxim": "Una frase da portare con te",
     "listenEpisode": "Ascolta questo episodio",
     "play": "Riproduci",
     "pause": "Pausa",
-    "aboutAuthor": "L'autore",
+    "aboutAuthor": "Chi ha scritto",
     "discuss": "Discussione ({{count}})",
-    "leaveComment": "Lascia un commento",
+    "leaveComment": "Lascia il tuo commento",
     "yourName": "Il tuo nome",
-    "yourThoughts": "Cosa pensi?",
-    "posting": "Pubblicazione...",
+    "yourThoughts": "Cosa ne pensi?",
+    "posting": "Invio in corso...",
     "postComment": "Pubblica commento",
     "commentPosted": "Commento pubblicato",
-    "commentPostedDesc": "La tua voce è stata aggiunta.",
+    "commentPostedDesc": "Il tuo commento è stato aggiunto.",
     "commentError": "Errore",
-    "commentErrorDesc": "Impossibile pubblicare il commento. Riprova.",
+    "commentErrorDesc": "Non è stato possibile pubblicare il commento. Riprova.",
     "commentLikeError": "Impossibile mettere mi piace al commento. Riprova.",
-    "noComments": "Ancora nessun commento. Sii il primo.",
-    "deadEnd": "Vicolo cieco",
-    "notFound": "Il post che cerchi non esiste o è stato spostato.",
-    "backToArchives": "Torna agli archivi",
-    "translatedNote": "Traduzione automatica — contenuto originale in italiano."
+    "noComments": "Ancora nessun commento. Apri tu la conversazione.",
+    "deadEnd": "Nessun risultato",
+    "notFound": "Questa storia non è disponibile o è stata spostata.",
+    "backToArchives": "Torna alle storie",
+    "translatedNote": "Traduzione automatica. Il contenuto originale è in italiano.",
+    "translationUnavailable": "La versione inglese di questa storia non è ancora disponibile."
   },
   "authors": {
-    "title": "The Writers",
-    "subtitle": "I meccanici, i lungometraggisti e i velocisti dietro ai dispatches."
+    "title": "Le voci",
+    "subtitle": "Le persone che danno forma alle storie di BikerBlog.",
+    "eyebrow": "Le persone dietro il blog",
+    "imageCaption": "Ogni storia parte da una persona",
+    "loading": "Caricamento autori...",
+    "contributor": "Autore",
+    "postCount": "{{count}} storie"
   },
   "timeline": {
-    "days": "73 giorni",
-    "title": "Timeline",
-    "subtitle": "La storia completa di BikerBlog — dal 12 marzo al 23 maggio 2026. Ogni giorno, ogni sprint, ogni svolta.",
+    "days": "Archivio cronologico",
+    "title": "Cronologia",
+    "subtitle": "Un percorso tra gli articoli e i momenti raccontati su BikerBlog.",
     "all": "Tutti",
     "march": "Marzo",
     "april": "Aprile",
     "may": "Maggio",
     "posts_one": "post",
     "posts_other": "post",
-    "noPost": "Nessun post",
-    "noPostDesc": "Nessun post trovato per questo mese."
+    "noPost": "Nessuna storia",
+    "noPostDesc": "Non ci sono storie per questo periodo.",
+    "filterByMonth": "Filtra per mese",
+    "loading": "Caricamento cronologia..."
   },
   "tags": {
     "label": "Tag",
-    "noResults": "Nessun post trovato con questo tag."
+    "noResults": "Non troviamo storie con questo tag.",
+    "subtitle": "Racconti collegati da un tema comune."
   },
   "categories": {
     "label": "Categoria",
-    "noResults": "Nessun post trovato in questa categoria."
+    "noResults": "Non troviamo storie in questa categoria.",
+    "subtitle": "Storie selezionate da questo argomento."
   },
   "podcast": {
     "title": "Podcast",
-    "subtitle": "Tutti gli episodi audio di BikerBlog. Ascolta i migliori dispatches dalla strada.",
+    "subtitle": "Episodi audio e storie da ascoltare lungo la strada.",
     "rss": "Feed RSS",
     "episode": "Episodio",
-    "readPost": "Leggi il post",
+    "readPost": "Leggi la storia",
     "empty": "Nessun episodio",
-    "emptyDesc": "Ancora nessun episodio audio disponibile. Torna presto."
+    "emptyDesc": "Non ci sono ancora episodi audio. Torna a trovarci.",
+    "eyebrow": "Audio dal blog",
+    "imageCaption": "Storie da portare in cuffia",
+    "loading": "Caricamento episodi..."
   },
   "notFound": {
-    "title": "404 Pagina non trovata",
-    "desc": "Hai dimenticato di aggiungere la pagina al router?"
+    "title": "404 — Pagina non trovata",
+    "desc": "Questa pagina non è disponibile. Torna alla home e riparti da lì."
+  },
+  "memorial": {
+    "title": "In memoria di Mauri",
+    "nickname": "grandepuffo",
+    "dedication": "Dedicato a un grande amico che non c'è più. Che ha avuto sempre una parola buona, mi ha sempre allungato una mano nel momento del bisogno, e un orecchio nei momenti di gioia."
   }
 }

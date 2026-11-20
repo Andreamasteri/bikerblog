@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Wrench, Menu, X, Download } from "lucide-react";
+import { Bike, Menu, X, Download } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,34 +13,38 @@ const NAV_LINK_KEYS = [
 ];
 
 function LanguageSwitcher({ mobile }: { mobile?: boolean }) {
-  const { i18n } = useTranslation();
-  const lang = i18n.language;
+  const { i18n, t } = useTranslation();
+  const lang = i18n.language.split("-")[0];
 
-  const toggle = (l: string) => {
-    i18n.changeLanguage(l);
-    localStorage.setItem("bikerblog_lang", l);
+  const toggle = (language: "it" | "en") => {
+    void i18n.changeLanguage(language);
+    localStorage.setItem("bikerblog_lang", language);
     const url = new URL(window.location.href);
-    url.searchParams.set("lang", l);
+    url.searchParams.set("lang", language);
     window.history.replaceState(null, "", url.toString());
   };
 
-  const base = mobile
-    ? "flex items-center gap-3 py-3 text-sm font-bold uppercase tracking-wider border-b border-border/30"
-    : "flex items-center gap-1 text-xs font-bold uppercase tracking-widest";
-
   return (
-    <div className={base}>
+    <div
+      className={mobile ? "bb-language-switch bb-language-switch-mobile" : "bb-language-switch"}
+      role="group"
+      aria-label={t("nav.language")}
+    >
       <button
+        type="button"
         onClick={() => toggle("it")}
-        className={`px-2 py-0.5 transition-colors ${lang === "it" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        className={lang === "it" ? "is-active" : ""}
+        aria-label={t("nav.switchItalian")}
         aria-pressed={lang === "it"}
       >
         IT
       </button>
-      <span className="text-border select-none">|</span>
+      <span aria-hidden="true">/</span>
       <button
+        type="button"
         onClick={() => toggle("en")}
-        className={`px-2 py-0.5 transition-colors ${lang === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        className={lang === "en" ? "is-active" : ""}
+        aria-label={t("nav.switchEnglish")}
         aria-pressed={lang === "en"}
       >
         EN
@@ -61,8 +65,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!menuOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) {
+    const handleClick = (event: MouseEvent) => {
+      if (drawerRef.current && !drawerRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
       }
     };
@@ -71,93 +75,86 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [menuOpen]);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col">
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors shrink-0">
-            <Wrench className="h-6 w-6" />
-            <span className="font-display font-bold text-2xl tracking-tighter uppercase">BikerBlog</span>
+    <div className="bb-site min-h-[100dvh] flex flex-col">
+      <a className="bb-skip-link" href="#contenuto">{t("nav.skipToContent")}</a>
+      <header className="bb-site-header">
+        <div className="container mx-auto px-4 bb-header-inner">
+          <Link href="/" className="bb-brand" aria-label="BikerBlog — home">
+            <span className="bb-brand-mark" aria-hidden="true"><Bike className="h-5 w-5" /></span>
+            <span className="bb-brand-copy">
+              <span className="bb-brand-name">Biker<span>Blog</span></span>
+              <span className="bb-brand-caption">{t("nav.brandCaption")}</span>
+            </span>
           </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-            {NAV_LINK_KEYS.map(l => (
-              <Link key={l.href} href={l.href} className="hover:text-primary transition-colors uppercase tracking-wider">{t(l.key)}</Link>
+          <nav className="bb-desktop-nav" aria-label={t("nav.main")}>
+            {NAV_LINK_KEYS.map((link) => (
+              <Link key={link.href} href={link.href} className="bb-nav-link">
+                {t(link.key)}
+              </Link>
             ))}
-            <a
-              href={APK_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/50 text-primary hover:bg-primary/10 transition-colors uppercase tracking-wider text-xs font-bold"
-            >
-              <Download className="h-3.5 w-3.5" />
-              APK
+            <a href={APK_URL} target="_blank" rel="noopener noreferrer" className="bb-app-link">
+              <Download className="h-4 w-4" aria-hidden="true" />
+              {t("nav.downloadApp")}
             </a>
             <LanguageSwitcher />
           </nav>
 
-          {/* Mobile hamburger */}
           <button
-            className="md:hidden flex items-center justify-center w-10 h-10 text-foreground hover:text-primary transition-colors"
+            type="button"
+            className="bb-menu-toggle"
             aria-label={menuOpen ? t("menu.close") : t("menu.open")}
-            onClick={() => setMenuOpen(o => !o)}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-navigation"
+            onClick={() => setMenuOpen((open) => !open)}
           >
             {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
 
-        {/* Mobile drawer */}
         {menuOpen && (
-          <div ref={drawerRef} className="md:hidden border-t border-border/40 bg-background/98 backdrop-blur px-4 py-4 flex flex-col gap-1">
-            {NAV_LINK_KEYS.map(l => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className="block py-3 text-sm font-bold uppercase tracking-wider hover:text-primary transition-colors border-b border-border/30"
-              >
-                {t(l.key)}
-              </Link>
-            ))}
-            <a
-              href={APK_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 py-3 text-sm font-bold uppercase tracking-wider text-primary border-b border-border/30"
-            >
-              <Download className="h-4 w-4" />
-              {t("footer.downloadApk")}
-            </a>
-            <LanguageSwitcher mobile />
+          <div ref={drawerRef} id="mobile-navigation" className="bb-mobile-nav">
+            <nav aria-label={t("nav.main")}>
+              {NAV_LINK_KEYS.map((link) => (
+                <Link key={link.href} href={link.href} className="bb-mobile-nav-link">
+                  {t(link.key)}
+                </Link>
+              ))}
+              <a href={APK_URL} target="_blank" rel="noopener noreferrer" className="bb-mobile-app-link">
+                <Download className="h-4 w-4" aria-hidden="true" />
+                {t("footer.downloadApk")}
+              </a>
+              <LanguageSwitcher mobile />
+            </nav>
           </div>
         )}
       </header>
 
-      <main className="flex-1">
+      <main id="contenuto" tabIndex={-1} className="flex-1 outline-none">
         {children}
       </main>
 
-      <footer className="border-t py-12 bg-muted/20">
-        <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <div className="flex justify-center items-center gap-2 mb-4">
-            <Wrench className="h-5 w-5" />
-            <span className="font-display font-bold text-xl uppercase tracking-tighter text-foreground">BikerBlog</span>
+      <footer className="bb-site-footer">
+        <div className="container mx-auto px-4">
+          <div className="bb-footer-main">
+            <Link href="/" className="bb-footer-brand">
+              <span className="bb-brand-mark" aria-hidden="true"><Bike className="h-5 w-5" /></span>
+              <span className="bb-brand-name">Biker<span>Blog</span></span>
+            </Link>
+            <p>{t("footer.tagline")}</p>
+            <Link href="/posts" className="bb-footer-cta">
+              {t("home.readArticles")} <span aria-hidden="true">↗</span>
+            </Link>
           </div>
-          <p className="max-w-md mx-auto mb-6">{t("footer.tagline")}</p>
-          <p className="text-sm">{t("footer.copyright", { year: new Date().getFullYear() })}</p>
-          <p className="text-sm mt-2 flex justify-center flex-wrap gap-6">
-            <Link href="/podcast" className="hover:text-primary transition-colors">Podcast</Link>
-            <Link href="/timeline" className="hover:text-primary transition-colors">Timeline</Link>
-            <Link href="/in-memoria" className="hover:text-primary transition-colors">{t("footer.inMemoria")}</Link>
-            <a
-              href={APK_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-primary hover:text-primary/80 transition-colors font-medium"
-            >
-              <Download className="h-3.5 w-3.5" />
-              {t("footer.downloadApk")}
-            </a>
-          </p>
+          <div className="bb-footer-bottom">
+            <p>{t("footer.copyright", { year: new Date().getFullYear() })}</p>
+            <nav aria-label={t("footer.moreLinks")}>
+              <Link href="/podcast">{t("nav.podcast")}</Link>
+              <Link href="/timeline">{t("nav.timeline")}</Link>
+              <Link href="/in-memoria">{t("footer.inMemoria")}</Link>
+              <a href={APK_URL} target="_blank" rel="noopener noreferrer">{t("footer.downloadApk")}</a>
+            </nav>
+          </div>
         </div>
       </footer>
     </div>
